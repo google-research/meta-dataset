@@ -1,0 +1,4 @@
+include 'meta_dataset/learn/gin/setups/all_datasets.gin'
+include 'meta_dataset/learn/gin/setups/data_config.gin'
+include 'meta_dataset/learn/gin/setups/learn_config.gin'
+include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'

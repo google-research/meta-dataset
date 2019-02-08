@@ -1,0 +1,4 @@
+Trainer.num_train_classes = None
+Trainer.num_test_classes = None
+Trainer.num_train_examples = None
+Trainer.num_test_examples = None

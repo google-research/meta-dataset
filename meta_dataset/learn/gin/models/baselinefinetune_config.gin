@@ -1,0 +1,7 @@
+include 'meta_dataset/learn/gin/models/baseline_config.gin'
+LearnerConfig.train_learner = 'BaselineFinetune'
+LearnerConfig.eval_learner = 'BaselineFinetune'
+weight_decay = 1e-4
+BaselineFinetuneLearner.weight_decay = %weight_decay
+BaselineFinetuneLearner.num_finetune_steps = 5
+BaselineFinetuneLearner.finetune_lr = 1e-4

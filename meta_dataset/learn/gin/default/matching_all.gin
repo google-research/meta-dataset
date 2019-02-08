@@ -1,0 +1,5 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/matching_config.gin'
+LearnerConfig.learning_rate = 1e-3
+LearnerConfig.decay_learning_rate = True

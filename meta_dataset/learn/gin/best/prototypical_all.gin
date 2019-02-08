@@ -1,0 +1,6 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/prototypical_config.gin'
+LearnerConfig.embedding_network = 'resnet'
+DataConfig.image_height = 126
+

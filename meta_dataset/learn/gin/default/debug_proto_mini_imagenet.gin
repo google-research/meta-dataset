@@ -1,0 +1,7 @@
+benchmark.datasets = 'mini_imagenet'
+include 'meta_dataset/learn/gin/setups/learn_config_debug.gin'
+include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'
+
+include 'meta_dataset/learn/gin/models/prototypical_config.gin'
+LearnerConfig.learning_rate = 1e-4
+LearnerConfig.decay_learning_rate = True

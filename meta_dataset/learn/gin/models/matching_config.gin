@@ -1,0 +1,8 @@
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+LearnerConfig.episodic = True
+LearnerConfig.train_learner = 'MatchingNet'
+LearnerConfig.eval_learner = 'MatchingNet'
+LearnerConfig.embedding_network = 'four_layer_convnet'
+weight_decay = 1e-4
+MatchingNetworkLearner.weight_decay = %weight_decay
+MatchingNetworkLearner.exact_cosine_distance = False

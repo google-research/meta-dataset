@@ -1,0 +1,1 @@
+benchmark.datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'

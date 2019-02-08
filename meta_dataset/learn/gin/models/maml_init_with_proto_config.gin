@@ -1,0 +1,18 @@
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+LearnerConfig.episodic = True
+LearnerConfig.train_learner = 'MAML'
+LearnerConfig.eval_learner = 'MAML'
+LearnerConfig.embedding_network = 'four_layer_convnet_maml'
+weight_decay = 1e-4
+MAMLLearner.weight_decay = %weight_decay
+MAMLLearner.num_update_steps = 5
+MAMLLearner.additional_test_update_steps = 0
+MAMLLearner.first_order = True
+MAMLLearner.alpha = 0.01
+MAMLLearner.train_batch_norm = False
+MAMLLearner.depth_multiplier = 1.0
+MAMLLearner.debug = False
+MAMLLearner.zero_fc_layer = True
+MAMLLearner.proto_maml_fc_layer_on_query_set = False
+MAMLLearner.proto_maml_fc_layer_on_support_set = False
+MAMLLearner.proto_maml_fc_layer_init = True

@@ -1,0 +1,6 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+
+include 'meta_dataset/learn/gin/models/baseline_config.gin'
+LearnerConfig.embedding_network = 'four_layer_convnet_maml'
+BaselineLearner.knn_distance = 'cosine'
+DataConfig.image_height = 126

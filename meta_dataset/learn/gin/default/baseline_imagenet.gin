@@ -1,0 +1,4 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+
+include 'meta_dataset/learn/gin/models/baseline_config.gin'
+LearnerConfig.learning_rate = 1e-5

@@ -1,0 +1,7 @@
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+LearnerConfig.episodic = True
+LearnerConfig.train_learner = 'PrototypicalNet'
+LearnerConfig.eval_learner = 'PrototypicalNet'
+LearnerConfig.embedding_network = 'four_layer_convnet'
+weight_decay = 1e-4
+PrototypicalNetworkLearner.weight_decay = %weight_decay

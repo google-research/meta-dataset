@@ -1,0 +1,11 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/maml_config.gin'
+LearnerConfig.embedding_network = 'four_layer_convnet_maml'
+weight_decay = 0.001
+MAMLLearner.first_order = True
+MAMLLearner.alpha = 0.01
+MAMLLearner.train_batch_norm = False
+MAMLLearner.additional_test_update_steps = 0
+MAMLLearner.num_update_steps = 6
+DataConfig.image_height = 84

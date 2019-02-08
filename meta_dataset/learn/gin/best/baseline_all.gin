@@ -1,0 +1,7 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/baseline_config.gin'
+LearnerConfig.embedding_network = 'resnet'
+BaselineLearner.knn_in_fc = False
+BaselineLearner.knn_distance = 'cosine'
+DataConfig.image_height = 126

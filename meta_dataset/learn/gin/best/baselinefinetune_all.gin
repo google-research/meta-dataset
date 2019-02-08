@@ -1,0 +1,8 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
+LearnerConfig.embedding_network = 'resnet'
+weight_decay = 0.000003
+BaselineFinetuneLearner.num_finetune_steps = 75
+BaselineFinetuneLearner.finetune_lr = 0.01
+DataConfig.image_height = 126
