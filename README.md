@@ -1,6 +1,6 @@
 This repository contains accompanying code for the article introducing
 Meta-Dataset,
-[https://arxiv.org/abs/1902.XXXXX](https://arxiv.org/abs/1902.XXXXX).
+[https://arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
 
 This code is provided here in order to give more details on the implementation
 of the data-providing pipeline, our back-bones and models, as well as the
