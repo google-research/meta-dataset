@@ -17,7 +17,7 @@ r"""Script for training models on the benchmark.
 
 Launching command for batch baseline:
 # pylint: disable=line-too-long
-python -m meta_dataset.train -- \
+python -m meta_dataset.train \
   --train_checkpoint_dir=/tmp/bench --summary_dir=/tmp/bench \
   --records_root_dir=<records_root> \
   --alsologtostderr \

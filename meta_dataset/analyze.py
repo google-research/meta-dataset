@@ -34,7 +34,7 @@ values of these dicts.
 
 Sample command:
 # pylint: disable=line-too-long
-python -m meta_dataset.analyze -- \
+python -m meta_dataset.analyze \
   --alsologtostderr \
   --eval_finegrainedness \
   --eval_finegrainedness_split=test \

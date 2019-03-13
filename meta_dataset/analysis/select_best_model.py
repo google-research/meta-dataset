@@ -39,7 +39,7 @@ Root contains: 'Exp1', 'Exp2'.
 
 Sample command:
 # pylint: disable=line-too-long
-python -m meta_dataset.analysis.select_best_model -- \
+python -m meta_dataset.analysis.select_best_model \
   --alsologtostderr \
   --all_experiments_root=<experiments_root> \
   --experiment_dir_basenames=baseline_imagenet_icml2019_1/3602170,baselinefinetune_imagenet_icml2019_1/3581340

@@ -13,7 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Main file for converting the datasets used in the benchmark into records."""
+# pyformat: disable
+r"""Main file for converting the datasets used in the benchmark into records.
+
+Example command to convert dataset omniglot:
+# pylint: disable=line-too-long
+python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
+  --dataset=omniglot \
+  --omniglot_data_root=<path/to/omniglot> \
+  --records_root=<path/to/records> \
+  --splits_root=<path/to/splits>
+# pylint: enable=line-too-long
+"""
+# pyformat: enable
 
 from __future__ import absolute_import
 from __future__ import division
@@ -35,8 +47,7 @@ FLAGS = tf.flags.FLAGS
 
 
 def main(argv):
-  if len(argv) > 1:
-    raise tf.app.UsageError('Too many arguments.')
+  del argv
 
   class ConverterArgs(
       collections.namedtuple('ConverterArgs', 'data_root, long_name')):
