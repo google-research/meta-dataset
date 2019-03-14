@@ -377,6 +377,51 @@ def resnet_maml(x,
       backprop_through_moments=backprop_through_moments)
 
 
+def _four_layer_convnet(inputs,
+                        scope,
+                        reuse=tf.AUTO_REUSE,
+                        params=None,
+                        moments=None,
+                        maml_arch=False,
+                        depth_multiplier=1.0,
+                        backprop_through_moments=True):
+  """A four-layer-convnet architecture."""
+  layer = tf.stop_gradient(inputs)
+  model_params_keys, model_params_vars = [], []
+  moments_keys, moments_vars = [], []
+
+  with tf.variable_scope(scope, reuse=reuse):
+    for i in range(4):
+      with tf.variable_scope('layer_{}'.format(i), reuse=reuse):
+        depth = int(64 * depth_multiplier)
+        layer, conv_bn_params, conv_bn_moments = conv_bn(
+            layer, [3, 3],
+            depth,
+            stride=1,
+            params=params,
+            moments=moments,
+            maml_arch=maml_arch,
+            backprop_through_moments=backprop_through_moments)
+        model_params_keys += conv_bn_params.keys()
+        model_params_vars += conv_bn_params.values()
+        moments_keys += conv_bn_moments.keys()
+        moments_vars += conv_bn_moments.values()
+
+      layer = tf.nn.relu(layer)
+      layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
+      tf.logging.info('Output of block %d: %s' % (i, layer.shape))
+
+    model_params = collections.OrderedDict(
+        zip(model_params_keys, model_params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+    return_dict = {
+        'embeddings': tf.layers.flatten(layer),
+        'params': model_params,
+        'moments': moments
+    }
+    return return_dict
+
+
 def four_layer_convnet(inputs,
                        is_training,
                        moments=None,
