@@ -3,6 +3,7 @@
 # which makes it a good candidate to profile imbalanced datasets with many
 # classes locally.
 benchmark.datasets = 'fungi'
+include 'meta_dataset/learn/gin/setups/data_config.gin'
 include 'meta_dataset/learn/gin/setups/learn_config_debug.gin'
 include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'
 
