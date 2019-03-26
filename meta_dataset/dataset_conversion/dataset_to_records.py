@@ -50,16 +50,12 @@ from scipy.io import loadmat
 import tensorflow as tf
 
 # Datasets in the same order as reported in the article.
+# 'ilsvrc_2012_data_root' is already defined in imagenet_specification.py.
 tf.flags.DEFINE_string(
-    'ilsvrc_2012_data_root',
-    '',
-    'The root directory storing the ILSVRC 2012 subset of ImageNet.')
-
-tf.flags.DEFINE_string(
-    'ilsvrc_2012_num_leaf_images_path',
-    '',
+    'ilsvrc_2012_num_leaf_images_path', '',
     'A path used as a cache for a dict mapping the WordNet id of each Synset '
-    'of a ILSVRC 2012 class to its number of images.')
+    'of a ILSVRC 2012 class to its number of images. If empty, it defaults to '
+    '"ilsvrc_2012/num_leaf_images.pkl" inside records_root.')
 
 tf.flags.DEFINE_string(
     'omniglot_data_root',
@@ -1406,13 +1402,17 @@ class ImageNetConverter(DatasetConverter):
   used during training.
   """
 
-  def _get_init_data_spec(self):
+  def _create_data_spec(self):
     """Initializes the HierarchicalDatasetSpecification instance for ImageNet.
 
     See HierarchicalDatasetSpecification for details.
     """
+    ilsvrc_2012_num_leaf_images_path = FLAGS.ilsvrc_2012_num_leaf_images_path
+    if not ilsvrc_2012_num_leaf_images_path:
+      ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
+                                                      'num_leaf_images.pkl')
     specification = imagenet_specification.create_imagenet_specification(
-        learning_spec.Split, FLAGS.ilsvrc_2012_num_leaf_images_path)
+        learning_spec.Split, ilsvrc_2012_num_leaf_images_path)
     split_subgraphs, images_per_class, _, _, _, _ = specification
 
     # Maps each class id to the name of its class.
@@ -1438,9 +1438,11 @@ class ImageNetConverter(DatasetConverter):
     # datasets. They will be skipped from ImageNet.
     files_to_skip = set()
     for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
-      duplicates_path = ILSCRC_DUPLICATES_PATH
+      duplicates_file = os.path.join(
+          ILSCRC_DUPLICATES_PATH,
+          'ImageNet_{}_duplicates.txt'.format(other_dataset))
 
-      with tf.gile.Open(duplicates_path) as fd:
+      with tf.gfile.Open(duplicates_file) as fd:
         duplicates = fd.read()
       lines = duplicates.splitlines()
 
@@ -1465,7 +1467,10 @@ class ImageNetConverter(DatasetConverter):
     # It is expected that within self.data_root there is a directory
     # for every ILSVRC 2012 synset, named by that synset's WordNet ID
     # (e.g. n15075141) and containing all images of that synset.
-    assert set(tf.gfile.ListDirectory(self.data_root)) == set(all_synset_ids), (
+    set_of_directories = set(
+        entry for entry in tf.gfile.ListDirectory(self.data_root)
+        if tf.gfile.IsDirectory(os.path.join(self.data_root, entry)))
+    assert set_of_directories == set(all_synset_ids), (
         'self.data_root should contain a directory whose name is the WordNet '
         "id of each synset that is a leaf of any split's subgraph.")
 

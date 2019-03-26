@@ -34,27 +34,23 @@ import numpy as np
 import tensorflow as tf
 
 tf.flags.DEFINE_string(
-    'imagenet_data_root',
+    'ilsvrc_2012_data_root',
     '',
     'Path to the root of the ImageNet data.')
 
-# TODO(etriantafillou): validate file location.
 tf.flags.DEFINE_string(
     'path_to_is_a',
     '',
-    'Path to the file containing is-a relationships (parent, child) pairs.')
+    'Path to the file containing is-a relationships (parent, child) pairs. '
+    'If empty, it defaults to "wordnet.is_a.txt" in ilsvrc_2012_data_root.')
 
-# TODO(etriantafillou): validate file location.
 tf.flags.DEFINE_string(
     'path_to_words',
     '',
-    'Path to the file containing (synset, word description) pairs.')
+    'Path to the file containing (synset, word description) pairs. '
+    'If empty, it defaults to "words.txt" in ilsvrc_2012_data_root.')
 
 FLAGS = tf.flags.FLAGS
-
-# A dict that maps strings representing the WordNet id of each ILSVRC 2012
-# class to the corresponding number of images.
-PATH_TO_NUM_LEAF_IMGS = ''
 
 
 class Synset(object):
@@ -782,7 +778,7 @@ def get_num_synset_2012_images(path, synsets_2012):
 
   Returns a dict mapping the WordNet of each class of ILSVRC 2012 to the
   number of its images.
-  This assumes that within FLAGS.imagenet_data_root there is a directory for
+  This assumes that within FLAGS.ilsvrc_2012_data_root there is a directory for
   every 2012 synset, named by that synset's WordNet ID (e.g. n15075141) and
   containing all images of that synset.
 
@@ -810,7 +806,7 @@ def get_num_synset_2012_images(path, synsets_2012):
   tf.logging.info('Unsuccessful. Deriving number of leaf images...')
   num_synset_2012_images = {}
   for s_2012 in synsets_2012:
-    synset_dir = os.path.join(FLAGS.imagenet_data_root, s_2012.wn_id)
+    synset_dir = os.path.join(FLAGS.ilsvrc_2012_data_root, s_2012.wn_id)
     num_synset_2012_images[s_2012.wn_id] = len(
         tf.gfile.ListDirectory(synset_dir))
 
@@ -822,7 +818,7 @@ def get_num_synset_2012_images(path, synsets_2012):
 
 
 def create_imagenet_specification(split_enum,
-                                  path_to_num_leaf_images=PATH_TO_NUM_LEAF_IMGS,
+                                  path_to_num_leaf_images=None,
                                   log_stats=True):
   """Creates the dataset specification of ImageNet.
 
@@ -862,13 +858,20 @@ def create_imagenet_specification(split_enum,
   """
 
   # Create Synsets for all ImageNet synsets (82115 in total).
+  data_root = FLAGS.ilsvrc_2012_data_root
   synsets = {}
-  with tf.gfile.Open(FLAGS.path_to_words) as f:
+  path_to_words = FLAGS.path_to_words
+  if not path_to_words:
+    path_to_words = os.path.join(data_root, 'words.txt')
+  with tf.gfile.Open(path_to_words) as f:
     for line in f:
       wn_id, words = line.rstrip().split('\t')
       synsets[wn_id] = Synset(wn_id, words, set(), set())
 
   # Populate the parents / children arrays of these Synsets.
+  path_to_is_a = FLAGS.path_to_is_a
+  if not path_to_is_a:
+    path_to_is_a = os.path.join(data_root, 'wordnet.is_a.txt')
   with tf.gfile.Open(FLAGS.path_to_is_a, 'r') as f:
     for line in f:
       parent, child = line.rstrip().split(' ')
@@ -876,7 +879,10 @@ def create_imagenet_specification(split_enum,
       synsets[child].parents.add(synsets[parent])
 
   # Get the WordNet id's of the synsets of ILSVRC 2012.
-  wn_ids_2012 = set(tf.gfile.ListDirectory(FLAGS.imagenet_data_root))
+  wn_ids_2012 = tf.gfile.ListDirectory(data_root)
+  wn_ids_2012 = set(
+      entry for entry in wn_ids_2012
+      if tf.gfile.IsDirectory(os.path.join(data_root, entry)))
   synsets_2012 = [s for s in synsets.values() if s.wn_id in wn_ids_2012]
   assert len(wn_ids_2012) == len(synsets_2012)
 
