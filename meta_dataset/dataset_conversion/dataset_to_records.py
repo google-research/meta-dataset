@@ -371,7 +371,7 @@ def write_tfrecord_from_directory(class_directory,
   if files_to_skip is None:
     files_to_skip = set()
   class_files = []
-  filenames = tf.gfile.ListDirectory(class_directory)
+  filenames = sorted(tf.gfile.ListDirectory(class_directory))
   for filename in filenames:
     if filename in files_to_skip:
       tf.logging.info('skipping file %s', filename)
@@ -701,7 +701,7 @@ class OmniglotConverter(DatasetConverter):
     for alphabet_folder_name in alphabets:
       alphabet_path = os.path.join(alphabets_path, alphabet_folder_name)
       # Each character is a class.
-      for char_folder_name in tf.gfile.ListDirectory(alphabet_path):
+      for char_folder_name in sorted(tf.gfile.ListDirectory(alphabet_path)):
         class_path = os.path.join(alphabet_path, char_folder_name)
         class_label = len(self.class_names)
         class_records_path = os.path.join(
@@ -747,13 +747,13 @@ class OmniglotConverter(DatasetConverter):
 
     training_alphabets = []
     data_path_trainval = os.path.join(self.data_root, 'images_background')
-    for alphabet_name in tf.gfile.ListDirectory(data_path_trainval):
+    for alphabet_name in sorted(tf.gfile.ListDirectory(data_path_trainval)):
       if alphabet_name not in validation_alphabets:
         training_alphabets.append(alphabet_name)
     assert len(training_alphabets) + len(validation_alphabets) == 30
 
     data_path_test = os.path.join(self.data_root, 'images_evaluation')
-    test_alphabets = tf.gfile.ListDirectory(data_path_test)
+    test_alphabets = sorted(tf.gfile.ListDirectory(data_path_test))
     assert len(test_alphabets) == 20
 
     self.parse_split_data(learning_spec.Split.TRAIN, training_alphabets,
@@ -771,7 +771,7 @@ class QuickdrawConverter(DatasetConverter):
     """Create splits for Quickdraw and store them in the default path."""
     # Quickdraw is stored in a number of .npy files, one for every class
     # with each .npy file storing an array containing the images of that class.
-    class_npy_files = tf.gfile.ListDirectory(self.data_root)
+    class_npy_files = sorted(tf.gfile.ListDirectory(self.data_root))
     class_names = [fname[:fname.find('.')] for fname in class_npy_files]
     # Sort the class names, for reproducibility.
     class_names.sort()
@@ -1424,10 +1424,10 @@ class ImageNetConverter(DatasetConverter):
 
   def _get_synset_ids(self, split):
     """Returns a list of synset id's of the classes assigned to split."""
-    return [
+    return sorted([
         synset.wn_id for synset in imagenet_specification.get_leaves(
             self.dataset_spec.split_subgraphs[split])
-    ]
+    ])
 
   def create_dataset_specification_and_records(self):
     """Create Records for the ILSVRC 2012 classes.
