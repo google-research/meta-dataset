@@ -1035,8 +1035,15 @@ class DTDConverter(DatasetConverter):
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_name
+      # 'waffled' class directory has a leftover '.directory' file.
+      files_to_skip = set()
+      if class_name == 'waffled':
+        files_to_skip.add('.directory')
       self.images_per_class[class_id] = write_tfrecord_from_directory(
-          class_directory, class_id, class_records_path)
+          class_directory,
+          class_id,
+          class_records_path,
+          files_to_skip=files_to_skip)
 
     self.write_data_spec_pkl()
 
