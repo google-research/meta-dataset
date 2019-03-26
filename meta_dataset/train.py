@@ -36,6 +36,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import gin.tf
 from meta_dataset import data
 from meta_dataset import learner
@@ -105,6 +107,8 @@ def get_datasets(datasets=''):
 
 
 def main(unused_argv):
+  tf.logging.info('FLAGS.gin_config: %s', FLAGS.gin_config)
+  tf.logging.info('FLAGS.gin_bindings: %s', FLAGS.gin_bindings)
   gin.parse_config_files_and_bindings(FLAGS.gin_config, FLAGS.gin_bindings)
 
   learner_config = trainer.LearnerConfig()
@@ -155,6 +159,20 @@ def main(unused_argv):
 
   mode = 'training' if FLAGS.is_training else 'evaluation'
   tf.logging.info('Starting %s for dataset(s) %s...' % (mode, datasets))
+
+  # Record gin operative config string after the setup, both in the logs and in
+  # the checkpoint directory.
+  gin_operative_config = gin.operative_config_str()
+  tf.logging.info('gin configuration:\n%s', gin_operative_config)
+  if FLAGS.train_checkpoint_dir:
+    gin_log_file = os.path.join(FLAGS.train_checkpoint_dir,
+                                'operative_config.gin')
+    # If it exists already, rename it instead of overwriting it.
+    # This just saves the previous one, not all the ones before.
+    if tf.gfile.Exists(gin_log_file):
+      tf.gfile.rename(gin_log_file, gin_log_file + '~')
+    with tf.gfile.Open(gin_log_file, 'w') as f:
+      f.write(gin_operative_config)
 
   if FLAGS.is_training:
     trainer_instance.train()
