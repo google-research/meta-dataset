@@ -170,7 +170,7 @@ def main(unused_argv):
     # If it exists already, rename it instead of overwriting it.
     # This just saves the previous one, not all the ones before.
     if tf.gfile.Exists(gin_log_file):
-      tf.gfile.rename(gin_log_file, gin_log_file + '~')
+      tf.gfile.Rename(gin_log_file, gin_log_file + '~', overwrite=True)
     with tf.gfile.Open(gin_log_file, 'w') as f:
       f.write(gin_operative_config)
 
