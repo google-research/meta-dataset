@@ -3,3 +3,11 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/matching_config.gin'
 LearnerConfig.embedding_network = 'resnet'
 DataConfig.image_height = 126
+
+## Hyperparameters used to train the best model
+LearnerConfig.decay_every = 500
+LearnerConfig.decay_rate = 0.915193802145601
+LearnerConfig.learning_rate = 0.000004006744265427231
+LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_29000.ckpt'
+LearnerConfig.pretrained_source = 'imagenet'
+weight_decay = 0.0000885787420909229
