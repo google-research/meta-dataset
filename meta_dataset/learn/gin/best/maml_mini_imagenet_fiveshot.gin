@@ -1,0 +1,19 @@
+include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
+include 'meta_dataset/learn/gin/models/maml_config.gin'
+
+LearnerConfig.embedding_network = 'four_layer_convnet_maml'
+DataConfig.image_height = 126
+LearnerConfig.decay_every = 1000000
+LearnerConfig.decay_rate = 1
+LearnerConfig.learning_rate = 0.0007496680949720318
+LearnerConfig.pretrained_source = 'scratch'
+MAMLLearner.additional_test_update_steps = 5
+MAMLLearner.alpha = 0.01
+MAMLLearner.first_order = True
+MAMLLearner.num_update_steps = 6
+MAMLLearner.proto_maml_fc_layer_init = False
+MAMLLearner.proto_maml_fc_layer_on_query_set = False
+MAMLLearner.proto_maml_fc_layer_on_support_set = False
+MAMLLearner.train_batch_norm = False
+MAMLLearner.zero_fc_layer = True
+weight_decay = 0
