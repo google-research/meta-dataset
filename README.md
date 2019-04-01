@@ -54,9 +54,9 @@ For brevity of the command line examples, we assume the following environment va
 
 ### Dataset summary
 
-Dataset | Other names | # classes (train/valid/test) | Size on disk  | Expected conversion time
+Dataset | Other names | Number of classes (train/valid/test) | Size on disk  | Expected conversion time
 --------|-------------|------------------------------|---------------|--------------------------
-[ilsvrc_2012](#ilsvrc_2012) | ImageNet | 1000 () | \~ 140 GiB   | 5 to 13 hours
+[ilsvrc_2012](#ilsvrc_2012) | ImageNet | 1000 (712/202/188, hierarchical) | \~140 GiB   | 5 to 13 hours
 
 
 ### ilsvrc_2012
