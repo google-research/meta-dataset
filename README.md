@@ -54,33 +54,18 @@ For brevity of the command line examples, we assume the following environment va
 
 ### Dataset summary
 
-Dataset | Other names | Number of classes (train/valid/test) | Size on disk  | Expected conversion time
---------|-------------|------------------------------|---------------|--------------------------
-[ilsvrc_2012](#ilsvrc_2012) | ImageNet | 1000 (712/202/188, hierarchical) | \~140 GiB   | 5 to 13 hours
+Dataset (other names) | Number of classes (train/valid/test) | Size on disk  | Expected conversion time
+----------------------|--------------------------------------|---------------|--------------------------
+ilsvrc\_2012 (ImageNet, ILSVRC) \[[instructions](doc/dataset_conversion.md#ilsvrc_2012)\] | 1000 (712/202/188, hierarchical) | \~140 GiB   | 5 to 13 hours
+omniglot \[[instructions](doc/dataset_conversion.md#omniglot)]\] | 1623 (883/81/659, by alphabet: 25/5/20) | \~60 MiB | few seconds
+aircraft (FGVC-Aircraft) \[[instructions](doc/dataset_conversion.md#aircraft)]\] | 100 (70/15/15) | \~470 MiB (2.6 GiB download) | 5 to 10 minutes
+cu\_birds (Birds, CUB-200-2011) \[[instructions](doc/dataset_conversion.md#cu_birds)]\] | 200 (140/30/30) | \~1.1 GiB | \~1 minute
+dtd (Describable Textures, DTD) \[[instructions](doc/dataset_conversion.md#dtd)]\] | 47 (33/7/7) | \~600 MiB | few seconds
+quickdraw (Quick, Draw!) \[[instructions](doc/dataset_conversion.md#quickdraw)]\] | 345 (241/52/52) | \~50 GiB | 3 to 4 hours
+fungi (FGVCx Fungi) \[[instructions](doc/dataset_conversion.md#fungi)]\] | 1394 (994/200/200) | \~13 GiB | 5 to 15 minutes
+vgg\_flower (VGG Flower) \[[instructions](doc/dataset_conversion.md#vgg_flower)]\] | 102 (71/15/16) | \~330 MiB | \~1 minute
+traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) \[[instructions](doc/dataset_conversion.md#traffic_sign)]\] | 43 (0/0/43, test only) | \~50 MiB (263 MiB download) | \~1 minute
+mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)]\] | 80 (0/40/40, validation and test only) | (18 GiB download) | \~5.3 GiB | 4 hours
 
-
-### ilsvrc_2012
-
-- Download `ilsvrc2012_img_train.tar`, from the [ILSVRC2012 website](http://www.image-net.org/challenges/LSVRC/2012/index)
-- Uncompress it into `ILSVRC2012_img_train/`, which should contain 1000 files, named `n????????.tar` (expected time: \~30 minutes)
-- Uncompress each of `ILSVRC2012_img_train/n????????.tar` in its own directory (expected time: \~30 minutes), for instance:
-  ```bash
-  for FILE in *.tar; do mkdir ${FILE/.tar/}; cd ${FILE/.tar/}; tar xvf ../$FILE; cd ..; done
-  ```
-- Download the following two files into `ILSVRC2012_img_train/`:
-  - http://www.image-net.org/archive/wordnet.is_a.txt
-  - http://www.image-net.org/archive/words.txt
-- The conversion itself should take 4 to 12 hours, depending on the filesystem's latency and bandwidth:
-  ```bash
-  python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
-    --dataset=ilsvrc_2012 \
-    --imagenet_data_root=$DATASRC/ILSVRC2012_img_train \
-    --splits_root=$SPLITS \
-    --records_root=$RECORDS
-  ```
-- Expected outputs in `$RECORDS/ilsvrc_2012/`:
-  - 1000 tfrecords files named `[0-999].tfrecords`
-  - `dataset_spec.pkl`
-  - `num_leaf_images.pkl`
 
 ## Launching experiments
