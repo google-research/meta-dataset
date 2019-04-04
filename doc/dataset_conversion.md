@@ -26,8 +26,8 @@
 
 ## omniglot
 
-- Download [images_background.zip](https://github.com/brendenlake/omniglot/raw/master/python/images_background.zip) and [images_evaluation.zip](https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip)
-- Extract them into the same `omniglot` directory
+- Download [`images_background.zip`](https://github.com/brendenlake/omniglot/raw/master/python/images_background.zip) and [`images_evaluation.zip`](https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip)
+- Extract them into the same `omniglot/` directory
 - The conversion should take a few seconds:
   ```bash
   python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -42,7 +42,7 @@
 
 ## aircraft
 
-- Download [fgvc-aircraft-2013b.tar.gz](http://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/archives/fgvc-aircraft-2013b.tar.gz)
+- Download [`fgvc-aircraft-2013b.tar.gz`](http://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/archives/fgvc-aircraft-2013b.tar.gz)
 - Extract it into `fgvc-aircraft-2013b`
 - The conversion itself should take 5 to 10 minutes:
   ```bash
@@ -58,7 +58,7 @@
 
 ## cu_birds
 
-- Download [CUB_200_2011.tgz](http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz)
+- Download [`CUB_200_2011.tgz`](http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz)
 - Extract it into `CUB_200_2011/` (and `attributes.txt`)
 - The conversion itself should take around one minute:
   ```bash
@@ -74,7 +74,7 @@
 
 ## dtd
 
-- Download [dtd-r1.0.1.tar.gz](https://www.robots.ox.ac.uk/~vgg/data/dtd/download/dtd-r1.0.1.tar.gz)
+- Download [`dtd-r1.0.1.tar.gz`](https://www.robots.ox.ac.uk/~vgg/data/dtd/download/dtd-r1.0.1.tar.gz)
 - Extract it into `dtd/`
 - The conversion itself should take a few seconds:
   ```bash
@@ -91,7 +91,7 @@
 ## quickdraw
 
 - Download all 345 `.npy` files hosted on [Google Cloud](https://console.cloud.google.com/storage/quickdraw_dataset/full/numpy_bitmap)
-  - You can use [gsutil](https://cloud.google.com/storage/docs/gsutil_install#install) to download them to `quickdraw/`:
+  - You can use [`gsutil`](https://cloud.google.com/storage/docs/gsutil_install#install) to download them to `quickdraw/`:
     ```bash
     gsutil -m cp gs://quickdraw_dataset/full/numpy_bitmap/*.npy $DATASRC/quickdraw
     ```
@@ -109,9 +109,9 @@
 
 ## fungi
 
-- Download [fungi_train_val.tgz](https://data.deic.dk/public.php?service=files&t=2fd47962a38e2a70570f3be027cea57f&download)
-  and [train_val_annotations.tgz](https://data.deic.dk/public.php?service=files&t=8dc110f312677d2b53003de983b3a26e&download)
-- Extract them into the same `fungi` directory. It should contain one
+- Download [`fungi_train_val.tgz`](https://data.deic.dk/public.php?service=files&t=2fd47962a38e2a70570f3be027cea57f&download)
+  and [`train_val_annotations.tgz`](https://data.deic.dk/public.php?service=files&t=8dc110f312677d2b53003de983b3a26e&download)
+- Extract them into the same `fungi/` directory. It should contain one
   `images/` directory, as well as `train.json` and `val.json`.
 - The conversion should take 5 to 15 minutes:
   ```bash
@@ -127,8 +127,8 @@
 
 ## vgg_flower
 
-- Download [102flowers.tgz](http://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz) (images)
-  and [imagelabels.mat](http://www.robots.ox.ac.uk/~vgg/data/flowers/102/imagelabels.mat) (labels)
+- Download [`102flowers.tgz`](http://www.robots.ox.ac.uk/~vgg/data/flowers/102/102flowers.tgz)
+  and [`imagelabels.mat`](http://www.robots.ox.ac.uk/~vgg/data/flowers/102/imagelabels.mat)
 - Extract `102flowers.tgz`, it will create a `jpg/` sub-directory
 - The conversion should take about one minute:
   ```bash
@@ -138,7 +138,7 @@
     --splits_root=$SPLITS \
     --records_root=$RECORDS
   ```
-- Expected outputs in `$RECORDS/vgg_flower`:
+- Expected outputs in `$RECORDS/vgg_flower/`:
   - 102 tfrecords files named `[0-101].tfrecords`
   - `dataset_spec.pkl`
 
@@ -154,14 +154,14 @@
     --splits_root=$SPLITS \
     --records_root=$RECORDS
   ```
-- Expected outputs in `$RECORDS/traffic_sign`:
+- Expected outputs in `$RECORDS/traffic_sign/`:
   - 43 tfrecords files named `[0-42].tfrecords`
   - `dataset_spec.pkl`
 
 ## mscoco
 
 - Download the 2017 train images and annotations from http://cocodataset.org/:
-  - You can use [gsutil](https://cloud.google.com/storage/docs/gsutil_install#install) to download them to `mscoco/`:
+  - You can use [`gsutil`](https://cloud.google.com/storage/docs/gsutil_install#install) to download them to `mscoco/`:
     ```bash
     cd $DATASRC/mscoco/
     mkdir train2017
@@ -169,7 +169,7 @@
     gsutil -m cp gs://images.cocodataset.org/annotations/annotations_trainval2017.zip
     unzip annotations_trainval2017.zip
     ```
-  - Otherwise, you can download [train2017.zip](http://images.cocodataset.org/zips/train2017.zip) and [annotations_trainval2017.zip](http://images.cocodataset.org/annotations/annotations_trainval2017.zip) and extract them into `mscoco/`.
+  - Otherwise, you can download [`train2017.zip`](http://images.cocodataset.org/zips/train2017.zip) and [`annotations_trainval2017.zip`](http://images.cocodataset.org/annotations/annotations_trainval2017.zip) and extract them into `mscoco/`.
 - The conversion should take about 4 hours:
   ```bash
   python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -178,6 +178,6 @@
     --splits_root=$SPLITS \
     --records_root=$RECORDS
   ```
-- Expected outputs in `$RECORDS/mscoco`:
+- Expected outputs in `$RECORDS/mscoco/`:
   - 80 tfrecords files named `[0-79].tfrecords`
   - `dataset_spec.pkl`
