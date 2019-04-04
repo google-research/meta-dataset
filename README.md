@@ -54,18 +54,18 @@ For brevity of the command line examples, we assume the following environment va
 
 ### Dataset summary
 
-Dataset (other names) | Number of classes (train/valid/test) | Size on disk  | Expected conversion time
+Dataset (other names) | Number of classes (train/valid/test) | Size on disk  | Conversion time
 ----------------------|--------------------------------------|---------------|--------------------------
 ilsvrc\_2012 (ImageNet, ILSVRC) \[[instructions](doc/dataset_conversion.md#ilsvrc_2012)\] | 1000 (712/202/188, hierarchical) | \~140 GiB   | 5 to 13 hours
-omniglot \[[instructions](doc/dataset_conversion.md#omniglot)]\] | 1623 (883/81/659, by alphabet: 25/5/20) | \~60 MiB | few seconds
-aircraft (FGVC-Aircraft) \[[instructions](doc/dataset_conversion.md#aircraft)]\] | 100 (70/15/15) | \~470 MiB (2.6 GiB download) | 5 to 10 minutes
-cu\_birds (Birds, CUB-200-2011) \[[instructions](doc/dataset_conversion.md#cu_birds)]\] | 200 (140/30/30) | \~1.1 GiB | \~1 minute
-dtd (Describable Textures, DTD) \[[instructions](doc/dataset_conversion.md#dtd)]\] | 47 (33/7/7) | \~600 MiB | few seconds
-quickdraw (Quick, Draw!) \[[instructions](doc/dataset_conversion.md#quickdraw)]\] | 345 (241/52/52) | \~50 GiB | 3 to 4 hours
-fungi (FGVCx Fungi) \[[instructions](doc/dataset_conversion.md#fungi)]\] | 1394 (994/200/200) | \~13 GiB | 5 to 15 minutes
-vgg\_flower (VGG Flower) \[[instructions](doc/dataset_conversion.md#vgg_flower)]\] | 102 (71/15/16) | \~330 MiB | \~1 minute
-traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) \[[instructions](doc/dataset_conversion.md#traffic_sign)]\] | 43 (0/0/43, test only) | \~50 MiB (263 MiB download) | \~1 minute
-mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)]\] | 80 (0/40/40, validation and test only) | (18 GiB download) | \~5.3 GiB | 4 hours
+omniglot \[[instructions](doc/dataset_conversion.md#omniglot)\] | 1623 (883/81/659, by alphabet: 25/5/20) | \~60 MiB | few seconds
+aircraft (FGVC-Aircraft) \[[instructions](doc/dataset_conversion.md#aircraft)\] | 100 (70/15/15) | \~470 MiB (2.6 GiB download) | 5 to 10 minutes
+cu\_birds (Birds, CUB-200-2011) \[[instructions](doc/dataset_conversion.md#cu_birds)\] | 200 (140/30/30) | \~1.1 GiB | \~1 minute
+dtd (Describable Textures, DTD) \[[instructions](doc/dataset_conversion.md#dtd)\] | 47 (33/7/7) | \~600 MiB | few seconds
+quickdraw (Quick, Draw!) \[[instructions](doc/dataset_conversion.md#quickdraw)\] | 345 (241/52/52) | \~50 GiB | 3 to 4 hours
+fungi (FGVCx Fungi) \[[instructions](doc/dataset_conversion.md#fungi)\] | 1394 (994/200/200) | \~13 GiB | 5 to 15 minutes
+vgg\_flower (VGG Flower) \[[instructions](doc/dataset_conversion.md#vgg_flower)\] | 102 (71/15/16) | \~330 MiB | \~1 minute
+traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) \[[instructions](doc/dataset_conversion.md#traffic_sign)\] | 43 (0/0/43, test only) | \~50 MiB (263 MiB download) | \~1 minute
+mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)\] | 80 (0/40/40, validation and test only) | \~5.3 GiB (18 GiB download) | 4 hours
 
 
 ## Launching experiments
