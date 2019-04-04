@@ -6,7 +6,7 @@ This code is provided here in order to give more details on the implementation
 of the data-providing pipeline, our back-bones and models, as well as the
 experimental setting.
 
-See below for [user instructions](#user-instructions), including how to [install](#installation) the software, [download and convert](#downloading-and-converting-datasets) the data, and [train](#launching-experiments) implemented models.
+See below for [user instructions](#user-instructions), including how to [install](#installation) the software, [download and convert](#downloading-and-converting-datasets) the data, and [train](#training) implemented models.
 
 We are currently working on updating the code and improving the instructions to
 facilitate designing and running new experiments.
@@ -68,4 +68,14 @@ traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) 
 mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)\] | 80 (0/40/40, validation and test only) | \~5.3 GiB (18 GiB download) | 4 hours
 
 
-## Launching experiments
+## Training
+
+Experiments are defined via [gin](google/gin-config) configuration files, that are under `meta_dataset/learn/gin/`:
+- `setups/` contain generic setups for classes of experiment, for instance which datasets to use (`imagenet` or `all`), parameters for sampling the number of ways and shots of episodes.
+- `models/` define settings for different meta-learning algorithms (baselines, prototypical networks, MAML...)
+- `default/` contains files that each correspond to one experiment, mostly defining a setup and a model, with default values for training hyperparameters.
+- `best/` contains files with values for training hyperparameters that achieved the best performance during hyperparameter search.
+
+### Reproducing results
+
+### Hyperparameter search
