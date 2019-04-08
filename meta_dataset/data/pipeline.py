@@ -59,14 +59,14 @@ def _log_data_augmentation(data_augmentation, name):
   """Logs the given data augmentation parameters for diagnostic purposes."""
   if not data_augmentation:
     tf.logging.info('No data augmentation provided for %s', name)
-
-  tf.logging.info('%s augmentations:', name)
-  tf.logging.info('enable_jitter: %s', data_augmentation.enable_jitter)
-  tf.logging.info('jitter_amount: %d', data_augmentation.jitter_amount)
-  tf.logging.info('enable_gaussian_noise: %s',
-                  data_augmentation.enable_gaussian_noise)
-  tf.logging.info('gaussian_noise_std: %s',
-                  data_augmentation.gaussian_noise_std)
+  else:
+    tf.logging.info('%s augmentations:', name)
+    tf.logging.info('enable_jitter: %s', data_augmentation.enable_jitter)
+    tf.logging.info('jitter_amount: %d', data_augmentation.jitter_amount)
+    tf.logging.info('enable_gaussian_noise: %s',
+                    data_augmentation.enable_gaussian_noise)
+    tf.logging.info('gaussian_noise_std: %s',
+                    data_augmentation.gaussian_noise_std)
 
 
 @gin.configurable(

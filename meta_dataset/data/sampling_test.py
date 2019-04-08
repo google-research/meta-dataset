@@ -19,6 +19,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from absl.testing import parameterized
 import gin.tf
 from meta_dataset.data import sampling
 from meta_dataset.data.dataset_spec import DatasetSpecification
@@ -58,6 +59,16 @@ gin.bind_parameter(
     MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
 gin.bind_parameter('EpisodeDescriptionSampler.min_log_weight', MIN_LOG_WEIGHT)
 gin.bind_parameter('EpisodeDescriptionSampler.max_log_weight', MAX_LOG_WEIGHT)
+
+# Following is set in a different scope.
+gin.bind_parameter('none/EpisodeDescriptionSampler.min_ways', None)
+gin.bind_parameter('none/EpisodeDescriptionSampler.max_ways_upper_bound', None)
+gin.bind_parameter('none/EpisodeDescriptionSampler.max_num_query', None)
+gin.bind_parameter('none/EpisodeDescriptionSampler.max_support_set_size', None)
+gin.bind_parameter(
+    'none/EpisodeDescriptionSampler.max_support_size_contrib_per_class', None)
+gin.bind_parameter('none/EpisodeDescriptionSampler.min_log_weight', None)
+gin.bind_parameter('none/EpisodeDescriptionSampler.max_log_weight', None)
 
 
 class SampleNumWaysUniformlyTest(tf.test.TestCase):
@@ -204,6 +215,56 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           support_set_size,
           min_log_weight=MIN_LOG_WEIGHT,
           max_log_weight=MAX_LOG_WEIGHT)
+
+
+class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
+  """Episode sampler should verify args when ways/shots are sampled."""
+  dataset_spec = DATASET_SPEC
+  split = Split.VALID
+
+  @parameterized.named_parameters(('num_ways_none', None, 5, 10, {}),
+                                  ('num_ways_none2', None, 5, 10, {
+                                      'min_ways': 3
+                                  }), ('num_support_none', 5, None, 10, {}),
+                                  ('num_support_none2', 5, None, 10, {
+                                      'max_support_set_size': 3
+                                  }), ('num_query_none', 5, 5, None, {}))
+  def test_runtime_errors(self, num_ways, num_support, num_query, kwargs):
+    """Testing run-time errors thrown when arguments are not set correctly."""
+    # The following scope removes the gin-config set.
+    with gin.config_scope('none'):
+      with self.assertRaises(RuntimeError):
+        _ = sampling.EpisodeDescriptionSampler(
+            self.dataset_spec,
+            self.split,
+            num_ways=num_ways,
+            num_support=num_support,
+            num_query=num_query,
+            **kwargs)
+
+  @parameterized.named_parameters(('num_ways_none', None, 5, 10, {
+      'min_ways': 3,
+      'max_ways_upper_bound': 5
+  }), ('num_support_none', 5, None, 10, {
+      'max_support_set_size': 3,
+      'max_support_size_contrib_per_class': 5,
+      'min_log_weight': 0.5,
+      'max_log_weight': 0.5
+  }), ('num_query_none', 5, 5, None, {
+      'max_num_query': 3
+  }))
+  def test_runtime_no_error(self, num_ways, num_support, num_query, kwargs):
+    """Testing run-time errors thrown when arguments are not set correctly."""
+    # The following scope removes the gin-config set.
+    with gin.config_scope('none'):
+      # No error thrown
+      _ = sampling.EpisodeDescriptionSampler(
+          self.dataset_spec,
+          self.split,
+          num_ways=num_ways,
+          num_support=num_support,
+          num_query=num_query,
+          **kwargs)
 
 
 class EpisodeDescrSamplerTest(tf.test.TestCase):
@@ -388,7 +449,7 @@ class FixedWaysEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
   def test_num_ways(self):
     for _ in range(10):
       episode_description = self.sampler.sample_episode_description()
-      self.assertEqual(len(episode_description), self.num_ways)
+      self.assertLen((episode_description), self.num_ways)
 
   def test_ways_too_big(self):
     """Asserts failure if more ways than classes are available."""

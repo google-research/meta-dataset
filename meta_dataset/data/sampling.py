@@ -210,13 +210,13 @@ class EpisodeDescriptionSampler(object):
                num_ways=None,
                num_support=None,
                num_query=None,
-               min_ways=gin.REQUIRED,
-               max_ways_upper_bound=gin.REQUIRED,
-               max_num_query=gin.REQUIRED,
-               max_support_set_size=gin.REQUIRED,
-               max_support_size_contrib_per_class=gin.REQUIRED,
-               min_log_weight=gin.REQUIRED,
-               max_log_weight=gin.REQUIRED):
+               min_ways=None,
+               max_ways_upper_bound=None,
+               max_num_query=None,
+               max_support_set_size=None,
+               max_support_size_contrib_per_class=None,
+               min_log_weight=None,
+               max_log_weight=None):
     """Initializes an EpisodeDescriptionSampler.
 
     Args:
@@ -238,28 +238,54 @@ class EpisodeDescriptionSampler(object):
       num_query: Integer (optional), fixes the number of examples for each class
         in the query set if provided.
       min_ways: Integer, the minimum value when sampling ways (has to be
-        provided through `gin`, only used if `num_ways` is None).
+        provided if `num_ways` is None).
       max_ways_upper_bound: Integer, the maximum value when sampling ways (has
-        to be provided through `gin`, only used if `num_ways` is None). Note
+        to be provided through if `num_ways` is None). Note
         that the number of available classes acts as another upper bound.
       max_num_query: Integer, the maximum number of query examples per class
-        (has to be provided through `gin`, only used if `num_query` is None).
+        (has to be provided if `num_query` is None).
       max_support_set_size: Integer, the maximum size for the support set (has
-        to be provided through `gin`, only used if `num_support` is None).
+        to be provided `num_support` is None).
       max_support_size_contrib_per_class: Integer, the maximum contribution for
-        any given class to the support set size. (has to be provided through
-        `gin`, only used if `num_support` is None).
+        any given class to the support set size. (has to be provided if
+        `num_support` is None).
       min_log_weight: Float, the minimum log-weight to give to any particular
         class when determining the number of support examples per class (has to
-        be provided through `gin`, only used if `num_support` is None).
+        be provided if `num_support` is None).
       max_log_weight: Float, the maximum log-weight to give to any particular
-        class (has to be provided through `gin`, only used if `num_support` is
+        class (has to be provided if `num_support` is
         None).
 
     Raises:
-      RuntimeError: Required gin bindings are missing.
+      RuntimeError: if required parameters are missing.
       ValueError: Inconsistent parameters.
     """
+    arg_groups = {
+        num_ways: ((min_ways, max_ways_upper_bound), 'num_ways',
+                   ('min_ways', 'max_ways_upper_bound')),
+        num_query: ((max_num_query,), 'num_query', ('max_num_query',)),
+        num_support: (
+            (max_support_set_size, max_support_size_contrib_per_class,
+             min_log_weight, max_log_weight), 'num_ways',
+            ('max_support_set_size', 'max_support_size_contrib_per_class',
+             'min_log_weight', 'max_log_weight'))
+    }
+
+    for first_arg, values in arg_groups.items():
+      required_args, first_arg_name, required_arg_names = values
+      if ((first_arg is None) and any(arg is None for arg in required_args)):
+        # Get name of the nones
+        none_arg_names = [
+            name for var, name in zip(required_args, required_arg_names)
+            if var is None
+        ]
+        raise RuntimeError(
+            'The following arguments: %s can not be None, since %s is None. '
+            'Arguments can be set up with gin, for instance by providing '
+            '`--gin_file=learn/gin/setups/learn_config.gin` or calling '
+            '`gin.parse_config_file(...)` in the code. Please ensure the '
+            'following gin arguments of EpisodeDescriptionSampler are set: '
+            '%s' % (none_arg_names, first_arg_name, none_arg_names))
     self.dataset_spec = dataset_spec
     self.split = split
     self.pool = pool
@@ -277,15 +303,6 @@ class EpisodeDescriptionSampler(object):
     self.max_support_size_contrib_per_class = max_support_size_contrib_per_class
     self.min_log_weight = min_log_weight
     self.max_log_weight = max_log_weight
-
-    # Make sure all required parameters have been passed to gin
-    if gin.REQUIRED in (min_ways, max_ways_upper_bound, max_num_query,
-                        max_support_set_size,
-                        max_support_size_contrib_per_class, min_log_weight,
-                        max_log_weight):
-      raise RuntimeError(
-          'Some required gin bindings for `EpisodeDescriptionSampler` are not '
-          'provided in config.')
 
     self.class_set = dataset_spec.get_classes(self.split)
     self.num_classes = len(self.class_set)
