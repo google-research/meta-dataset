@@ -1,0 +1,30 @@
+# Default values for sampling the descriptions of episodes, when they are not fixed.
+EpisodeDescriptionSampler.min_ways = 5
+EpisodeDescriptionSampler.max_ways_upper_bound = 50
+EpisodeDescriptionSampler.max_num_query = 10
+EpisodeDescriptionSampler.max_support_set_size = 500
+EpisodeDescriptionSampler.max_support_size_contrib_per_class = 100
+EpisodeDescriptionSampler.min_log_weight = -0.69314718055994529  # np.log(0.5)
+EpisodeDescriptionSampler.max_log_weight = 0.69314718055994529  # np.log(2)
+
+# Default parameters for support set data augmentation
+process_episode.support_data_augmentation = @SupportSetDataAugmentation()
+SupportSetDataAugmentation.enable_jitter = True
+SupportSetDataAugmentation.jitter_amount = 0
+SupportSetDataAugmentation.enable_gaussian_noise = True
+SupportSetDataAugmentation.gaussian_noise_std = 0.0
+
+# Default parameters for query set data augmentation
+process_episode.query_data_augmentation = @QuerySetDataAugmentation()
+QuerySetDataAugmentation.enable_jitter = False
+QuerySetDataAugmentation.jitter_amount = 0
+QuerySetDataAugmentation.enable_gaussian_noise = False
+QuerySetDataAugmentation.gaussian_noise_std = 0.0
+
+# Default parameters for batch data augmentation
+process_batch.batch_data_augmentation = @BatchDataAugmentation()
+BatchDataAugmentation.enable_jitter = True
+BatchDataAugmentation.jitter_amount = 0
+BatchDataAugmentation.enable_gaussian_noise = True
+BatchDataAugmentation.gaussian_noise_std = 0.0
+
