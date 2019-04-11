@@ -15,7 +15,7 @@
   ```bash
   python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
     --dataset=ilsvrc_2012 \
-    --imagenet_data_root=$DATASRC/ILSVRC2012_img_train \
+    --ilsvrc_2012_data_root=$DATASRC/ILSVRC2012_img_train \
     --splits_root=$SPLITS \
     --records_root=$RECORDS
   ```
