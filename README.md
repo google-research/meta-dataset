@@ -6,9 +6,10 @@ This code is provided here in order to give more details on the implementation
 of the data-providing pipeline, our back-bones and models, as well as the
 experimental setting.
 
-We are currently working on updating the code and adding user instructions to
-facilitate reproducing the experiments and results of the article in new
-execution environments, as well as design and run new experiments.
+See below for [user instructions](#user-instructions), including how to [install](#installation) the software, [download and convert](#downloading-and-converting-datasets) the data, and [train](#training) implemented models.
+
+We are currently working on updating the code and improving the instructions to
+facilitate designing and running new experiments.
 
 This is not an officially supported Google product.
 
@@ -33,3 +34,52 @@ Finally our extensive empirical evaluation leads us to identify weaknesses in
 Prototypical Networks and MAML, two popular few-shot classification methods, and
 to propose a new method, Proto-MAML, which achieves improved performance on our
 benchmark.
+
+# User instructions
+## Installation
+Meta-Dataset currently supports Python 2 only, and has not been tested with TensorFlow 2 yet.
+
+- We recommend you follow [these instructions](https://www.tensorflow.org/install/pip?lang=python2) to install TensorFlow.
+- A list of packages to install is available in `requirements.txt`, you can install them using `pip`.
+- Clone the `meta-dataset` repository. Most command lines start with `python -m meta_dataset.<something>`, and should be typed from within that clone (where a `meta_dataset` Python module should be visible).
+
+## Downloading and converting datasets
+
+Meta-Dataset uses several established datasets, that are available from different sources.
+You can find below a summary of these datasets, as well as instructions to download them and convert them into a common format.
+
+For brevity of the command line examples, we assume the following environment variables are defined:
+
+- `$DATASRC`: root of where the original data is downloaded and potentially extracted from compressed files. This directory does not need to be available after the data conversion is done.
+- `$SPLITS`: directory where `*_splits.pkl` files will be created, one per dataset. For instance, `$SPLITS/fungi_splits.pkl` contains information about which classes are part of the meta-training, meta-validation, and meta-test set. This is only used during the dataset conversion phase, but can help troubleshooting later.
+- `$RECORDS`: root directory that will contain the converted datasets (one per sub-directory). This directory needs to be available during training and evaluation.
+
+### Dataset summary
+
+Dataset (other names) | Number of classes (train/valid/test) | Size on disk  | Conversion time
+----------------------|--------------------------------------|---------------|--------------------------
+ilsvrc\_2012 (ImageNet, ILSVRC) \[[instructions](doc/dataset_conversion.md#ilsvrc_2012)\] | 1000 (712/158/130, hierarchical) | \~140 GiB   | 5 to 13 hours
+omniglot \[[instructions](doc/dataset_conversion.md#omniglot)\] | 1623 (883/81/659, by alphabet: 25/5/20) | \~60 MiB | few seconds
+aircraft (FGVC-Aircraft) \[[instructions](doc/dataset_conversion.md#aircraft)\] | 100 (70/15/15) | \~470 MiB (2.6 GiB download) | 5 to 10 minutes
+cu\_birds (Birds, CUB-200-2011) \[[instructions](doc/dataset_conversion.md#cu_birds)\] | 200 (140/30/30) | \~1.1 GiB | \~1 minute
+dtd (Describable Textures, DTD) \[[instructions](doc/dataset_conversion.md#dtd)\] | 47 (33/7/7) | \~600 MiB | few seconds
+quickdraw (Quick, Draw!) \[[instructions](doc/dataset_conversion.md#quickdraw)\] | 345 (241/52/52) | \~50 GiB | 3 to 4 hours
+fungi (FGVCx Fungi) \[[instructions](doc/dataset_conversion.md#fungi)\] | 1394 (994/200/200) | \~13 GiB | 5 to 15 minutes
+vgg\_flower (VGG Flower) \[[instructions](doc/dataset_conversion.md#vgg_flower)\] | 102 (71/15/16) | \~330 MiB | \~1 minute
+traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) \[[instructions](doc/dataset_conversion.md#traffic_sign)\] | 43 (0/0/43, test only) | \~50 MiB (263 MiB download) | \~1 minute
+mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)\] | 80 (0/40/40, validation and test only) | \~5.3 GiB (18 GiB download) | 4 hours
+*Total (All datasets)* | *4934 (3144/598/1192)* | *\~210 GiB* | *12 to 24 hours* |
+
+
+## Training
+
+Experiments are defined via [gin](google/gin-config) configuration files, that are under `meta_dataset/learn/gin/`:
+
+- `setups/` contain generic setups for classes of experiment, for instance which datasets to use (`imagenet` or `all`), parameters for sampling the number of ways and shots of episodes.
+- `models/` define settings for different meta-learning algorithms (baselines, prototypical networks, MAML...)
+- `default/` contains files that each correspond to one experiment, mostly defining a setup and a model, with default values for training hyperparameters.
+- `best/` contains files with values for training hyperparameters that achieved the best performance during hyperparameter search.
+
+### Reproducing results
+
+### Hyperparameter search
