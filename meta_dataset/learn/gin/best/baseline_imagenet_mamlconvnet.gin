@@ -4,3 +4,11 @@ include 'meta_dataset/learn/gin/models/baseline_config.gin'
 LearnerConfig.embedding_network = 'four_layer_convnet_maml'
 BaselineLearner.knn_distance = 'cosine'
 DataConfig.image_height = 126
+
+## Hyperparameters used to train the best checkpoint
+LearnerConfig.decay_every = 5000
+LearnerConfig.decay_rate = 0.6431136271727287
+LearnerConfig.learning_rate = 0.00371743130027308
+LearnerConfig.pretrained_checkpoint = ''
+LearnerConfig.pretrained_source = 'scratch'
+weight_decay = 0.00003630199690303937
