@@ -28,7 +28,6 @@ import os
 import gin.tf
 from meta_dataset import learner
 # The following import is needed for gin to know about DataConfig.
-from meta_dataset.data import config  # pylint: disable=unused-import
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline

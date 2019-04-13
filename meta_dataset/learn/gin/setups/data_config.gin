@@ -1,3 +1,5 @@
+import meta_dataset.data.config
+
 # Default values for sampling the descriptions of episodes, when they are not fixed.
 EpisodeDescriptionSampler.min_ways = 5
 EpisodeDescriptionSampler.max_ways_upper_bound = 50
@@ -11,8 +13,6 @@ EpisodeDescriptionSampler.max_log_weight = 0.69314718055994529  # np.log(2)
 DataConfig.image_height = 84
 DataConfig.shuffle_buffer_size = 1000
 DataConfig.read_buffer_size_bytes = 1048576  # 1 MB (1024**2)
-Trainer.data_config = @DataConfig()
-
 
 # Default parameters for support set data augmentation
 process_episode.support_data_augmentation = @SupportSetDataAugmentation()
