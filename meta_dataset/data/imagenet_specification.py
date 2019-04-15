@@ -872,7 +872,7 @@ def create_imagenet_specification(split_enum,
   path_to_is_a = FLAGS.path_to_is_a
   if not path_to_is_a:
     path_to_is_a = os.path.join(data_root, 'wordnet.is_a.txt')
-  with tf.gfile.Open(FLAGS.path_to_is_a, 'r') as f:
+  with tf.gfile.Open(path_to_is_a, 'r') as f:
     for line in f:
       parent, child = line.rstrip().split(' ')
       synsets[parent].children.add(synsets[child])
