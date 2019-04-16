@@ -37,6 +37,8 @@ import tensorflow as tf
 
 tf.flags.DEFINE_string(
     'mini_imagenet_records_dir',
+    # This dataset is for diagnostic purposes only, which is why we want to
+    # store it in a different location than the other datasets.
     '',
     'The path to store the tf.Records of MiniImageNet.')
 
