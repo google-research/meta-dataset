@@ -340,7 +340,8 @@ def propose_valid_test_roots(spanning_leaves,
   # Sort in decreasing order of the length of the lists of spanning leaves, so
   # e.g. the node that spans the most leaves will be the first element
   spanning_leaves_sorted = sorted(
-      spanning_leaves.iteritems(), key=lambda (k, v): (len(v), k))
+      spanning_leaves.iteritems(),
+      key=lambda key_val: (len(key_val[1]), key_val[0]))
   spanning_leaves_sorted.reverse()
 
   # Get the candidate roots for the validation and test sub-graphs, by finding
