@@ -86,7 +86,7 @@ There are two main architectures, or "backbones": `four_layer_convnet` (sometime
 
 See [Reproducing best results](doc/reproducing_best_results.md) for instructions to launch training experiments with the values of hyperparameters that were selected in the paper. The hyperparameters (including the backbone, whether to train from scratch or from pre-trained weights, and the number of training updates) were selected using only the validation classes of the ILSVRC 2012 dataset for all experiments. Even when training on "all" datasets, the validation classes of the other datasets were not used.
 
-We tried our best to reproduce the original results using the public code on Google Cloud VMs, but there is inherent noise and variability in the computation. 
+We tried our best to reproduce the original results using the public code on Google Cloud VMs, but there is inherent noise and variability in the computation.
 For transparency, we will include the results of the reproduced experiments as well as the original ones, which were reported in the article. We also include the validation errors on ILSVRC.
 
 TODO: fill.
