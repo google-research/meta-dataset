@@ -2,7 +2,14 @@ include 'meta_dataset/learn/gin/setups/all.gin'
 
 include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
 LearnerConfig.embedding_network = 'resnet'
-weight_decay = 0.000003
+DataConfig.image_height = 126
+
+## Hyperparameters used to train the best model
 BaselineFinetuneLearner.num_finetune_steps = 75
 BaselineFinetuneLearner.finetune_lr = 0.01
-DataConfig.image_height = 126
+LearnerConfig.decay_every = 10000
+LearnerConfig.decay_rate = 0.5575524279100452
+LearnerConfig.learning_rate = 0.001826400239977318
+LearnerConfig.pretrained_checkpoint = ''
+LearnerConfig.pretrained_source = 'scratch'
+weight_decay = 0.0000033242172150107816

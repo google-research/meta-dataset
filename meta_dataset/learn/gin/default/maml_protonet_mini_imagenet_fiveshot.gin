@@ -1,5 +1,0 @@
-include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
-
-include 'meta_dataset/learn/gin/models/maml_config.gin'
-LearnerConfig.learning_rate = 1e-4
-LearnerConfig.decay_learning_rate = True

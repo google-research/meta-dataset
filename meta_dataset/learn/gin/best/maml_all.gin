@@ -9,3 +9,11 @@ MAMLLearner.train_batch_norm = False
 MAMLLearner.additional_test_update_steps = 0
 MAMLLearner.num_update_steps = 6
 DataConfig.image_height = 84
+
+## Hyperparameters used to train the best model
+LearnerConfig.decay_every = 10000
+LearnerConfig.decay_rate = 0.5306086781426814
+LearnerConfig.learning_rate = 0.00010204104240973289
+LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_mamlconvnet_best/model_43500.ckpt'
+LearnerConfig.pretrained_source = 'imagenet'
+weight_decay = 0.0011111917305133214
