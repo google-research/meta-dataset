@@ -198,6 +198,11 @@ differences:
 - The best baseline still has to be trained on all the data.
 - The best `prototypical` was a pre-trained `resnet`, so the gin configuration also has to be updated for `prototypical_all`.
 
+Since many more `.tfrecords` files are used than for ImageNet only, make sure that the limits on the number of files open at the same time is large enough (`ulimit -n`). We used [these instructions](http://posidev.com/blog/2009/06/04/set-ulimit-parameters-on-ubuntu/) to set the limit to 100000, although 10000 is probably sufficient (1024 was too small). If the limit it too low, the script would crash:
+
+- For batch training, right away with an explicit error: `ResourceExhaustedError [...] Too many open files`,
+- For episodic training, with a more cryptic error like `InvalidArgumentError: Feature: image (data type: string) is required but could not be found.`, after warnings like `DirectedInterleave selected an exhausted input`.
+
 ### Training
 
 ```bash
