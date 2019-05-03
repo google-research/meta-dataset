@@ -140,7 +140,7 @@ do
   python -m meta_dataset.analysis.select_best_model \
     --all_experiments_root=$EXPROOT \
     --experiment_dir_basenames='' \
-    --restrict_to_variant=${EXPNAME} \
+    --restrict_to_variants=${EXPNAME} \
     --description=best_${EXPNAME}
 done
 ```
@@ -214,10 +214,14 @@ do
 done
 ```
 
-TODO: Add approximate timing.
+Run time:
+
+- `baseline` and `baselinefinetune`: ~10 hours
+- `matching` and `prototypical`: ~18 hours
+- `maml`: 2 days
+- `maml_init_with_proto`: manually killed after 4 days, reached only 20k
+  updates.
 
 ### Evaluation
 
-Evaluation would be identical, except for `export SOURCE=all`.
-
-TODO: Add approximate timing.
+Getting the best checkpoint and evaluating it would be identical, except for `export SOURCE=all`. Timing should be similar as well.
