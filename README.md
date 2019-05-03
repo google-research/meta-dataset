@@ -122,8 +122,8 @@ Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet 
 
 Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet     | fo-MAML      | Proto-MAML
 ------------------------|--------------|--------------|--------------|--------------|--------------|------------
- ILSVRC valid           |  |  |  |  |  |  
-*ILSVRC valid (repro)*  | ** | ** | ** | ** | ** | ** 
+ ILSVRC valid           |  25.26       |  32.43       |  34.70       |  37.22       |  21.12       |  39.67 
+*ILSVRC valid (repro)*  | *23.94*      | *27.98*      | *34.06*      | *36.34*      | *19.73*      | *39.86* 
  ILSVRC test            |  28.46±0.83  |  39.68±1.02  |  40.81±1.02  |  41.82±1.06  |  22.41±0.80  |  45.48±1.02
 *ILSVRC test (repro)*   | *±* | *±* | *±* | *±* | *±* | *±* 
  Omniglot               |  88.42±0.63  |  85.57±0.89  |  75.62±1.09  |  78.61±1.10  |  68.14±1.35  |  86.26±0.85
