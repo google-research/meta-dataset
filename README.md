@@ -89,8 +89,6 @@ See [Reproducing best results](doc/reproducing_best_results.md) for instructions
 We tried our best to reproduce the original results using the public code on Google Cloud VMs, but there is inherent noise and variability in the computation.
 For transparency, we will include the results of the reproduced experiments as well as the original ones, which were reported in the article. We also include the validation errors on ILSVRC.
 
-TODO: fill.
-
 #### Models trained on ILSVRC-2012 only
 
 Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet     | fo-MAML      | Proto-MAML
@@ -125,25 +123,25 @@ Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet 
  ILSVRC valid           |  25.26       |  32.43       |  34.70       |  37.22       |  21.12       |  39.67 
 *ILSVRC valid (repro)*  | *23.94*      | *27.98*      | *34.06*      | *36.34*      | *19.73*      | *39.86* 
  ILSVRC test            |  28.46±0.83  |  39.68±1.02  |  40.81±1.02  |  41.82±1.06  |  22.41±0.80  |  45.48±1.02
-*ILSVRC test (repro)*   | *±* | *±* | *±* | *±* | *±* | *±* 
+*ILSVRC test (repro)*   | *28.43±0.90* | *31.96±0.98* | *39.43±1.05* | *40.99±1.04* | *22.44±0.82* | *46.70±1.08* 
  Omniglot               |  88.42±0.63  |  85.57±0.89  |  75.62±1.09  |  78.61±1.10  |  68.14±1.35  |  86.26±0.85
-*Omniglot (repro)*      | *±* | *±* | *±* | *±* | *±* | *±* 
+*Omniglot (repro)*      | *88.25±0.66* | *86.19±0.88* | *74.95±1.06* | *80.91±0.98* | *68.34±1.31* | *82.31±0.99* 
  Aircraft               |  70.10±0.73  |  69.81±0.93  |  60.68±0.87  |  66.57±0.92  |  44.48±0.91  |  79.15±0.67
-*Aircraft (repro)*      | *±* | *±* | *±* | *±* | *±* | *±* 
+*Aircraft (repro)*      | *65.15±0.73* | *65.08±0.88* | *59.56±0.92* | *70.11±0.86* | *44.39±0.95* | *73.53±0.82* 
  Birds                  |  47.34±0.97  |  54.07±1.08  |  57.09±0.95  |  63.57±1.02  |  36.70±1.13  |  72.67±0.96
-*Birds (repro)*         | *±* | *±* | *±* | *±* | *±* | *±* 
+*Birds (repro)*         | *47.42±0.95* | *50.57±1.05* | *57.45±0.98* | *63.07±1.10* | *36.13±1.13* | *71.77±0.93* 
  Textures               |  56.39±0.74  |  62.66±0.81  |  64.65±0.77  |  66.60±0.80  |  45.79±0.67  |  66.69±0.77
-*Textures (repro)*      | *±* | *±* | *±* | *±* | *±* | *±* 
+*Textures (repro)*      | *55.74±0.71* | *54.82±0.83* | *65.97±0.78* | *65.99±0.79* | *43.05±0.95* | *66.32±0.77* 
  Quick Draw             |  66.12±0.91  |  73.88±0.81  |  58.86±1.01  |  63.55±0.92  |  41.27±1.46  |  67.83±0.90
-*Quick Draw (repro)*    | *±* | *±* | *±* | *±* | *±* | *±* 
+*Quick Draw (repro)*    | *65.51±0.88* | *72.66±0.83* | *61.80±0.97* | *67.81±0.90* | *42.61±1.43* | *69.69±0.89* 
  Fungi                  |  38.35±1.08  |  31.85±1.08  |  34.38±1.01  |  37.97±1.07  |  14.21±0.81  |  44.58±1.19
-*Fungi (repro)*         | *±* | *±* | *±* | *±* | *±* | *±* 
+*Fungi (repro)*         | *37.59±1.04* | *30.37±0.94* | *34.16±0.98* | *38.42±1.16* | *14.16±0.80* | *42.971.13±* 
  VGG Flower             |  73.21±0.75  |  77.55±0.94  |  82.60±0.66  |  84.43±0.69  |  61.10±1.11  |  88.21±0.68
-*VGG Flower (repro)*    | *±* | *±* | *±* | *±* | *±* | *±* 
+*VGG Flower (repro)*    | *74.41±0.74* | *72.33±1.01* | *82.40±0.70* | *85.21±0.67* | *58.75±1.12* | *88.11±0.70* 
  Traffic signs          |  49.84±1.23  |  53.07±1.13  |  57.90±1.16  |  50.60±1.02  |  24.03±1.08  |  46.38±1.03
-*Traffic signs (repro)* | *±* | *±* | *±* | *±* | *±* | *±* 
+*Traffic signs (repro)* | *49.61±1.25* | *52.03±1.22* | *57.92±1.17* | *49.63±1.01* | *23.29±1.03* | *48.74±1.11* 
  MSCOCO                 |  24.29±0.92  |  27.71±1.20  |  30.20±1.13  |  37.58±1.14  |  13.63±0.96  |  35.12±1.20
-*MSCOCO (repro)*        | *±* | *±* | *±* | *±* | *±* | *±* 
+*MSCOCO (repro)*        | *30.34±0.93* | *33.71±1.02* | *39.48±1.06* | *42.53±1.08* | *17.11±0.88* | *42.94±1.10* 
 
 ### Hyperparameter search
 
