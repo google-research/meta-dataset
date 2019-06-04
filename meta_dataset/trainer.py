@@ -719,6 +719,7 @@ class Trainer(object):
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
+    num_prefetch = self.data_config.num_prefetch
     benchmark_spec = (
         self.valid_benchmark_spec if split == 'valid' else self.benchmark_spec)
     (_, image_shape, dataset_spec_list, has_dag_ontology,
@@ -750,6 +751,7 @@ class Trainer(object):
           num_query=num_test_examples,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_size)
     else:
       data_pipeline = pipeline.make_multisource_episode_pipeline(
@@ -762,6 +764,7 @@ class Trainer(object):
           num_query=num_test_examples,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_size)
       data_pipeline = apply_dataset_options(data_pipeline)
 
@@ -787,6 +790,7 @@ class Trainer(object):
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
+    num_prefetch = self.data_config.num_prefetch
     _, image_shape, dataset_spec_list, _, _ = self.benchmark_spec
     dataset_split, batch_size = self.split_episode_or_batch_specs[split]
     for dataset_spec in dataset_spec_list:
@@ -804,6 +808,7 @@ class Trainer(object):
           batch_size=batch_size,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_shape[0])
     else:
       data_pipeline = pipeline.make_multisource_batch_pipeline(
@@ -812,6 +817,7 @@ class Trainer(object):
           batch_size=batch_size,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_shape[0])
 
     data_pipeline = apply_dataset_options(data_pipeline)

@@ -30,7 +30,8 @@ import gin.tf
 class DataConfig(object):
   """Common configuration options for creating data processing pipelines."""
 
-  def __init__(self, image_height, shuffle_buffer_size, read_buffer_size_bytes):
+  def __init__(self, image_height, shuffle_buffer_size, read_buffer_size_bytes,
+               num_prefetch):
     """Initialize a DataConfig.
 
     Args:
@@ -44,10 +45,14 @@ class DataConfig(object):
       read_buffer_size_bytes: An integer, the size (in bytes) of the read buffer
         for each tf.data.TFRecordDataset (there is typically one for each class
         of each dataset).
+      num_prefetch: int, the number of examples to prefetch for each class of
+        each dataset. Prefetching occurs just after the class-specific Dataset
+        object is constructed. If < 1, no prefetching occurs.
     """
     self.image_height = image_height
     self.shuffle_buffer_size = shuffle_buffer_size
     self.read_buffer_size_bytes = read_buffer_size_bytes
+    self.num_prefetch = num_prefetch
 
 
 class DataAugmentation(object):

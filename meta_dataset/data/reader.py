@@ -148,7 +148,7 @@ class Reader(object):
   """
 
   def __init__(self, dataset_spec, split, shuffle_buffer_size,
-               read_buffer_size_bytes):
+               read_buffer_size_bytes, num_prefetch):
     """Initializes a Reader from a source.
 
     The source is identified by dataset_spec and split.
@@ -159,11 +159,15 @@ class Reader(object):
       shuffle_buffer_size: An integer, the shuffle buffer size for each Dataset
         object. If 0, no shuffling operation will happen.
       read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+      num_prefetch: int, the number of examples to prefetch for each class of
+        each dataset. Prefetching occurs just after the class-specific Dataset
+        object is constructed. If < 1, no prefetching occurs.
     """
     self.dataset_spec = dataset_spec
     self.split = split
     self.shuffle_buffer_size = shuffle_buffer_size
     self.read_buffer_size_bytes = read_buffer_size_bytes
+    self.num_prefetch = num_prefetch
 
     self.base_path = self.dataset_spec.path
     self.class_set = self.dataset_spec.get_classes(self.split)
@@ -213,6 +217,9 @@ class Reader(object):
 
       example_string_dataset = tf.data.TFRecordDataset(
           filename, buffer_size=self.read_buffer_size_bytes)
+      if self.num_prefetch > 0:
+        example_string_dataset = example_string_dataset.prefetch(
+            self.num_prefetch)
       if shuffle:
         # Do not set a buffer size greater than the number of examples in this
         # class, as it can result in unnecessary memory being allocated.
