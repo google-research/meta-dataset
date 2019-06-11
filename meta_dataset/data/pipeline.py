@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """This module assembles full input data pipelines.
 
 The whole pipeline incorporate (potentially) multiple Readers, the logic to
@@ -35,6 +36,7 @@ from meta_dataset import data
 from meta_dataset.data import learning_spec
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
+from six.moves import zip
 import tensorflow as tf
 
 
