@@ -230,6 +230,7 @@ class EpisodeReaderTest(tf.test.TestCase):
     self.split = Split.TRAIN
     self.shuffle_buffer_size = 30
     self.read_buffer_size_bytes = None
+    self.num_prefetch = 0
 
   def generate_episodes(self,
                         sampler,
@@ -243,8 +244,10 @@ class EpisodeReaderTest(tf.test.TestCase):
     else:
       shuffle_buffer_size = 0
 
-    episode_reader = DummyEpisodeReader(
-        dataset_spec, split, shuffle_buffer_size, self.read_buffer_size_bytes)
+    episode_reader = DummyEpisodeReader(dataset_spec, split,
+                                        shuffle_buffer_size,
+                                        self.read_buffer_size_bytes,
+                                        self.num_prefetch)
     input_pipeline = episode_reader.create_dataset_input_pipeline(
         sampler, shuffle_seed=shuffle_seed)
     iterator = input_pipeline.make_one_shot_iterator()

@@ -266,7 +266,7 @@ class EpisodeReader(Reader):
         support and query sets and decode the example strings.
     """
     # Always shuffle, unless self.shuffle_buffer_size is 0
-    shuffle = (self.shuffle_buffer_size > 0)
+    shuffle = (self.shuffle_buffer_size and self.shuffle_buffer_size > 0)
     class_datasets = self.construct_class_datasets(
         pool=pool, shuffle=shuffle, shuffle_seed=shuffle_seed)
 
