@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Prepares the ILSVRC2012 subset of ImageNet for integration in the benchmark.
 
 This requires creating a data structure to navigate the subset of the ontology
@@ -31,6 +32,7 @@ import os
 import pickle as pkl
 from meta_dataset.data import imagenet_stats
 import numpy as np
+import six
 import tensorflow as tf
 
 tf.flags.DEFINE_string(
@@ -338,10 +340,13 @@ def propose_valid_test_roots(spanning_leaves,
       margin value.
   """
   # Sort in decreasing order of the length of the lists of spanning leaves, so
-  # e.g. the node that spans the most leaves will be the first element
-  spanning_leaves_sorted = sorted(
-      spanning_leaves.iteritems(),
-      key=lambda key_val: (len(key_val[1]), key_val[0]))
+  # e.g. the node that spans the most leaves will be the first element.  Ties
+  # are broken by the WordNet ID of the Synset.
+  def _sort_key(synset_and_leaves):
+    synset, leaves = synset_and_leaves
+    return (len(leaves), synset.wn_id)
+
+  spanning_leaves_sorted = sorted(six.iteritems(spanning_leaves), key=_sort_key)
   spanning_leaves_sorted.reverse()
 
   # Get the candidate roots for the validation and test sub-graphs, by finding

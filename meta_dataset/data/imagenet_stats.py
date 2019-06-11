@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Computes stats of the graphs created in imagenet_specification.py."""
 
 from __future__ import absolute_import
@@ -21,6 +22,7 @@ from __future__ import print_function
 
 import collections
 import numpy as np
+from six.moves import range
 import tensorflow as tf
 
 
@@ -148,7 +150,7 @@ def log_stats_finegrainedness(nodes,
   """
   tf.logging.info(
       'Finegrainedness analysis of %s graph using %s paths in '
-      'finding the lowest common ancestor.', (graph_name, path))
+      'finding the lowest common ancestor.', graph_name, path)
   leaves = get_leaves_fn(nodes)
   # Maps the height of the lowest common ancestor of two leaves to the 'example'
   # in which that height occurred. The example is a tuple of the string words
