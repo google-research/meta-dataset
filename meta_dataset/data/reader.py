@@ -62,7 +62,7 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   class in the dataset (there are `num_classes` of them, which is determined by
   inspecting the `dataset_spec` argument using the `split` argument) is appended
   with a "dummy" Dataset (which has index `num_classes` in the list) which
-  outputs a constant `('', DUMMY_CLASS_ID)` tuple).
+  outputs a constant `(b'', DUMMY_CLASS_ID)` tuple).
 
   Note that a dataset ID is different from the (absolute) class ID: the dataset
   ID refers to the index of the Dataset in the list of Dataset objects, and the
@@ -270,10 +270,10 @@ class EpisodeReader(Reader):
     class_datasets = self.construct_class_datasets(
         pool=pool, shuffle=shuffle, shuffle_seed=shuffle_seed)
 
-    # We also construct a dummy dataset which outputs `('', DUMMY_CLASS_ID)`
+    # We also construct a dummy dataset which outputs `(b'', DUMMY_CLASS_ID)`
     # tuples.
     dummy_dataset = tf.data.Dataset.zip(
-        (tf.data.Dataset.from_tensors('').repeat(),
+        (tf.data.Dataset.from_tensors(b'').repeat(),
          tf.data.Dataset.from_tensors(DUMMY_CLASS_ID).repeat()))
     class_datasets.append(dummy_dataset)
 
