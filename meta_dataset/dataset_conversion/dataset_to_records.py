@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tools for preparing datasets for integration in the benchmark.
 
 Specifically, the DatasetConverter class is used to perform the conversion of a
@@ -34,7 +35,6 @@ from __future__ import print_function
 
 import binascii
 import collections
-import cPickle as pkl
 import io
 import json
 import operator
@@ -47,6 +47,8 @@ import numpy as np
 from PIL import Image
 from PIL import ImageOps
 from scipy.io import loadmat
+from six.moves import range
+import six.moves.cPickle as pkl
 import tensorflow as tf
 
 # Datasets in the same order as reported in the article.
@@ -1355,7 +1357,7 @@ class MSCOCOConverter(DatasetConverter):
       return image_crop, class_id
 
     class_tf_record_writers = []
-    for class_id in xrange(self.num_all_classes):
+    for class_id in range(self.num_all_classes):
       output_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       class_tf_record_writers.append(tf.python_io.TFRecordWriter(output_path))
@@ -1545,7 +1547,7 @@ class FungiConverter(DatasetConverter):
       original_val = json.load(f)
 
     # The categories (classes) for train and validation should be the same.
-    assert cmp(original_train['categories'], original_val['categories']) == 0
+    assert original_train['categories'] == original_val['categories']
     class_labels = ([c['id'] for c in original_train['categories']])
     # Assert no repeated categories
     assert len(class_labels) == len(set(class_labels))
