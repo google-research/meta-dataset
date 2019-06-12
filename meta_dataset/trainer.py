@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Interface for a learner that uses BenchmarkReaderDataSource to get data."""
 # TODO(lamblinp): Update variable names to be more consistent
 # - target, class_idx, label
@@ -22,7 +23,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pkl
 import os
 
 import gin.tf
@@ -32,7 +32,11 @@ from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
 import numpy as np
+from six.moves import range
+from six.moves import zip
+import six.moves.cPickle as pkl
 import tensorflow as tf
+
 from tensorflow.core.protobuf import rewriter_config_pb2  # pylint: disable=g-direct-tensorflow-import
 
 # The following flag specifies substrings of variable names that should not be
