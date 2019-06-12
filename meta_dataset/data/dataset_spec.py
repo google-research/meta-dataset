@@ -127,8 +127,8 @@ class BenchmarkSpecification(
         BiLevelDatasetSpecification.
   """
 
-  def __init__(self, name, image_shape, dataset_spec_list, has_dag_ontology,
-               has_bilevel_ontology):
+  def __new__(cls, name, image_shape, dataset_spec_list, has_dag_ontology,
+              has_bilevel_ontology):
     if len(has_dag_ontology) != len(dataset_spec_list):
       raise ValueError('The length of has_dag_ontology must be the number of '
                        'datasets.')
@@ -156,9 +156,10 @@ class BenchmarkSpecification(
         raise ValueError(
             'Dataset {} has no bilevel ontology, but is '
             'represented using a BiLevelDatasetSpecification.'.format(i))
-    super(BenchmarkSpecification,
-          self).__init__(name, image_shape, dataset_spec_list, has_dag_ontology,
-                         has_bilevel_ontology)
+    self = super(BenchmarkSpecification,
+                 cls).__new__(cls, name, image_shape, dataset_spec_list,
+                              has_dag_ontology, has_bilevel_ontology)
+    return self
 
 
 class DatasetSpecification(
