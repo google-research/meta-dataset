@@ -261,18 +261,19 @@ class EpisodeDescriptionSampler(object):
       ValueError: Inconsistent parameters.
     """
     arg_groups = {
-        num_ways: ((min_ways, max_ways_upper_bound), 'num_ways',
-                   ('min_ways', 'max_ways_upper_bound')),
-        num_query: ((max_num_query,), 'num_query', ('max_num_query',)),
-        num_support: (
-            (max_support_set_size, max_support_size_contrib_per_class,
-             min_log_weight, max_log_weight), 'num_ways',
-            ('max_support_set_size', 'max_support_size_contrib_per_class',
-             'min_log_weight', 'max_log_weight'))
+        'num_ways': (num_ways, ('min_ways', 'max_ways_upper_bound'),
+                     (min_ways, max_ways_upper_bound)),
+        'num_query': (num_query, ('max_num_query',), (max_num_query,)),
+        'num_support':
+            (num_support,
+             ('max_support_set_size', 'max_support_size_contrib_per_class',
+              'min_log_weight', 'max_log_weight'),
+             (max_support_set_size, max_support_size_contrib_per_class,
+              min_log_weight, max_log_weight)),
     }
 
-    for first_arg, values in arg_groups.items():
-      required_args, first_arg_name, required_arg_names = values
+    for first_arg_name, values in arg_groups.items():
+      first_arg, required_arg_names, required_args = values
       if ((first_arg is None) and any(arg is None for arg in required_args)):
         # Get name of the nones
         none_arg_names = [
@@ -282,7 +283,7 @@ class EpisodeDescriptionSampler(object):
         raise RuntimeError(
             'The following arguments: %s can not be None, since %s is None. '
             'Arguments can be set up with gin, for instance by providing '
-            '`--gin_file=learn/gin/setups/learn_config.gin` or calling '
+            '`--gin_file=learn/gin/setups/data_config.gin` or calling '
             '`gin.parse_config_file(...)` in the code. Please ensure the '
             'following gin arguments of EpisodeDescriptionSampler are set: '
             '%s' % (none_arg_names, first_arg_name, none_arg_names))
