@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 r"""Script for aggregating the eval summaries into dicts.
 
 This script assumes that the evaluation has already been ran (and has produced
@@ -47,13 +48,14 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import cPickle as pkl
 import os
 
 from meta_dataset.data import dataset_spec  # pylint: disable=unused-import
 from meta_dataset.data import imagenet_specification as imagenet_spec
 from meta_dataset.data import learning_spec
 import numpy as np
+from six.moves import range
+import six.moves.cPickle as pkl
 import tensorflow as tf
 
 FLAGS = tf.flags.FLAGS
@@ -439,7 +441,7 @@ def write_pkl(output_data, output_path):
   with tf.gfile.Open(output_path, 'wb') as f:
     pkl.dump(output_data, f, protocol=pkl.HIGHEST_PROTOCOL)
   tf.logging.info('Dumped data with keys: %s to location %s' %
-                  (output_data.keys(), output_path))
+                  (list(output_data.keys()), output_path))
 
 
 def read_pkl(output_path):
@@ -447,7 +449,7 @@ def read_pkl(output_path):
   if tf.gfile.Exists(output_path):
     with tf.gfile.Open(output_path, 'rb') as f:
       data = pkl.load(f)
-      tf.logging.info('Read data with keys: %s' % data.keys())
+      tf.logging.info('Read data with keys: %s' % list(data.keys()))
       return data
   else:
     return False
