@@ -242,8 +242,8 @@ class EpisodeDescriptionSampler(object):
       min_ways: Integer, the minimum value when sampling ways (has to be
         provided if `num_ways` is None).
       max_ways_upper_bound: Integer, the maximum value when sampling ways (has
-        to be provided through if `num_ways` is None). Note
-        that the number of available classes acts as another upper bound.
+        to be provided through if `num_ways` is None). Note that the number of
+        available classes acts as another upper bound.
       max_num_query: Integer, the maximum number of query examples per class
         (has to be provided if `num_query` is None).
       max_support_set_size: Integer, the maximum size for the support set (has
@@ -255,8 +255,7 @@ class EpisodeDescriptionSampler(object):
         class when determining the number of support examples per class (has to
         be provided if `num_support` is None).
       max_log_weight: Float, the maximum log-weight to give to any particular
-        class (has to be provided if `num_support` is
-        None).
+        class (has to be provided if `num_support` is None).
 
     Raises:
       RuntimeError: if required parameters are missing.
