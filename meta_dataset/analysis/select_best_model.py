@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 r"""A script for choosing the best variant of a model automatically.
 
 It takes as input the root directory of all experiments, and a list of names of
@@ -50,9 +51,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pkl
 import os
+
 import numpy as np
+from six.moves import range
+from six.moves import zip
+import six.moves.cPickle as pkl
 import tensorflow as tf
 
 FLAGS = tf.flags.FLAGS
@@ -223,7 +227,7 @@ def get_paths_to_events(root_dir,
     ]
 
   tf.logging.info('Found event files for variants: {}'.format(
-      event_paths.keys()))
+      list(event_paths.keys())))
   return event_paths
 
 
