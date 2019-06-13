@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Forming the first part of a tf.data pipeline, reading from a source on disk.
 
 The data output by the Reader consists in episodes or batches (for EpisodeReader
@@ -33,6 +34,7 @@ import os
 
 from meta_dataset import data
 import numpy as np
+from six.moves import range
 import tensorflow as tf
 
 # DUMMY_CLASS_ID will be used as the target of examples used for padding only.

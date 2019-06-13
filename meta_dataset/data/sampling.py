@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Sampling the composition of episodes.
 
 The composition of episodes consists in the number of classes (num_ways), which
@@ -32,6 +33,7 @@ import gin.tf
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import imagenet_specification
 import numpy as np
+from six.moves import zip
 
 # Module-level random number generator. Initialized randomly, can be seeded.
 RNG = np.random.RandomState(seed=None)

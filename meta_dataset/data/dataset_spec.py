@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Interfaces for dataset specifications."""
 
 from __future__ import absolute_import
@@ -23,6 +24,8 @@ import collections
 from meta_dataset import data
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
+from six.moves import range
+from six.moves import zip
 import tensorflow as tf
 
 # Global records root directory, for all datasets (except diagnostics).
