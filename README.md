@@ -8,6 +8,8 @@ experimental setting.
 
 See below for [user instructions](#user-instructions), including how to [install](#installation) the software, [download and convert](#downloading-and-converting-datasets) the data, and [train](#training) implemented models.
 
+See this [introduction notebook](https://github.com/google-research/meta-dataset/blob/master/Intro_to_Metadataset.ipynb) for a demonstration of how to sample data from the pipeline (episodes or batches).
+
 We are currently working on updating the code and improving the instructions to
 facilitate designing and running new experiments.
 
@@ -37,9 +39,10 @@ benchmark.
 
 # User instructions
 ## Installation
-Meta-Dataset currently supports Python 2 only, and has not been tested with TensorFlow 2 yet.
+Meta-Dataset is now compatible with Python 2 and Python 3, but has mostly been used with Python 2 up to now, so glitches with Python 3 are still possible.
+The code has not been tested with TensorFlow 2 yet.
 
-- We recommend you follow [these instructions](https://www.tensorflow.org/install/pip?lang=python2) to install TensorFlow.
+- We recommend you follow [these instructions](https://www.tensorflow.org/install/pip) to install TensorFlow.
 - A list of packages to install is available in `requirements.txt`, you can install them using `pip`.
 - Clone the `meta-dataset` repository. Most command lines start with `python -m meta_dataset.<something>`, and should be typed from within that clone (where a `meta_dataset` Python module should be visible).
 
