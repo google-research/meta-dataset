@@ -1409,12 +1409,37 @@ class ImageNetConverter(DatasetConverter):
 
     See HierarchicalDatasetSpecification for details.
     """
+    # Load lists of image names that are duplicates with images in other
+    # datasets. They will be skipped from ImageNet.
+    self.files_to_skip = set()
+    for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
+      duplicates_file = os.path.join(
+          ILSCRC_DUPLICATES_PATH,
+          'ImageNet_{}_duplicates.txt'.format(other_dataset))
+
+      with tf.gfile.Open(duplicates_file) as fd:
+        duplicates = fd.read()
+      lines = duplicates.splitlines()
+
+      for l in lines:
+        # Skip comment lines
+        l = l.strip()
+        if l.startswith('#'):
+          continue
+        # Lines look like:
+        # 'synset/synset_imgnumber.JPEG  # original_file_name.jpg\n'.
+        # Extract only the 'synset_imgnumber.JPG' part.
+        file_path = l.split('#')[0].strip()
+        file_name = os.path.basename(file_path)
+        self.files_to_skip.add(file_name)
+
     ilsvrc_2012_num_leaf_images_path = FLAGS.ilsvrc_2012_num_leaf_images_path
     if not ilsvrc_2012_num_leaf_images_path:
       ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
                                                       'num_leaf_images.pkl')
     specification = imagenet_specification.create_imagenet_specification(
-        learning_spec.Split, ilsvrc_2012_num_leaf_images_path)
+        learning_spec.Split, self.files_to_skip,
+        ilsvrc_2012_num_leaf_images_path)
     split_subgraphs, images_per_class, _, _, _, _ = specification
 
     # Maps each class id to the name of its class.
@@ -1436,30 +1461,6 @@ class ImageNetConverter(DatasetConverter):
 
     The field that requires modification in this case is only self.class_names.
     """
-    # Load lists of image names that are duplicates with images in other
-    # datasets. They will be skipped from ImageNet.
-    files_to_skip = set()
-    for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
-      duplicates_file = os.path.join(
-          ILSCRC_DUPLICATES_PATH,
-          'ImageNet_{}_duplicates.txt'.format(other_dataset))
-
-      with tf.gfile.Open(duplicates_file) as fd:
-        duplicates = fd.read()
-      lines = duplicates.splitlines()
-
-      for l in lines:
-        # Skip comment lines
-        l = l.strip()
-        if l.startswith('#'):
-          continue
-        # Lines look like:
-        # 'synset/synset_imgnumber.JPEG  # original_file_name.jpg\n'.
-        # Extract only the 'synset_imgnumber.JPG' part.
-        file_path = l.split('#')[0].strip()
-        file_name = os.path.basename(file_path)
-        files_to_skip.add(file_name)
-
     # Get a list of synset id's assigned to each split.
     train_synset_ids = self._get_synset_ids(learning_spec.Split.TRAIN)
     valid_synset_ids = self._get_synset_ids(learning_spec.Split.VALID)
@@ -1492,7 +1493,7 @@ class ImageNetConverter(DatasetConverter):
           class_path,
           class_label,
           class_records_path,
-          files_to_skip=files_to_skip,
+          files_to_skip=self.files_to_skip,
           skip_on_error=True)
 
 
