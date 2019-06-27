@@ -226,10 +226,8 @@ def make_one_source_episode_pipeline(dataset_spec,
                                      use_dag_ontology,
                                      use_bilevel_ontology,
                                      split,
+                                     episode_descr_config,
                                      pool=None,
-                                     num_ways=None,
-                                     num_support=None,
-                                     num_query=None,
                                      shuffle_buffer_size=None,
                                      read_buffer_size_bytes=None,
                                      num_prefetch=0,
@@ -243,14 +241,10 @@ def make_one_source_episode_pipeline(dataset_spec,
     use_bilevel_ontology: Whether to use source's bilevel ontology (consisting
       of superclasses and subclasses) to sample episode classes.
     split: A learning_spec.Split object identifying the source (meta-)split.
+    episode_descr_config: An instance of EpisodeDescriptionConfig containing
+      parameters relating to sampling shots and ways for episodes.
     pool: String (optional), for example-split datasets, which example split to
       use ('train', 'valid', or 'test'), used at meta-test time only.
-    num_ways: Integer (optional), fixes the number of classes ("ways") to be
-      used in each episode if provided.
-    num_support: Integer (optional), fixes the number of examples for each class
-      in the support set if provided.
-    num_query: Integer (optional), fixes the number of examples for each class
-      in the query set if provided.
     shuffle_buffer_size: int or None, shuffle buffer size for each Dataset.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
     num_prefetch: int, the number of examples to prefetch for each class of
@@ -272,13 +266,11 @@ def make_one_source_episode_pipeline(dataset_spec,
   sampler = sampling.EpisodeDescriptionSampler(
       episode_reader.dataset_spec,
       split,
+      episode_descr_config,
       pool=pool,
       use_dag_hierarchy=use_dag_ontology,
       use_bilevel_hierarchy=use_bilevel_ontology,
-      use_all_classes=use_all_classes,
-      num_ways=num_ways,
-      num_support=num_support,
-      num_query=num_query)
+      use_all_classes=use_all_classes)
   dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
 
   # Episodes coming out of `dataset` contain flushed examples and are internally
@@ -299,10 +291,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                       use_dag_ontology_list,
                                       use_bilevel_ontology_list,
                                       split,
+                                      episode_descr_config,
                                       pool=None,
-                                      num_ways=None,
-                                      num_support=None,
-                                      num_query=None,
                                       shuffle_buffer_size=None,
                                       read_buffer_size_bytes=None,
                                       num_prefetch=0,
@@ -320,14 +310,10 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       to use that source's bi-level ontology to sample episode classes.
     split: A learning_spec.Split object identifying the sources split. It is the
       same for all datasets.
+    episode_descr_config: An instance of EpisodeDescriptionConfig containing
+      parameters relating to sampling shots and ways for episodes.
     pool: String (optional), for example-split datasets, which example split to
       use ('train', 'valid', or 'test'), used at meta-test time only.
-    num_ways: Integer (optional), fixes the number of classes ("ways") to be
-      used in each episode if provided.
-    num_support: Integer (optional), fixes the number of examples for each class
-      in the support set if provided.
-    num_query: Integer (optional), fixes the number of examples for each class
-      in the query set if provided.
     shuffle_buffer_size: int or None, shuffle buffer size for each Dataset.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
     num_prefetch: int, the number of examples to prefetch for each class of
@@ -350,12 +336,10 @@ def make_multisource_episode_pipeline(dataset_spec_list,
     sampler = sampling.EpisodeDescriptionSampler(
         episode_reader.dataset_spec,
         split,
+        episode_descr_config,
         pool=pool,
         use_dag_hierarchy=use_dag_ontology,
-        use_bilevel_hierarchy=use_bilevel_ontology,
-        num_ways=num_ways,
-        num_support=num_support,
-        num_query=num_query)
+        use_bilevel_hierarchy=use_bilevel_ontology)
     dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
     sources.append(dataset)
 

@@ -1,4 +1,3 @@
-Trainer.num_train_classes = 5
-Trainer.num_test_classes = 5
-Trainer.num_train_examples = 5
-Trainer.num_test_examples = 15
+EpisodeDescriptionConfig.num_ways = 5
+EpisodeDescriptionConfig.num_support = 5
+EpisodeDescriptionConfig.num_query = 15

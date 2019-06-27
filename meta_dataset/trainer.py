@@ -270,8 +270,8 @@ class Trainer(object):
   def __init__(self, train_learner, eval_learner, is_training, dataset_list,
                checkpoint_dir, summary_dir, eval_finegrainedness,
                eval_finegrainedness_split, eval_imbalance_dataset,
-               num_train_classes, num_test_classes, num_train_examples,
-               num_test_examples, learn_config, learner_config, data_config):
+               train_episode_config, eval_episode_config, learn_config,
+               learner_config, data_config):
     """Initializes a Trainer.
 
     Args:
@@ -293,12 +293,11 @@ class Trainer(object):
       eval_imbalance_dataset: A dataset on which to perform evaluation for
         assessing how class imbalance affects performance in binary episodes. By
         default it is empty and no imbalance analysis is performed.
-      num_train_classes: An int or None, the number of classes in episodic
-        meta-training.
-      num_test_classes: An int or None, the number of classes in episodic
-        meta-testing.
-      num_train_examples: An int or None, the number of support examples.
-      num_test_examples: An int or None, the number of query examples.
+      train_episode_config: An instance of EpisodeDescriptionConfig (in
+        data/config.py). This is a config for setting the ways and shots of
+        training episodes or the parameters for sampling them, if variable.
+      eval_episode_config: An instance of EpisodeDescriptionConfig. Analogous to
+        train_episode_config but used for eval episodes (validation or testing).
       learn_config: A LearnConfig, the learning configuration.
       learner_config: A LearnerConfig, the learner configuration.
       data_config: A DataConfig, the data configuration.
@@ -326,22 +325,21 @@ class Trainer(object):
           'the finegrainedness analysis is applied on binary '
           'classification tasks only.'.format(eval_finegrainedness_split))
       if eval_finegrainedness and eval_finegrainedness_split == 'train':
-        num_train_classes = 2
+        train_episode_config.num_ways = 2
       else:
-        num_test_classes = 2
+        eval_episode_config.num_ways = 2
 
-    self.num_train_classes = num_train_classes
-    self.num_test_classes = num_test_classes
-    self.num_train_examples = num_train_examples
-    self.num_test_examples = num_test_examples
-    msg = ('num_train_classes: {}, num_test_classes: {}, '
-           'num_train_examples: {}, num_test_examples: {}').format(
-               num_train_classes, num_test_classes, num_train_examples,
-               num_test_examples)
-    tf.logging.info(msg)
+    self.num_train_classes = train_episode_config.num_ways
+    self.num_test_classes = eval_episode_config.num_ways
+    self.num_support_train = train_episode_config.num_support
+    self.num_query_train = train_episode_config.num_query
+    self.num_support_eval = eval_episode_config.num_support
+    self.num_query_eval = eval_episode_config.num_query
 
     self.learn_config = learn_config
     self.learner_config = learner_config
+    self.train_episode_config = train_episode_config
+    self.eval_episode_config = eval_episode_config
 
     if self.learn_config.transductive_batch_norm:
       tf.logging.warn('Using transductive batch norm!')
@@ -442,9 +440,9 @@ class Trainer(object):
     # the following list. For example, those that track iterator state, as
     # iterator state is not saved.
     omit_substrings = FLAGS.omit_from_saving_and_reloading.split(',')
-    tf.logging.info(
-        'Omitting from saving / reloading any variable that '
-        'contains any of the following substrings: %s' % omit_substrings)
+    tf.logging.info('Omitting from saving / reloading any variable that '
+                    'contains any of the following substrings: %s' %
+                    omit_substrings)
     for var in tf.global_variables():
       if not any([substring in var.name for substring in omit_substrings]):
         vars_to_restore.append(var)
@@ -638,8 +636,8 @@ class Trainer(object):
     if self.learner_config.checkpoint_for_eval:
       # Requested a specific checkpoint.
       self.saver.restore(self.sess, self.learner_config.checkpoint_for_eval)
-      tf.logging.info(
-          'Restored checkpoint: %s' % self.learner_config.checkpoint_for_eval)
+      tf.logging.info('Restored checkpoint: %s' %
+                      self.learner_config.checkpoint_for_eval)
     else:
       # Continue from the latest checkpoint if one exists.
       # This handles fault-tolerance.
@@ -660,8 +658,8 @@ class Trainer(object):
     if self.learner_config.pretrained_checkpoint and not self.sess.run(
         tf.train.get_global_step()):
       self.saver.restore(self.sess, self.learner_config.pretrained_checkpoint)
-      tf.logging.info(
-          'Restored checkpoint: %s' % self.learner_config.pretrained_checkpoint)
+      tf.logging.info('Restored checkpoint: %s' %
+                      self.learner_config.pretrained_checkpoint)
       # We only want the embedding weights of the checkpoint we just restored.
       # So we re-initialize everything that's not an embedding weight. Also,
       # since this episodic finetuning procedure is a different optimization
@@ -676,8 +674,8 @@ class Trainer(object):
           continue
         vars_to_reinit.append(var)
         vars_to_reinit_names.append(var.name)
-      tf.logging.info(
-          'Initializing all variables except for %s.' % embedding_var_names)
+      tf.logging.info('Initializing all variables except for %s.' %
+                      embedding_var_names)
       self.sess.run(tf.variables_initializer(vars_to_reinit))
       tf.logging.info('Re-initialized vars %s.' % vars_to_reinit_names)
 
@@ -698,8 +696,8 @@ class Trainer(object):
     """
     split_enum = get_split_enum(split)
     return learning_spec.EpisodeSpecification(split_enum, self.num_test_classes,
-                                              self.num_train_examples,
-                                              self.num_test_examples)
+                                              self.num_support_eval,
+                                              self.num_query_eval)
 
   def _create_train_specification(self):
     """Returns an EpisodeSpecification or BatchSpecification for training.
@@ -729,14 +727,21 @@ class Trainer(object):
     (_, image_shape, dataset_spec_list, has_dag_ontology,
      has_bilevel_ontology) = benchmark_spec
     episode_spec = self.split_episode_or_batch_specs[split]
-    dataset_split, num_classes, num_train_examples, num_test_examples = \
-        episode_spec
+    dataset_split = episode_spec[0]
     # TODO(lamblinp): Support non-square shapes if necessary. For now, all
     # images are resized to square, even if it changes the aspect ratio.
     image_size = image_shape[0]
     if image_shape[1] != image_size:
       raise ValueError(
           'Expected a square image shape, not {}'.format(image_shape))
+
+    if split == 'train':
+      episode_descr_config = self.train_episode_config
+    elif split == 'valid' or split == 'test':
+      episode_descr_config = self.eval_episode_config
+    else:
+      raise ValueError('Unexpected split: {}. Was expecting "train", "valid" '
+                       'or "test".'.format(split))
 
     # TODO(lamblinp): pass specs directly to the pipeline builder.
     # TODO(lamblinp): move the special case directly in make_..._pipeline
@@ -750,9 +755,7 @@ class Trainer(object):
           use_dag_ontology=use_dag_ontology,
           use_bilevel_ontology=has_bilevel_ontology[0],
           split=dataset_split,
-          num_ways=num_classes,
-          num_support=num_train_examples,
-          num_query=num_test_examples,
+          episode_descr_config=episode_descr_config,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
@@ -763,9 +766,7 @@ class Trainer(object):
           use_dag_ontology_list=has_dag_ontology,
           use_bilevel_ontology_list=has_bilevel_ontology,
           split=dataset_split,
-          num_ways=num_classes,
-          num_support=num_train_examples,
-          num_query=num_test_examples,
+          episode_descr_config=episode_descr_config,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
@@ -976,9 +977,10 @@ class EpisodicTrainer(Trainer):
 
   def _create_train_specification(self):
     """Returns an EpisodeSpecification or BatchSpecification for training."""
-    return learning_spec.EpisodeSpecification(
-        learning_spec.Split.TRAIN, self.num_train_classes,
-        self.num_train_examples, self.num_test_examples)
+    return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
+                                              self.num_train_classes,
+                                              self.num_support_train,
+                                              self.num_query_train)
 
   def set_way_shots_classes_logits_targets(self):
     """Sets the Tensors for the above info of the learner's next episode."""
@@ -1030,9 +1032,10 @@ class BatchTrainer(Trainer):
   def _create_train_specification(self):
     """Returns an EpisodeSpecification or BatchSpecification for training."""
     if self.eval_split == 'train':
-      return learning_spec.EpisodeSpecification(
-          learning_spec.Split.TRAIN, self.num_train_classes,
-          self.num_train_examples, self.num_test_examples)
+      return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
+                                                self.num_train_classes,
+                                                self.num_support_train,
+                                                self.num_query_train)
     else:
       return learning_spec.BatchSpecification(learning_spec.Split.TRAIN,
                                               self.learn_config.batch_size)
@@ -1058,10 +1061,11 @@ class BatchTrainer(Trainer):
     """Instantiates a train learner."""
     num_total_classes = self._get_num_total_classes()
     is_training = False if self.eval_split == 'train' else True
-    return train_learner_class(
-        is_training, self.learn_config.transductive_batch_norm,
-        self.backprop_through_moments, self.ema_object, self.embedding_fn,
-        episode_or_batch, num_total_classes, self.num_test_classes)
+    return train_learner_class(is_training,
+                               self.learn_config.transductive_batch_norm,
+                               self.backprop_through_moments, self.ema_object,
+                               self.embedding_fn, episode_or_batch,
+                               num_total_classes, self.num_test_classes)
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""

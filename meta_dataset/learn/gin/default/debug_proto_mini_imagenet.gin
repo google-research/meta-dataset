@@ -6,3 +6,6 @@ include 'meta_dataset/learn/gin/models/prototypical_config.gin'
 Trainer.data_config = @DataConfig()
 LearnerConfig.learning_rate = 1e-4
 LearnerConfig.decay_learning_rate = True
+
+Trainer.train_episode_config = @train/EpisodeDescriptionConfig()
+Trainer.eval_episode_config = @EpisodeDescriptionConfig()

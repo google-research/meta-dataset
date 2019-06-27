@@ -3,3 +3,5 @@ include 'meta_dataset/learn/gin/setups/data_config.gin'
 include 'meta_dataset/learn/gin/setups/learn_config.gin'
 include 'meta_dataset/learn/gin/setups/fixed_way_and_shot.gin'
 Trainer.data_config = @DataConfig()
+Trainer.train_episode_config = @train/EpisodeDescriptionConfig()
+Trainer.eval_episode_config = @EpisodeDescriptionConfig()

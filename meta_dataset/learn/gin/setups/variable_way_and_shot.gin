@@ -1,4 +1,3 @@
-Trainer.num_train_classes = None
-Trainer.num_test_classes = None
-Trainer.num_train_examples = None
-Trainer.num_test_examples = None
+EpisodeDescriptionConfig.num_ways = None
+EpisodeDescriptionConfig.num_support = None
+EpisodeDescriptionConfig.num_query = None

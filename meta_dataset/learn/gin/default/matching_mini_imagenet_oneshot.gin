@@ -1,5 +1,5 @@
 include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
-Trainer.num_train_examples = 1
+EpisodeDescriptionConfig.num_support = 1
 
 include 'meta_dataset/learn/gin/models/matching_config.gin'
 LearnerConfig.learning_rate = 1e-4

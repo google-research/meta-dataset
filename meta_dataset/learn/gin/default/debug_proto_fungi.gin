@@ -14,3 +14,6 @@ LearnConfig.checkpoint_every = 1000
 LearnConfig.validate_every = 1000
 LearnConfig.log_every = 10
 Trainer.learn_config = @LearnConfig()
+
+Trainer.train_episode_config = @train/EpisodeDescriptionConfig()
+Trainer.eval_episode_config = @EpisodeDescriptionConfig()

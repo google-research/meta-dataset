@@ -29,7 +29,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import gin.tf
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import imagenet_specification
 import numpy as np
@@ -190,10 +189,6 @@ def sample_num_support_per_class(images_per_class, num_remaining_per_class,
   return np.minimum(num_desired_per_class, num_remaining_per_class)
 
 
-@gin.configurable(whitelist=[
-    'min_ways', 'max_ways_upper_bound', 'max_num_query', 'max_support_set_size',
-    'max_support_size_contrib_per_class', 'min_log_weight', 'max_log_weight'
-])
 class EpisodeDescriptionSampler(object):
   """Generates descriptions of Episode composition.
 
@@ -205,25 +200,18 @@ class EpisodeDescriptionSampler(object):
   def __init__(self,
                dataset_spec,
                split,
+               episode_descr_config,
                pool=None,
                use_dag_hierarchy=False,
                use_bilevel_hierarchy=False,
-               use_all_classes=False,
-               num_ways=None,
-               num_support=None,
-               num_query=None,
-               min_ways=None,
-               max_ways_upper_bound=None,
-               max_num_query=None,
-               max_support_set_size=None,
-               max_support_size_contrib_per_class=None,
-               min_log_weight=None,
-               max_log_weight=None):
-    """Initializes an EpisodeDescriptionSampler.
+               use_all_classes=False):
+    """Initializes an EpisodeDescriptionSampler.episode_config.
 
     Args:
       dataset_spec: DatasetSpecification, dataset specification.
       split: one of Split.TRAIN, Split.VALID, or Split.TEST.
+      episode_descr_config: An instance of EpisodeDescriptionConfig containing
+        parameters relating to sampling shots and ways for episodes.
       pool: A string ('train' or 'test') or None, indicating which example-level
         split to select, if the current dataset has them.
       use_dag_hierarchy: Boolean, defaults to False. If a DAG-structured
@@ -233,84 +221,37 @@ class EpisodeDescriptionSampler(object):
       use_all_classes: Boolean, defaults to False. Uses all available classes,
         in order, instead of sampling. Overrides `num_ways` to the number of
         classes in `split`.
-      num_ways: Integer (optional), fixes the number of classes ("ways") to be
-        used in each episode if provided. Incompatible with using any hierarchy.
-      num_support: Integer (optional), fixes the number of examples for each
-        class in the support set if provided.
-      num_query: Integer (optional), fixes the number of examples for each class
-        in the query set if provided.
-      min_ways: Integer, the minimum value when sampling ways (has to be
-        provided if `num_ways` is None).
-      max_ways_upper_bound: Integer, the maximum value when sampling ways (has
-        to be provided through if `num_ways` is None). Note that the number of
-        available classes acts as another upper bound.
-      max_num_query: Integer, the maximum number of query examples per class
-        (has to be provided if `num_query` is None).
-      max_support_set_size: Integer, the maximum size for the support set (has
-        to be provided `num_support` is None).
-      max_support_size_contrib_per_class: Integer, the maximum contribution for
-        any given class to the support set size. (has to be provided if
-        `num_support` is None).
-      min_log_weight: Float, the minimum log-weight to give to any particular
-        class when determining the number of support examples per class (has to
-        be provided if `num_support` is None).
-      max_log_weight: Float, the maximum log-weight to give to any particular
-        class (has to be provided if `num_support` is None).
 
     Raises:
       RuntimeError: if required parameters are missing.
       ValueError: Inconsistent parameters.
     """
-    arg_groups = {
-        'num_ways': (num_ways, ('min_ways', 'max_ways_upper_bound'),
-                     (min_ways, max_ways_upper_bound)),
-        'num_query': (num_query, ('max_num_query',), (max_num_query,)),
-        'num_support':
-            (num_support,
-             ('max_support_set_size', 'max_support_size_contrib_per_class',
-              'min_log_weight', 'max_log_weight'),
-             (max_support_set_size, max_support_size_contrib_per_class,
-              min_log_weight, max_log_weight)),
-    }
-
-    for first_arg_name, values in arg_groups.items():
-      first_arg, required_arg_names, required_args = values
-      if ((first_arg is None) and any(arg is None for arg in required_args)):
-        # Get name of the nones
-        none_arg_names = [
-            name for var, name in zip(required_args, required_arg_names)
-            if var is None
-        ]
-        raise RuntimeError(
-            'The following arguments: %s can not be None, since %s is None. '
-            'Arguments can be set up with gin, for instance by providing '
-            '`--gin_file=learn/gin/setups/data_config.gin` or calling '
-            '`gin.parse_config_file(...)` in the code. Please ensure the '
-            'following gin arguments of EpisodeDescriptionSampler are set: '
-            '%s' % (none_arg_names, first_arg_name, none_arg_names))
     self.dataset_spec = dataset_spec
     self.split = split
     self.pool = pool
     self.use_dag_hierarchy = use_dag_hierarchy
     self.use_bilevel_hierarchy = use_bilevel_hierarchy
     self.use_all_classes = use_all_classes
-    self.num_ways = num_ways
-    self.num_support = num_support
-    self.num_query = num_query
-    # Gin parameters
-    self.min_ways = min_ways
-    self.max_ways_upper_bound = max_ways_upper_bound
-    self.max_num_query = max_num_query
-    self.max_support_set_size = max_support_set_size
-    self.max_support_size_contrib_per_class = max_support_size_contrib_per_class
-    self.min_log_weight = min_log_weight
-    self.max_log_weight = max_log_weight
+    self.num_ways = episode_descr_config.num_ways
+    self.num_support = episode_descr_config.num_support
+    self.num_query = episode_descr_config.num_query
+    self.min_ways = episode_descr_config.min_ways
+    self.max_ways_upper_bound = episode_descr_config.max_ways_upper_bound
+    self.max_num_query = episode_descr_config.max_num_query
+    self.max_support_set_size = episode_descr_config.max_support_set_size
+    self.max_support_size_contrib_per_class = episode_descr_config.max_support_size_contrib_per_class
+    self.min_log_weight = episode_descr_config.min_log_weight
+    self.max_log_weight = episode_descr_config.max_log_weight
 
     self.class_set = dataset_spec.get_classes(self.split)
     self.num_classes = len(self.class_set)
 
     if self.use_all_classes:
       self.num_ways = self.num_classes
+
+    # Possibly overwrite use_dag_hierarchy if so requested.
+    if episode_descr_config.ignore_dag_ontology:
+      self.use_dag_hierarchy = False
 
     # For Omniglot.
     if self.use_bilevel_hierarchy:
