@@ -70,7 +70,7 @@ EMBEDDING_KEYWORDS = ('conv', 'resnet')
 
 DATASETS_WITH_EXAMPLE_SPLITS = ()
 TF_DATA_OPTIONS = tf.data.Options()
-if ENABLE_DATA_OPTIMIZATIONS:
+if not ENABLE_DATA_OPTIMIZATIONS:
   # The Options object can be used to control which static or dynamic
   # optimizations to apply.
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
@@ -771,7 +771,8 @@ class Trainer(object):
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
           image_size=image_size)
-      data_pipeline = apply_dataset_options(data_pipeline)
+
+    data_pipeline = apply_dataset_options(data_pipeline)
 
     iterator = data_pipeline.make_one_shot_iterator()
     (support_images, support_labels, support_class_ids, query_images,
