@@ -109,7 +109,7 @@ def get_total_images_per_class(data_spec, class_id=None, pool=None):
 class BenchmarkSpecification(
     collections.namedtuple(
         'BenchmarkSpecification', 'name, image_shape, dataset_spec_list,'
-        'has_dag_ontology, has_bilevel_ontology')):
+        'has_dag_ontology, has_bilevel_ontology, splits_to_contribute')):
   """The specification of a benchmark, consisting of multiple datasets.
 
     Args:
@@ -128,15 +128,25 @@ class BenchmarkSpecification(
         bi-level ontology (comprised of superclasses and subclasses). In that
         case, the corresponding dataset specification must be an instance of
         BiLevelDatasetSpecification.
+      splits_to_contribute: A list of sets of the same length as the number of
+        datasets in the benchmark. Each element is a set which can be one of
+        {'train'}, {'valid'}, {'train', 'valid'} or {'test'} indicating which
+        meta-splits the corresponding dataset should contribute to. Note that a
+        dataset can not contribute to a split if it has zero classes assigned to
+        that split. But we do have the option to ignore a dataset for a
+        particular split even if it has a non-zero number of classes for it.
   """
 
   def __new__(cls, name, image_shape, dataset_spec_list, has_dag_ontology,
-              has_bilevel_ontology):
+              has_bilevel_ontology, splits_to_contribute):
     if len(has_dag_ontology) != len(dataset_spec_list):
       raise ValueError('The length of has_dag_ontology must be the number of '
                        'datasets.')
     if len(has_bilevel_ontology) != len(dataset_spec_list):
       raise ValueError('The length of has_bilevel_ontology must be the number '
+                       'of datasets.')
+    if len(splits_to_contribute) != len(dataset_spec_list):
+      raise ValueError('The length of splits_to_contribute must be the number '
                        'of datasets.')
     # Ensure that HierarchicalDatasetSpecification is used iff has_dag_ontology.
     for i, has_dag in enumerate(has_dag_ontology):
@@ -159,9 +169,33 @@ class BenchmarkSpecification(
         raise ValueError(
             'Dataset {} has no bilevel ontology, but is '
             'represented using a BiLevelDatasetSpecification.'.format(i))
+    # Check the validity of the given value for splits_to_contribute.
+    valid_values = [{'train'}, {'valid'}, {'train', 'valid'}, {'test'}]
+    for splits in splits_to_contribute:
+      if splits not in valid_values:
+        raise ValueError(
+            'Found an invalid element: {} in splits_to_contribute. '
+            'Valid elements are: {}'.format(splits, valid_values))
+    # Ensure that no dataset is asked to contribute to a split for which it does
+    # not have any classes.
+    for dataset_spec, dataset_splits in zip(dataset_spec_list,
+                                            splits_to_contribute):
+      invalid_train_split = (
+          'train' in dataset_splits and
+          not dataset_spec.classes_per_split[learning_spec.Split.TRAIN])
+      invalid_valid_split = (
+          'valid' in dataset_splits and
+          not dataset_spec.classes_per_split[learning_spec.Split.VALID])
+      invalid_test_split = (
+          'test' in dataset_splits and
+          not dataset_spec.classes_per_split[learning_spec.Split.TEST])
+      if invalid_train_split or invalid_valid_split or invalid_test_split:
+        raise ValueError('A dataset can not contribute to a split if it has '
+                         'no classes assigned to that split.')
     self = super(BenchmarkSpecification,
                  cls).__new__(cls, name, image_shape, dataset_spec_list,
-                              has_dag_ontology, has_bilevel_ontology)
+                              has_dag_ontology, has_bilevel_ontology,
+                              splits_to_contribute)
     return self
 
 

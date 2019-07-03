@@ -23,8 +23,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import os
-
 import gin.tf
 from meta_dataset import learner
 from meta_dataset.data import dataset_spec as dataset_spec_lib
@@ -267,19 +267,22 @@ class LearnerConfig(object):
 class Trainer(object):
   """A Trainer for training a Learner on data provided by ReaderDataSource."""
 
-  def __init__(self, train_learner, eval_learner, is_training, dataset_list,
-               checkpoint_dir, summary_dir, eval_finegrainedness,
-               eval_finegrainedness_split, eval_imbalance_dataset,
-               train_episode_config, eval_episode_config, learn_config,
-               learner_config, data_config):
+  def __init__(self, train_learner, eval_learner, is_training,
+               train_dataset_list, eval_dataset_list, checkpoint_dir,
+               summary_dir, eval_finegrainedness, eval_finegrainedness_split,
+               eval_imbalance_dataset, train_episode_config,
+               eval_episode_config, learn_config, learner_config, data_config):
     """Initializes a Trainer.
 
     Args:
       train_learner: A Learner to be used for meta-training.
       eval_learner: A Learner to be used for meta-validation or meta-testing.
       is_training: Bool, whether or not to train or just evaluate.
-      dataset_list: A list of names of datasets to include in the benchmark.
-        This can be any subset of the supported datasets.
+      train_dataset_list: A list of names of datasets to train on. This can be
+        any subset of the supported datasets.
+      eval_dataset_list: A list of names of datasets to evaluate on either
+        for validation during train or for final test evaluation, depending on
+        the nature of the experiment, as dictated by `is_training'.
       checkpoint_dir: A string, the path to the checkpoint directory, or None if
         no checkpointing should occur.
       summary_dir: A string, the path to the checkpoint directory, or None if no
@@ -305,7 +308,8 @@ class Trainer(object):
     self.train_learner_class = train_learner
     self.eval_learner_class = eval_learner
     self.is_training = is_training
-    self.dataset_list = dataset_list
+    self.train_dataset_list = train_dataset_list
+    self.eval_dataset_list = eval_dataset_list
     self.checkpoint_dir = checkpoint_dir
     self.summary_dir = summary_dir
     self.eval_finegrainedness = eval_finegrainedness
@@ -355,13 +359,7 @@ class Trainer(object):
     self.image_shape = [data_config.image_height] * 2 + [3]
 
     # Create the benchmark specification.
-    (self.benchmark_spec,
-     self.valid_benchmark_spec) = self.get_benchmark_specification()
-    if self.valid_benchmark_spec is None:
-      # This means that ImageNet is not a dataset in the given benchmark spec.
-      # In this case the validation will be carried out on randomly-sampled
-      # episodes from the meta-validation sets of all given datasets.
-      self.valid_benchmark_spec = self.benchmark_spec
+    self.benchmark_spec = self.get_benchmark_specification()
 
     # Which splits to support depends on whether we are in the meta-training
     # phase or not. If we are, we need the train split, and the valid one for
@@ -555,11 +553,17 @@ class Trainer(object):
 
   def get_benchmark_specification(self):
     """Returns a BenchmarkSpecification."""
-    valid_benchmark_spec = None  # a benchmark spec for validation only.
-    data_spec_list, has_dag_ontology, has_bilevel_ontology = [], [], []
-    for dataset_name in self.dataset_list:
-      dataset_records_path = os.path.join(FLAGS.records_root_dir, dataset_name)
+    (data_spec_list, has_dag_ontology, has_bilevel_ontology,
+     splits_to_contribute) = [], [], [], []
+    seen_datasets = set()
+    for dataset_name in self.train_dataset_list + self.eval_dataset_list:
 
+      # Might be seeing a dataset for a second time if it belongs to both the
+      # train and eval dataset lists.
+      if dataset_name in seen_datasets:
+        continue
+
+      dataset_records_path = os.path.join(FLAGS.records_root_dir, dataset_name)
       dataset_spec_path = os.path.join(dataset_records_path, 'dataset_spec.pkl')
       if not tf.gfile.Exists(dataset_spec_path):
         raise ValueError(
@@ -580,35 +584,52 @@ class Trainer(object):
               'have the correct value for "file_pattern". Expected "%s", but '
               'got "%s".' % ('{}_{}.tfrecords', data_spec.file_pattern))
 
+      # Only ImageNet has a DAG ontology.
+      has_dag = (dataset_name == 'ilsvrc_2012')
+      # Only Omniglot has a bi-level ontology.
+      is_bilevel = (dataset_name == 'omniglot')
+
+      # The meta-splits that this dataset will contribute data to.
+      if not self.train_dataset_list:
+        # If we're meta-testing, all datasets contribute only to meta-test.
+        splits = {'test'}
+      else:
+        splits = set()
+        if dataset_name in self.train_dataset_list:
+          splits.add('train')
+        if dataset_name in self.eval_dataset_list:
+          splits.add('valid')
+
+      # Add this dataset to the benchmark.
       tf.logging.info('Adding dataset {}'.format(data_spec.name))
       data_spec_list.append(data_spec)
-
-      # Only ImageNet has a DAG ontology.
-      has_dag = False
-      if dataset_name == 'ilsvrc_2012':
-        has_dag = True
       has_dag_ontology.append(has_dag)
-
-      # Only Omniglot has a bi-level ontology.
-      is_bilevel = True if dataset_name == 'omniglot' else False
       has_bilevel_ontology.append(is_bilevel)
+      splits_to_contribute.append(splits)
 
-      if self.eval_imbalance_dataset:
-        self.eval_imbalance_dataset_spec = data_spec
-        assert len(data_spec_list) == 1, ('Imbalance analysis is only '
-                                          'supported on one dataset at a time.')
+      # Book-keeping.
+      seen_datasets.add(dataset_name)
 
-      # Validation should happen on ImageNet only.
-      if dataset_name == 'ilsvrc_2012':
-        valid_benchmark_spec = dataset_spec_lib.BenchmarkSpecification(
-            'valid_benchmark', self.image_shape, [data_spec], [has_dag],
-            [is_bilevel])
+    if self.eval_imbalance_dataset:
+      self.eval_imbalance_dataset_spec = data_spec
+      assert len(data_spec_list) == 1, ('Imbalance analysis is only '
+                                        'supported on one dataset at a time.')
 
     benchmark_spec = dataset_spec_lib.BenchmarkSpecification(
         'benchmark', self.image_shape, data_spec_list, has_dag_ontology,
-        has_bilevel_ontology)
+        has_bilevel_ontology, splits_to_contribute)
 
-    return benchmark_spec, valid_benchmark_spec
+    # Logging of which datasets will be used for the different meta-splits.
+    splits_to_datasets = collections.defaultdict(list)
+    for dataset_spec, splits_to_contribute in zip(data_spec_list,
+                                                  splits_to_contribute):
+      for split in splits_to_contribute:
+        splits_to_datasets[split].append(dataset_spec.name)
+    for split, datasets in splits_to_datasets.items():
+      tf.logging.info('Episodes for split {} will be created from {}'.format(
+          split, datasets))
+
+    return benchmark_spec
 
   def initialize_session(self):
     """Initializes a tf Session."""
@@ -722,10 +743,22 @@ class Trainer(object):
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
     num_prefetch = self.data_config.num_prefetch
-    benchmark_spec = (
-        self.valid_benchmark_spec if split == 'valid' else self.benchmark_spec)
-    (_, image_shape, dataset_spec_list, has_dag_ontology,
-     has_bilevel_ontology) = benchmark_spec
+    (_, image_shape, dataset_spec_list, has_dag_ontology, has_bilevel_ontology,
+     splits_to_contribute) = self.benchmark_spec
+
+    # Choose only the datasets that are chosen to contribute to the given split.
+    dataset_spec_list_, has_dag_ontology_, has_bilevel_ontology_ = [], [], []
+    for dataset_num, dataset_splits in enumerate(splits_to_contribute):
+      if split in dataset_splits:
+        dataset_spec_list_.append(dataset_spec_list[dataset_num])
+        has_dag_ontology_.append(has_dag_ontology[dataset_num])
+        has_bilevel_ontology_.append(has_bilevel_ontology[dataset_num])
+
+    # Restrict the following lists to only the relevant datasets for split.
+    dataset_spec_list = dataset_spec_list_
+    has_dag_ontology = has_dag_ontology_
+    has_bilevel_ontology = has_bilevel_ontology_
+
     episode_spec = self.split_episode_or_batch_specs[split]
     dataset_split = episode_spec[0]
     # TODO(lamblinp): Support non-square shapes if necessary. For now, all

@@ -95,16 +95,19 @@ EPISODIC_LEARNERS = ['MatchingNet', 'PrototypicalNet', 'MAML']
 
 
 @gin.configurable('benchmark')
-def get_datasets(datasets=''):
-  """Gets the list of dataset names.
+def get_datasets(train_datasets='', eval_datasets=''):
+  """Gets the lists of dataset names.
 
   Args:
-    datasets: A string of comma separated dataset names.
+    train_datasets: A string of comma separated dataset names for training.
+    eval_datasets: A string of comma separated dataset names for evaluation.
 
   Returns:
-    A list of dataset names.
+    Two lists of dataset names, to be used for training and validation, resp.
+    The second one might be empty.
   """
-  return [d.strip() for d in datasets.split(',')]
+  return [d.strip() for d in train_datasets.split(',')
+         ], [d.strip() for d in eval_datasets.split(',')]
 
 
 def main(unused_argv):
@@ -125,7 +128,7 @@ def main(unused_argv):
                      'pre-trained weights. It is also only applicable to '
                      'episodic models and restores only the embedding weights.')
 
-  datasets = get_datasets()
+  train_datasets, eval_datasets = get_datasets()
 
   train_learner = None
   if FLAGS.is_training or (FLAGS.eval_finegrainedness and
@@ -139,8 +142,8 @@ def main(unused_argv):
   # Get a trainer or evaluator.
   if learner_config.episodic:
     trainer_instance = trainer.EpisodicTrainer(
-        train_learner, eval_learner, FLAGS.is_training, datasets,
-        FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
+        train_learner, eval_learner, FLAGS.is_training, train_datasets,
+        eval_datasets, FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
         FLAGS.eval_finegrainedness, FLAGS.eval_finegrainedness_split,
         FLAGS.eval_imbalance_dataset)
     if learner_config.train_learner not in EPISODIC_LEARNERS:
@@ -149,8 +152,8 @@ def main(unused_argv):
           'among {}.'.format(EPISODIC_LEARNERS))
   else:
     trainer_instance = trainer.BatchTrainer(
-        train_learner, eval_learner, FLAGS.is_training, datasets,
-        FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
+        train_learner, eval_learner, FLAGS.is_training, train_datasets,
+        eval_datasets, FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
         FLAGS.eval_finegrainedness, FLAGS.eval_finegrainedness_split,
         FLAGS.eval_imbalance_dataset)
     if learner_config.train_learner not in BATCH_LEARNERS:
@@ -159,6 +162,7 @@ def main(unused_argv):
           'among {}.'.format(BATCH_LEARNERS))
 
   mode = 'training' if FLAGS.is_training else 'evaluation'
+  datasets = train_datasets if FLAGS.is_training else eval_datasets
   tf.logging.info('Starting %s for dataset(s) %s...' % (mode, datasets))
 
   # Record gin operative config string after the setup, both in the logs and in

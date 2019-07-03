@@ -1,1 +1,2 @@
-benchmark.datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'
+benchmark.train_datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'
+benchmark.eval_datasets = 'ilsvrc_2012'

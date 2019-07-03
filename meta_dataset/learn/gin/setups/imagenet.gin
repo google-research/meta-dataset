@@ -1,4 +1,5 @@
-benchmark.datasets = 'ilsvrc_2012'
+benchmark.train_datasets = 'ilsvrc_2012'
+benchmark.eval_datasets = 'ilsvrc_2012'
 include 'meta_dataset/learn/gin/setups/data_config.gin'
 include 'meta_dataset/learn/gin/setups/learn_config.gin'
 include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'
