@@ -76,6 +76,7 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
 
+
 def apply_dataset_options(dataset):
   """Apply the module-wide set of dataset options to dataset.
 
@@ -413,6 +414,7 @@ class Trainer(object):
             self.learners[split].compute_accuracy()
             for split in self.required_splits
         ]))
+
 
     # Set self.way, self.shots to Tensors for the way/shots of the next episode.
     self.set_way_shots_classes_logits_targets()
@@ -948,6 +950,7 @@ class Trainer(object):
         self.summary_writer.add_summary(valid_ci_summary, global_step)
       self.valid_acc = valid_acc
       self.valid_ci = valid_ci
+
 
   def evaluate(self, split):
     """Returns performance metrics across num_eval_trials episodes / batches."""
