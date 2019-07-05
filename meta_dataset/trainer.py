@@ -281,9 +281,9 @@ class Trainer(object):
       is_training: Bool, whether or not to train or just evaluate.
       train_dataset_list: A list of names of datasets to train on. This can be
         any subset of the supported datasets.
-      eval_dataset_list: A list of names of datasets to evaluate on either
-        for validation during train or for final test evaluation, depending on
-        the nature of the experiment, as dictated by `is_training'.
+      eval_dataset_list: A list of names of datasets to evaluate on either for
+        validation during train or for final test evaluation, depending on the
+        nature of the experiment, as dictated by `is_training'.
       checkpoint_dir: A string, the path to the checkpoint directory, or None if
         no checkpointing should occur.
       summary_dir: A string, the path to the checkpoint directory, or None if no
@@ -558,7 +558,13 @@ class Trainer(object):
     (data_spec_list, has_dag_ontology, has_bilevel_ontology,
      splits_to_contribute) = [], [], [], []
     seen_datasets = set()
-    for dataset_name in self.train_dataset_list + self.eval_dataset_list:
+
+    if self.is_training:
+      benchmark_datasets = self.train_dataset_list + self.eval_dataset_list
+    else:
+      benchmark_datasets = self.eval_dataset_list
+
+    for dataset_name in benchmark_datasets:
 
       # Might be seeing a dataset for a second time if it belongs to both the
       # train and eval dataset lists.
@@ -592,7 +598,7 @@ class Trainer(object):
       is_bilevel = (dataset_name == 'omniglot')
 
       # The meta-splits that this dataset will contribute data to.
-      if not self.train_dataset_list:
+      if not self.is_training:
         # If we're meta-testing, all datasets contribute only to meta-test.
         splits = {'test'}
       else:

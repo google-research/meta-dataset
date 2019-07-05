@@ -180,15 +180,17 @@ class BenchmarkSpecification(
     # not have any classes.
     for dataset_spec, dataset_splits in zip(dataset_spec_list,
                                             splits_to_contribute):
-      invalid_train_split = (
-          'train' in dataset_splits and
-          not dataset_spec.classes_per_split[learning_spec.Split.TRAIN])
-      invalid_valid_split = (
-          'valid' in dataset_splits and
-          not dataset_spec.classes_per_split[learning_spec.Split.VALID])
-      invalid_test_split = (
-          'test' in dataset_splits and
-          not dataset_spec.classes_per_split[learning_spec.Split.TEST])
+      dataset_spec.initialize()
+      if isinstance(dataset_spec, BiLevelDatasetSpecification):
+        classes_per_split = dataset_spec.superclasses_per_split
+      else:
+        classes_per_split = dataset_spec.classes_per_split
+      invalid_train_split = ('train' in dataset_splits and
+                             not classes_per_split[learning_spec.Split.TRAIN])
+      invalid_valid_split = ('valid' in dataset_splits and
+                             not classes_per_split[learning_spec.Split.VALID])
+      invalid_test_split = ('test' in dataset_splits and
+                            not classes_per_split[learning_spec.Split.TEST])
       if invalid_train_split or invalid_valid_split or invalid_test_split:
         raise ValueError('A dataset can not contribute to a split if it has '
                          'no classes assigned to that split.')
