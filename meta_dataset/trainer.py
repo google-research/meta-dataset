@@ -739,6 +739,26 @@ class Trainer(object):
   def build_data(self, split):
     raise NotImplementedError('Abstract method.')
 
+  def _restrict_dataset_list_for_split(self, split, splits_to_contribute,
+                                       dataset_list):
+    """Returns the restricted dataset_list for the given split.
+
+    Args:
+      split: A string, either 'train', 'valid' or 'test'.
+      splits_to_contribute: A list whose length is the number of datasets in the
+        benchmark. Each element is a set of strings corresponding to the splits
+        that the respective dataset will contribute to.
+      dataset_list: A list which has one element per selected dataset (same
+        length as splits_to_contribute), e.g. this can be one of the lists
+        dataset_spec_list, has_dag_ontology, has_bilevel_ontology of the
+        BenchmarkSpecification.
+    """
+    updated_list = []
+    for dataset_num, dataset_splits in enumerate(splits_to_contribute):
+      if split in dataset_splits:
+        updated_list.append(dataset_list[dataset_num])
+    return updated_list
+
   def build_episode(self, split):
     """Builds an EpisodeDataset containing the next data for "split".
 
@@ -755,17 +775,12 @@ class Trainer(object):
      splits_to_contribute) = self.benchmark_spec
 
     # Choose only the datasets that are chosen to contribute to the given split.
-    dataset_spec_list_, has_dag_ontology_, has_bilevel_ontology_ = [], [], []
-    for dataset_num, dataset_splits in enumerate(splits_to_contribute):
-      if split in dataset_splits:
-        dataset_spec_list_.append(dataset_spec_list[dataset_num])
-        has_dag_ontology_.append(has_dag_ontology[dataset_num])
-        has_bilevel_ontology_.append(has_bilevel_ontology[dataset_num])
-
-    # Restrict the following lists to only the relevant datasets for split.
-    dataset_spec_list = dataset_spec_list_
-    has_dag_ontology = has_dag_ontology_
-    has_bilevel_ontology = has_bilevel_ontology_
+    dataset_spec_list = self._restrict_dataset_list_for_split(
+        split, splits_to_contribute, dataset_spec_list)
+    has_dag_ontology = self._restrict_dataset_list_for_split(
+        split, splits_to_contribute, has_dag_ontology)
+    has_bilevel_ontology = self._restrict_dataset_list_for_split(
+        split, splits_to_contribute, has_bilevel_ontology)
 
     episode_spec = self.split_episode_or_batch_specs[split]
     dataset_split = episode_spec[0]
@@ -838,7 +853,13 @@ class Trainer(object):
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
     num_prefetch = self.data_config.num_prefetch
-    _, image_shape, dataset_spec_list, _, _ = self.benchmark_spec
+    (_, image_shape, dataset_spec_list, _, _,
+     splits_to_contribute) = self.benchmark_spec
+
+    # Choose only the datasets that are chosen to contribute to the given split.
+    dataset_spec_list = self._restrict_dataset_list_for_split(
+        split, splits_to_contribute, dataset_spec_list)
+
     dataset_split, batch_size = self.split_episode_or_batch_specs[split]
     for dataset_spec in dataset_spec_list:
       if dataset_spec.name in DATASETS_WITH_EXAMPLE_SPLITS:
