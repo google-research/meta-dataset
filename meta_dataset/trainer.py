@@ -32,6 +32,7 @@ from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
 import numpy as np
+import six
 from six.moves import range
 from six.moves import zip
 import six.moves.cPickle as pkl
@@ -553,8 +554,21 @@ class Trainer(object):
     """
     raise NotImplementedError('Abstract Method.')
 
-  def get_benchmark_specification(self):
-    """Returns a BenchmarkSpecification."""
+  def get_benchmark_specification(self, records_root_dir=None):
+    """Returns a BenchmarkSpecification.
+
+    Args:
+      records_root_dir: Optional. If provided, a list or string that sets the
+        directory in which a child directory will be searched for each dataset
+        to locate that dataset's records and dataset specification. If it's a
+        string, that path will be used for all datasets. If it's a list, its
+        length must be the same as the number of datasets, in order to specify a
+        different such directory for each. If None, FLAGS.records_root_dir will
+        be used for all datasets.
+
+    Raises:
+      RuntimeError: Incorrect file_pattern detected in a dataset specification.
+    """
     (data_spec_list, has_dag_ontology, has_bilevel_ontology,
      splits_to_contribute) = [], [], [], []
     seen_datasets = set()
@@ -564,14 +578,30 @@ class Trainer(object):
     else:
       benchmark_datasets = self.eval_dataset_list
 
-    for dataset_name in benchmark_datasets:
+    if isinstance(records_root_dir, list):
+      if len(records_root_dir) != len(benchmark_datasets):
+        raise ValueError('The given records_root_dir is a list whose length is '
+                         'not the same as the number of benchmark datasets. '
+                         'Found datasets {} (for the {} phase) but '
+                         'len(records_root_dir) is {}. Expected their lengths '
+                         'to match or records_path to be a string').format(
+                             benchmark_datasets, len(records_root_dir))
+      records_roots_for_datasets = records_root_dir
+    elif isinstance(records_root_dir, six.text_type):
+      records_roots_for_datasets = [records_root_dir] * len(benchmark_datasets)
+    elif records_root_dir is None:
+      records_roots_for_datasets = [FLAGS.records_root_dir
+                                   ] * len(benchmark_datasets)
+
+    for dataset_name, dataset_records_root in zip(benchmark_datasets,
+                                                  records_roots_for_datasets):
 
       # Might be seeing a dataset for a second time if it belongs to both the
       # train and eval dataset lists.
       if dataset_name in seen_datasets:
         continue
 
-      dataset_records_path = os.path.join(FLAGS.records_root_dir, dataset_name)
+      dataset_records_path = os.path.join(dataset_records_root, dataset_name)
       dataset_spec_path = os.path.join(dataset_records_path, 'dataset_spec.pkl')
       if not tf.gfile.Exists(dataset_spec_path):
         raise ValueError(
