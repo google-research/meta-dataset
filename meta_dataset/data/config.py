@@ -101,7 +101,7 @@ class EpisodeDescriptionConfig(object):
   def __init__(self, num_ways, num_support, num_query, min_ways,
                max_ways_upper_bound, max_num_query, max_support_set_size,
                max_support_size_contrib_per_class, min_log_weight,
-               max_log_weight, ignore_dag_ontology):
+               max_log_weight, ignore_dag_ontology, ignore_bilevel_ontology):
     """Initialize a EpisodeDescriptionConfig.
 
     This is used in sampling.py in Trainer and in EpisodeDescriptionSampler to
@@ -128,6 +128,9 @@ class EpisodeDescriptionConfig(object):
       ignore_dag_ontology: Whether to ignore ImageNet's DAG ontology when
         sampling classes from it. This has no effect if ImageNet is not part of
         the benchmark.
+      ignore_bilevel_ontology: Whether to ignore Omniglot's DAG ontology when
+        sampling classes from it. This has no effect if Omniglot is not part of
+        the benchmark.
     """
     self.num_ways = num_ways
     self.num_support = num_support
@@ -140,3 +143,4 @@ class EpisodeDescriptionConfig(object):
     self.min_log_weight = min_log_weight
     self.max_log_weight = max_log_weight
     self.ignore_dag_ontology = ignore_dag_ontology
+    self.ignore_bilevel_ontology = ignore_bilevel_ontology

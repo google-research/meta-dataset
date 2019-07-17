@@ -249,9 +249,11 @@ class EpisodeDescriptionSampler(object):
     if self.use_all_classes:
       self.num_ways = self.num_classes
 
-    # Possibly overwrite use_dag_hierarchy if so requested.
+    # Maybe overwrite use_dag_hierarchy or use_bilevel_hierarchy if requested.
     if episode_descr_config.ignore_dag_ontology:
       self.use_dag_hierarchy = False
+    if episode_descr_config.ignore_bilevel_ontology:
+      self.use_bilevel_hierarchy = False
 
     # For Omniglot.
     if self.use_bilevel_hierarchy:
