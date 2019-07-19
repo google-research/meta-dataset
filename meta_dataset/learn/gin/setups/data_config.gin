@@ -9,7 +9,7 @@ EpisodeDescriptionConfig.max_support_size_contrib_per_class = 100
 EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
 EpisodeDescriptionConfig.max_log_weight = 0.69314718055994529  # np.log(2)
 EpisodeDescriptionConfig.ignore_dag_ontology = False
-EpisodeDescriptionConfig.ignore_dag_ontology = False
+EpisodeDescriptionConfig.ignore_bilevel_ontology = False
 
 # It is possible to override some of the above defaults only for meta-training.
 # An example is shown in the following two commented-out lines.
