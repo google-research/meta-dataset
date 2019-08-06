@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Sampling the composition of episodes.
 
 The composition of episodes consists in the number of classes (num_ways), which
@@ -32,6 +33,7 @@ import gin.tf
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import imagenet_specification
 import numpy as np
+from six.moves import zip
 
 # Module-level random number generator. Initialized randomly, can be seeded.
 RNG = np.random.RandomState(seed=None)
@@ -240,8 +242,8 @@ class EpisodeDescriptionSampler(object):
       min_ways: Integer, the minimum value when sampling ways (has to be
         provided if `num_ways` is None).
       max_ways_upper_bound: Integer, the maximum value when sampling ways (has
-        to be provided through if `num_ways` is None). Note
-        that the number of available classes acts as another upper bound.
+        to be provided through if `num_ways` is None). Note that the number of
+        available classes acts as another upper bound.
       max_num_query: Integer, the maximum number of query examples per class
         (has to be provided if `num_query` is None).
       max_support_set_size: Integer, the maximum size for the support set (has
@@ -253,26 +255,26 @@ class EpisodeDescriptionSampler(object):
         class when determining the number of support examples per class (has to
         be provided if `num_support` is None).
       max_log_weight: Float, the maximum log-weight to give to any particular
-        class (has to be provided if `num_support` is
-        None).
+        class (has to be provided if `num_support` is None).
 
     Raises:
       RuntimeError: if required parameters are missing.
       ValueError: Inconsistent parameters.
     """
     arg_groups = {
-        num_ways: ((min_ways, max_ways_upper_bound), 'num_ways',
-                   ('min_ways', 'max_ways_upper_bound')),
-        num_query: ((max_num_query,), 'num_query', ('max_num_query',)),
-        num_support: (
-            (max_support_set_size, max_support_size_contrib_per_class,
-             min_log_weight, max_log_weight), 'num_ways',
-            ('max_support_set_size', 'max_support_size_contrib_per_class',
-             'min_log_weight', 'max_log_weight'))
+        'num_ways': (num_ways, ('min_ways', 'max_ways_upper_bound'),
+                     (min_ways, max_ways_upper_bound)),
+        'num_query': (num_query, ('max_num_query',), (max_num_query,)),
+        'num_support':
+            (num_support,
+             ('max_support_set_size', 'max_support_size_contrib_per_class',
+              'min_log_weight', 'max_log_weight'),
+             (max_support_set_size, max_support_size_contrib_per_class,
+              min_log_weight, max_log_weight)),
     }
 
-    for first_arg, values in arg_groups.items():
-      required_args, first_arg_name, required_arg_names = values
+    for first_arg_name, values in arg_groups.items():
+      first_arg, required_arg_names, required_args = values
       if ((first_arg is None) and any(arg is None for arg in required_args)):
         # Get name of the nones
         none_arg_names = [
@@ -282,7 +284,7 @@ class EpisodeDescriptionSampler(object):
         raise RuntimeError(
             'The following arguments: %s can not be None, since %s is None. '
             'Arguments can be set up with gin, for instance by providing '
-            '`--gin_file=learn/gin/setups/learn_config.gin` or calling '
+            '`--gin_file=learn/gin/setups/data_config.gin` or calling '
             '`gin.parse_config_file(...)` in the code. Please ensure the '
             'following gin arguments of EpisodeDescriptionSampler are set: '
             '%s' % (none_arg_names, first_arg_name, none_arg_names))

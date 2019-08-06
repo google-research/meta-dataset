@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Prepares the ILSVRC2012 subset of ImageNet for integration in the benchmark.
 
 This requires creating a data structure to navigate the subset of the ontology
@@ -31,6 +32,7 @@ import os
 import pickle as pkl
 from meta_dataset.data import imagenet_stats
 import numpy as np
+import six
 import tensorflow as tf
 
 tf.flags.DEFINE_string(
@@ -338,9 +340,13 @@ def propose_valid_test_roots(spanning_leaves,
       margin value.
   """
   # Sort in decreasing order of the length of the lists of spanning leaves, so
-  # e.g. the node that spans the most leaves will be the first element
-  spanning_leaves_sorted = sorted(
-      spanning_leaves.iteritems(), key=lambda (k, v): (len(v), k))
+  # e.g. the node that spans the most leaves will be the first element.  Ties
+  # are broken by the WordNet ID of the Synset.
+  def _sort_key(synset_and_leaves):
+    synset, leaves = synset_and_leaves
+    return (len(leaves), synset.wn_id)
+
+  spanning_leaves_sorted = sorted(six.iteritems(spanning_leaves), key=_sort_key)
   spanning_leaves_sorted.reverse()
 
   # Get the candidate roots for the validation and test sub-graphs, by finding
@@ -773,7 +779,7 @@ def get_lowest_common_ancestor(leaf_a, leaf_b, path='longest'):
   return lca, height_of_lca
 
 
-def get_num_synset_2012_images(path, synsets_2012):
+def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
   """Count the number of images of each class in ILSVRC 2012.
 
   Returns a dict mapping the WordNet of each class of ILSVRC 2012 to the
@@ -789,6 +795,7 @@ def get_num_synset_2012_images(path, synsets_2012):
     path: An optional path to a cache where the computed dict is / may be
       stored.
     synsets_2012: A list of Synsets.
+    files_to_skip: A set with the files that repeat in other datasets.
 
   Returns:
     a dict mapping the WordNet id of each ILSVRC 2012 class to its number of
@@ -804,11 +811,14 @@ def get_num_synset_2012_images(path, synsets_2012):
         return num_synset_2012_images
 
   tf.logging.info('Unsuccessful. Deriving number of leaf images...')
+  if files_to_skip is None:
+    files_to_skip = set()
   num_synset_2012_images = {}
   for s_2012 in synsets_2012:
     synset_dir = os.path.join(FLAGS.ilsvrc_2012_data_root, s_2012.wn_id)
+    # Size of the set difference (-) between listed files and `files_to_skip`.
     num_synset_2012_images[s_2012.wn_id] = len(
-        tf.gfile.ListDirectory(synset_dir))
+        set(tf.gfile.ListDirectory(synset_dir)) - files_to_skip)
 
   if path:
     with tf.gfile.Open(path, 'wb') as f:
@@ -818,6 +828,7 @@ def get_num_synset_2012_images(path, synsets_2012):
 
 
 def create_imagenet_specification(split_enum,
+                                  files_to_skip,
                                   path_to_num_leaf_images=None,
                                   log_stats=True):
   """Creates the dataset specification of ImageNet.
@@ -836,6 +847,7 @@ def create_imagenet_specification(split_enum,
   Args:
     split_enum: A class that inherits from enum.Enum whose attributes are TRAIN,
       VALID, and TEST, which are mapped to enumerated constants.
+    files_to_skip: A set with the files that intersect with other datasets.
     path_to_num_leaf_images: A string, representing a path to a file containing
       a dict that maps the WordNet id of each ILSVRC 2012 class to the
       corresponding number of images. If no file is present, it will be created
@@ -872,7 +884,7 @@ def create_imagenet_specification(split_enum,
   path_to_is_a = FLAGS.path_to_is_a
   if not path_to_is_a:
     path_to_is_a = os.path.join(data_root, 'wordnet.is_a.txt')
-  with tf.gfile.Open(FLAGS.path_to_is_a, 'r') as f:
+  with tf.gfile.Open(path_to_is_a, 'r') as f:
     for line in f:
       parent, child = line.rstrip().split(' ')
       synsets[parent].children.add(synsets[child])
@@ -888,7 +900,8 @@ def create_imagenet_specification(split_enum,
 
   # Get a dict mapping each WordNet id of ILSVRC 2012 to its number of images.
   num_synset_2012_images = get_num_synset_2012_images(path_to_num_leaf_images,
-                                                      synsets_2012)
+                                                      synsets_2012,
+                                                      files_to_skip)
 
   # Get the graph of all and only the ancestors of the ILSVRC 2012 classes.
   sampling_graph = create_sampling_graph(synsets_2012)

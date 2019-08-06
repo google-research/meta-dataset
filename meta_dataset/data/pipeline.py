@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """This module assembles full input data pipelines.
 
 The whole pipeline incorporate (potentially) multiple Readers, the logic to
@@ -35,6 +36,7 @@ from meta_dataset import data
 from meta_dataset.data import learning_spec
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
+from six.moves import zip
 import tensorflow as tf
 
 
@@ -230,6 +232,7 @@ def make_one_source_episode_pipeline(dataset_spec,
                                      num_query=None,
                                      shuffle_buffer_size=None,
                                      read_buffer_size_bytes=None,
+                                     num_prefetch=0,
                                      image_size=None):
   """Returns a pipeline emitting data from one single source as Episodes.
 
@@ -250,6 +253,9 @@ def make_one_source_episode_pipeline(dataset_spec,
       in the query set if provided.
     shuffle_buffer_size: int or None, shuffle buffer size for each Dataset.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+    num_prefetch: int, the number of examples to prefetch for each class of
+      each dataset. Prefetching occurs just after the class-specific Dataset
+      object is constructed. If < 1, no prefetching occurs.
     image_size: int, desired image size used during decoding.
 
   Returns:
@@ -260,8 +266,9 @@ def make_one_source_episode_pipeline(dataset_spec,
       raise NotImplementedError('Example-level splits or pools not supported.')
   else:
     use_all_classes = False
-  episode_reader = reader.EpisodeReader(
-      dataset_spec, split, shuffle_buffer_size, read_buffer_size_bytes)
+  episode_reader = reader.EpisodeReader(dataset_spec, split,
+                                        shuffle_buffer_size,
+                                        read_buffer_size_bytes, num_prefetch)
   sampler = sampling.EpisodeDescriptionSampler(
       episode_reader.dataset_spec,
       split,
@@ -298,6 +305,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                       num_query=None,
                                       shuffle_buffer_size=None,
                                       read_buffer_size_bytes=None,
+                                      num_prefetch=0,
                                       image_size=None):
   """Returns a pipeline emitting data from multiple sources as Episodes.
 
@@ -322,6 +330,9 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       in the query set if provided.
     shuffle_buffer_size: int or None, shuffle buffer size for each Dataset.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+    num_prefetch: int, the number of examples to prefetch for each class of
+      each dataset. Prefetching occurs just after the class-specific Dataset
+      object is constructed. If < 1, no prefetching occurs.
     image_size: int, desired image size used during decoding.
 
   Returns:
@@ -333,8 +344,9 @@ def make_multisource_episode_pipeline(dataset_spec_list,
   sources = []
   for (dataset_spec, use_dag_ontology, use_bilevel_ontology) in zip(
       dataset_spec_list, use_dag_ontology_list, use_bilevel_ontology_list):
-    episode_reader = reader.EpisodeReader(
-        dataset_spec, split, shuffle_buffer_size, read_buffer_size_bytes)
+    episode_reader = reader.EpisodeReader(dataset_spec, split,
+                                          shuffle_buffer_size,
+                                          read_buffer_size_bytes, num_prefetch)
     sampler = sampling.EpisodeDescriptionSampler(
         episode_reader.dataset_spec,
         split,
@@ -370,6 +382,7 @@ def make_one_source_batch_pipeline(dataset_spec,
                                    pool=None,
                                    shuffle_buffer_size=None,
                                    read_buffer_size_bytes=None,
+                                   num_prefetch=0,
                                    image_size=None):
   """Returns a pipeline emitting data from one single source as Batches.
 
@@ -383,6 +396,9 @@ def make_one_source_batch_pipeline(dataset_spec,
       shuffling the examples from different classes, while they are mixed
       together. There is only one shuffling operation, not one per class.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+    num_prefetch: int, the number of examples to prefetch for each class of each
+      dataset. Prefetching occurs just after the class-specific Dataset object
+      is constructed. If < 1, no prefetching occurs.
     image_size: int, desired image size used during decoding.
 
   Returns:
@@ -390,7 +406,7 @@ def make_one_source_batch_pipeline(dataset_spec,
     split.
   """
   batch_reader = reader.BatchReader(dataset_spec, split, shuffle_buffer_size,
-                                    read_buffer_size_bytes)
+                                    read_buffer_size_bytes, num_prefetch)
   dataset = batch_reader.create_dataset_input_pipeline(
       batch_size=batch_size, pool=pool)
   map_fn = functools.partial(process_batch, image_size=image_size)
@@ -410,6 +426,7 @@ def make_multisource_batch_pipeline(dataset_spec_list,
                                     pool=None,
                                     shuffle_buffer_size=None,
                                     read_buffer_size_bytes=None,
+                                    num_prefetch=0,
                                     image_size=None):
   """Returns a pipeline emitting data from multiple source as Batches.
 
@@ -425,6 +442,9 @@ def make_multisource_batch_pipeline(dataset_spec_list,
       shuffling the examples from different classes, while they are mixed
       together. There is only one shuffling operation, not one per class.
     read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+    num_prefetch: int, the number of examples to prefetch for each class of
+      each dataset. Prefetching occurs just after the class-specific Dataset
+      object is constructed. If < 1, no prefetching occurs.
     image_size: int, desired image size used during decoding.
 
   Returns:
@@ -435,7 +455,7 @@ def make_multisource_batch_pipeline(dataset_spec_list,
   offset = 0
   for dataset_spec in dataset_spec_list:
     batch_reader = reader.BatchReader(dataset_spec, split, shuffle_buffer_size,
-                                      read_buffer_size_bytes)
+                                      read_buffer_size_bytes, num_prefetch)
     dataset = batch_reader.create_dataset_input_pipeline(
         batch_size=batch_size, pool=pool, offset=offset)
     sources.append(dataset)

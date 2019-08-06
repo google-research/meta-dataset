@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tests for imagenet_specification."""
 
 from __future__ import absolute_import
@@ -22,6 +23,7 @@ from __future__ import print_function
 from meta_dataset.data import imagenet_specification as imagenet_spec
 from meta_dataset.data import learning_spec
 import numpy as np
+from six.moves import range
 import tensorflow as tf
 
 DESIRED_TOY_NUM_VALID_CLASSES = 2

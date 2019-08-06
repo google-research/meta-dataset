@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tests for trainer.py."""
 
 from __future__ import absolute_import
@@ -62,10 +63,23 @@ class TrainerTest(tf.test.TestCase):
     # have the opportunity to pass values to its constructor except through gin.
     gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
 
+    # Values for EpisodeDescriptionSampler
+    gin.bind_parameter('EpisodeDescriptionSampler.min_ways', 5)
+    gin.bind_parameter('EpisodeDescriptionSampler.max_ways_upper_bound', 50)
+    gin.bind_parameter('EpisodeDescriptionSampler.max_num_query', 10)
+    gin.bind_parameter('EpisodeDescriptionSampler.max_support_set_size', 500)
+    gin.bind_parameter(
+        'EpisodeDescriptionSampler.max_support_size_contrib_per_class', 100)
+    gin.bind_parameter('EpisodeDescriptionSampler.min_log_weight',
+                       -0.69314718055994529)  # np.log(0.5)
+    gin.bind_parameter('EpisodeDescriptionSampler.max_log_weight',
+                       0.69314718055994529)  # np.log(2)
+
     data_config = config.DataConfig(
         image_height=84,
         shuffle_buffer_size=20,
         read_buffer_size_bytes=(1024**2),
+        num_prefetch=2,
     )
 
     episodic_trainer = trainer.EpisodicTrainer(

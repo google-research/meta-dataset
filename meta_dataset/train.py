@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 r"""Script for training models on the benchmark.
 
 Launching command for batch baseline:
@@ -170,7 +171,7 @@ def main(unused_argv):
     # If it exists already, rename it instead of overwriting it.
     # This just saves the previous one, not all the ones before.
     if tf.gfile.Exists(gin_log_file):
-      tf.gfile.Rename(gin_log_file, gin_log_file + '~', overwrite=True)
+      tf.gfile.Rename(gin_log_file, gin_log_file + '.old', overwrite=True)
     with tf.gfile.Open(gin_log_file, 'w') as f:
       f.write(gin_operative_config)
 

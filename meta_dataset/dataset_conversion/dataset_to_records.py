@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tools for preparing datasets for integration in the benchmark.
 
 Specifically, the DatasetConverter class is used to perform the conversion of a
@@ -34,7 +35,6 @@ from __future__ import print_function
 
 import binascii
 import collections
-import cPickle as pkl
 import io
 import json
 import operator
@@ -47,6 +47,8 @@ import numpy as np
 from PIL import Image
 from PIL import ImageOps
 from scipy.io import loadmat
+from six.moves import range
+import six.moves.cPickle as pkl
 import tensorflow as tf
 
 # Datasets in the same order as reported in the article.
@@ -1355,7 +1357,7 @@ class MSCOCOConverter(DatasetConverter):
       return image_crop, class_id
 
     class_tf_record_writers = []
-    for class_id in xrange(self.num_all_classes):
+    for class_id in range(self.num_all_classes):
       output_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       class_tf_record_writers.append(tf.python_io.TFRecordWriter(output_path))
@@ -1407,12 +1409,37 @@ class ImageNetConverter(DatasetConverter):
 
     See HierarchicalDatasetSpecification for details.
     """
+    # Load lists of image names that are duplicates with images in other
+    # datasets. They will be skipped from ImageNet.
+    self.files_to_skip = set()
+    for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
+      duplicates_file = os.path.join(
+          ILSCRC_DUPLICATES_PATH,
+          'ImageNet_{}_duplicates.txt'.format(other_dataset))
+
+      with tf.gfile.Open(duplicates_file) as fd:
+        duplicates = fd.read()
+      lines = duplicates.splitlines()
+
+      for l in lines:
+        # Skip comment lines
+        l = l.strip()
+        if l.startswith('#'):
+          continue
+        # Lines look like:
+        # 'synset/synset_imgnumber.JPEG  # original_file_name.jpg\n'.
+        # Extract only the 'synset_imgnumber.JPG' part.
+        file_path = l.split('#')[0].strip()
+        file_name = os.path.basename(file_path)
+        self.files_to_skip.add(file_name)
+
     ilsvrc_2012_num_leaf_images_path = FLAGS.ilsvrc_2012_num_leaf_images_path
     if not ilsvrc_2012_num_leaf_images_path:
       ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
                                                       'num_leaf_images.pkl')
     specification = imagenet_specification.create_imagenet_specification(
-        learning_spec.Split, ilsvrc_2012_num_leaf_images_path)
+        learning_spec.Split, self.files_to_skip,
+        ilsvrc_2012_num_leaf_images_path)
     split_subgraphs, images_per_class, _, _, _, _ = specification
 
     # Maps each class id to the name of its class.
@@ -1434,30 +1461,6 @@ class ImageNetConverter(DatasetConverter):
 
     The field that requires modification in this case is only self.class_names.
     """
-    # Load lists of image names that are duplicates with images in other
-    # datasets. They will be skipped from ImageNet.
-    files_to_skip = set()
-    for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
-      duplicates_file = os.path.join(
-          ILSCRC_DUPLICATES_PATH,
-          'ImageNet_{}_duplicates.txt'.format(other_dataset))
-
-      with tf.gfile.Open(duplicates_file) as fd:
-        duplicates = fd.read()
-      lines = duplicates.splitlines()
-
-      for l in lines:
-        # Skip comment lines
-        l = l.strip()
-        if l.startswith('#'):
-          continue
-        # Lines look like:
-        # 'synset/synset_imgnumber.JPEG  # original_file_name.jpg\n'.
-        # Extract only the 'synset_imgnumber.JPG' part.
-        file_path = l.split('#')[0].strip()
-        file_name = os.path.basename(file_path)
-        files_to_skip.add(file_name)
-
     # Get a list of synset id's assigned to each split.
     train_synset_ids = self._get_synset_ids(learning_spec.Split.TRAIN)
     valid_synset_ids = self._get_synset_ids(learning_spec.Split.VALID)
@@ -1490,7 +1493,7 @@ class ImageNetConverter(DatasetConverter):
           class_path,
           class_label,
           class_records_path,
-          files_to_skip=files_to_skip,
+          files_to_skip=self.files_to_skip,
           skip_on_error=True)
 
 
@@ -1545,7 +1548,7 @@ class FungiConverter(DatasetConverter):
       original_val = json.load(f)
 
     # The categories (classes) for train and validation should be the same.
-    assert cmp(original_train['categories'], original_val['categories']) == 0
+    assert original_train['categories'] == original_val['categories']
     class_labels = ([c['id'] for c in original_train['categories']])
     # Assert no repeated categories
     assert len(class_labels) == len(set(class_labels))

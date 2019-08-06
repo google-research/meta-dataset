@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Forming the first part of a tf.data pipeline, reading from a source on disk.
 
 The data output by the Reader consists in episodes or batches (for EpisodeReader
@@ -33,6 +34,7 @@ import os
 
 from meta_dataset import data
 import numpy as np
+from six.moves import range
 import tensorflow as tf
 
 # DUMMY_CLASS_ID will be used as the target of examples used for padding only.
@@ -62,7 +64,7 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   class in the dataset (there are `num_classes` of them, which is determined by
   inspecting the `dataset_spec` argument using the `split` argument) is appended
   with a "dummy" Dataset (which has index `num_classes` in the list) which
-  outputs a constant `('', DUMMY_CLASS_ID)` tuple).
+  outputs a constant `(b'', DUMMY_CLASS_ID)` tuple).
 
   Note that a dataset ID is different from the (absolute) class ID: the dataset
   ID refers to the index of the Dataset in the list of Dataset objects, and the
@@ -148,7 +150,7 @@ class Reader(object):
   """
 
   def __init__(self, dataset_spec, split, shuffle_buffer_size,
-               read_buffer_size_bytes):
+               read_buffer_size_bytes, num_prefetch):
     """Initializes a Reader from a source.
 
     The source is identified by dataset_spec and split.
@@ -159,11 +161,15 @@ class Reader(object):
       shuffle_buffer_size: An integer, the shuffle buffer size for each Dataset
         object. If 0, no shuffling operation will happen.
       read_buffer_size_bytes: int or None, buffer size for each TFRecordDataset.
+      num_prefetch: int, the number of examples to prefetch for each class of
+        each dataset. Prefetching occurs just after the class-specific Dataset
+        object is constructed. If < 1, no prefetching occurs.
     """
     self.dataset_spec = dataset_spec
     self.split = split
     self.shuffle_buffer_size = shuffle_buffer_size
     self.read_buffer_size_bytes = read_buffer_size_bytes
+    self.num_prefetch = num_prefetch
 
     self.base_path = self.dataset_spec.path
     self.class_set = self.dataset_spec.get_classes(self.split)
@@ -213,6 +219,9 @@ class Reader(object):
 
       example_string_dataset = tf.data.TFRecordDataset(
           filename, buffer_size=self.read_buffer_size_bytes)
+      if self.num_prefetch > 0:
+        example_string_dataset = example_string_dataset.prefetch(
+            self.num_prefetch)
       if shuffle:
         # Do not set a buffer size greater than the number of examples in this
         # class, as it can result in unnecessary memory being allocated.
@@ -259,14 +268,14 @@ class EpisodeReader(Reader):
         support and query sets and decode the example strings.
     """
     # Always shuffle, unless self.shuffle_buffer_size is 0
-    shuffle = (self.shuffle_buffer_size > 0)
+    shuffle = (self.shuffle_buffer_size and self.shuffle_buffer_size > 0)
     class_datasets = self.construct_class_datasets(
         pool=pool, shuffle=shuffle, shuffle_seed=shuffle_seed)
 
-    # We also construct a dummy dataset which outputs `('', DUMMY_CLASS_ID)`
+    # We also construct a dummy dataset which outputs `(b'', DUMMY_CLASS_ID)`
     # tuples.
     dummy_dataset = tf.data.Dataset.zip(
-        (tf.data.Dataset.from_tensors('').repeat(),
+        (tf.data.Dataset.from_tensors(b'').repeat(),
          tf.data.Dataset.from_tensors(DUMMY_CLASS_ID).repeat()))
     class_datasets.append(dummy_dataset)
 

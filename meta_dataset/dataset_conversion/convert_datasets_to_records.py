@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 # pyformat: disable
 r"""Main file for converting the datasets used in the benchmark into records.
 
@@ -37,6 +38,8 @@ import tensorflow as tf
 
 tf.flags.DEFINE_string(
     'mini_imagenet_records_dir',
+    # This dataset is for diagnostic purposes only, which is why we want to
+    # store it in a different location than the other datasets.
     '',
     'The path to store the tf.Records of MiniImageNet.')
 

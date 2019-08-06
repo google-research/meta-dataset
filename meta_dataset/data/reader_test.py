@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tests for Readers and related functions."""
 
 from __future__ import absolute_import
@@ -28,6 +29,8 @@ from meta_dataset.data import sampling
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.data.learning_spec import Split
 import numpy as np
+from six.moves import range
+from six.moves import zip
 import tensorflow as tf
 
 # DatasetSpecification to use in tests
@@ -230,6 +233,7 @@ class EpisodeReaderTest(tf.test.TestCase):
     self.split = Split.TRAIN
     self.shuffle_buffer_size = 30
     self.read_buffer_size_bytes = None
+    self.num_prefetch = 0
 
   def generate_episodes(self,
                         sampler,
@@ -243,8 +247,10 @@ class EpisodeReaderTest(tf.test.TestCase):
     else:
       shuffle_buffer_size = 0
 
-    episode_reader = DummyEpisodeReader(
-        dataset_spec, split, shuffle_buffer_size, self.read_buffer_size_bytes)
+    episode_reader = DummyEpisodeReader(dataset_spec, split,
+                                        shuffle_buffer_size,
+                                        self.read_buffer_size_bytes,
+                                        self.num_prefetch)
     input_pipeline = episode_reader.create_dataset_input_pipeline(
         sampler, shuffle_seed=shuffle_seed)
     iterator = input_pipeline.make_one_shot_iterator()
@@ -293,7 +299,7 @@ class EpisodeReaderTest(tf.test.TestCase):
     self.assertEqual(len(examples), len(targets))
     for (example, target) in zip(examples, targets):
       if example:
-        expected_target, _ = example.split('.')
+        expected_target, _ = example.decode().split('.')
         self.assertEqual(int(expected_target), target)
       else:
         self.assertEqual(target, reader.DUMMY_CLASS_ID)
@@ -308,11 +314,11 @@ class EpisodeReaderTest(tf.test.TestCase):
     num_actual = sum(
         class_id != reader.DUMMY_CLASS_ID for class_id in targets_chunk)
     self.assertNotIn(reader.DUMMY_CLASS_ID, targets_chunk[:num_actual])
-    self.assertNotIn('', examples_chunk[:num_actual])
+    self.assertNotIn(b'', examples_chunk[:num_actual])
     self.assertTrue(
         all(reader.DUMMY_CLASS_ID == target
             for target in targets_chunk[num_actual:]))
-    self.assertAllInSet(examples_chunk[num_actual:], [''])
+    self.assertAllInSet(examples_chunk[num_actual:], [b''])
 
   def generate_and_check(self, sampler, num_episodes):
     chunk_sizes = sampler.compute_chunk_sizes()
@@ -587,7 +593,7 @@ class EpisodeReaderTest(tf.test.TestCase):
         if not example:
           # Padding is at the end
           break
-        class_id, example_id = example.split('.')
+        class_id, example_id = example.decode().split('.')
         mapping[int(class_id)].append(int(example_id))
       return mapping
 
@@ -595,12 +601,12 @@ class EpisodeReaderTest(tf.test.TestCase):
     query2_example_ids = _build_class_id_to_example_ids(query_examples2)
 
     for class_id in range(10):
-      self.assertItemsEqual(support2_example_ids[class_id], range(5))
-      self.assertItemsEqual(query2_example_ids[class_id], range(5, 10))
+      self.assertItemsEqual(support2_example_ids[class_id], list(range(5)))
+      self.assertItemsEqual(query2_example_ids[class_id], list(range(5, 10)))
 
     for class_id in range(10, num_classes):
-      self.assertItemsEqual(support2_example_ids[class_id], range(10, 15))
-      self.assertItemsEqual(query2_example_ids[class_id], range(15, 20))
+      self.assertItemsEqual(support2_example_ids[class_id], list(range(10, 15)))
+      self.assertItemsEqual(query2_example_ids[class_id], list(range(15, 20)))
 
 
 if __name__ == '__main__':

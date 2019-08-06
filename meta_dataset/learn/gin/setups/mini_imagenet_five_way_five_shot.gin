@@ -2,3 +2,4 @@ benchmark.datasets = 'mini_imagenet'
 include 'meta_dataset/learn/gin/setups/data_config.gin'
 include 'meta_dataset/learn/gin/setups/learn_config.gin'
 include 'meta_dataset/learn/gin/setups/fixed_way_and_shot.gin'
+Trainer.data_config = @DataConfig()

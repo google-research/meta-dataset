@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Interface for a learner that uses BenchmarkReaderDataSource to get data."""
 # TODO(lamblinp): Update variable names to be more consistent
 # - target, class_idx, label
@@ -22,19 +23,20 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pkl
 import os
 
 import gin.tf
 from meta_dataset import learner
-# The following import is needed for gin to know about DataConfig.
-from meta_dataset.data import config  # pylint: disable=unused-import
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
 import numpy as np
+from six.moves import range
+from six.moves import zip
+import six.moves.cPickle as pkl
 import tensorflow as tf
+
 from tensorflow.core.protobuf import rewriter_config_pb2  # pylint: disable=g-direct-tensorflow-import
 
 # The following flag specifies substrings of variable names that should not be
@@ -721,6 +723,7 @@ class Trainer(object):
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
+    num_prefetch = self.data_config.num_prefetch
     benchmark_spec = (
         self.valid_benchmark_spec if split == 'valid' else self.benchmark_spec)
     (_, image_shape, dataset_spec_list, has_dag_ontology,
@@ -752,6 +755,7 @@ class Trainer(object):
           num_query=num_test_examples,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_size)
     else:
       data_pipeline = pipeline.make_multisource_episode_pipeline(
@@ -764,6 +768,7 @@ class Trainer(object):
           num_query=num_test_examples,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_size)
       data_pipeline = apply_dataset_options(data_pipeline)
 
@@ -789,6 +794,7 @@ class Trainer(object):
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
+    num_prefetch = self.data_config.num_prefetch
     _, image_shape, dataset_spec_list, _, _ = self.benchmark_spec
     dataset_split, batch_size = self.split_episode_or_batch_specs[split]
     for dataset_spec in dataset_spec_list:
@@ -806,6 +812,7 @@ class Trainer(object):
           batch_size=batch_size,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_shape[0])
     else:
       data_pipeline = pipeline.make_multisource_batch_pipeline(
@@ -814,6 +821,7 @@ class Trainer(object):
           batch_size=batch_size,
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
+          num_prefetch=num_prefetch,
           image_size=image_shape[0])
 
     data_pipeline = apply_dataset_options(data_pipeline)

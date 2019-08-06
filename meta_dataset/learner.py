@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Learner related code."""
 
 from __future__ import absolute_import
@@ -21,6 +22,9 @@ from __future__ import print_function
 
 import collections
 import gin.tf
+import six
+from six.moves import range
+from six.moves import zip
 import tensorflow as tf
 
 MAX_WAY = 50  # The maximum number of classes we will see in any batch.
@@ -149,18 +153,18 @@ def conv_bn(x,
   moments_keys, moments_vars = [], []
   x, conv_params = conv(
       x, conv_size, depth, stride, params=params, maml_arch=maml_arch)
-  params_keys += conv_params.keys()
-  params_vars += conv_params.values()
+  params_keys.extend(conv_params.keys())
+  params_vars.extend(conv_params.values())
 
   x, bn_params, bn_moments = bn(
       x,
       params=params,
       moments=moments,
       backprop_through_moments=backprop_through_moments)
-  params_keys += bn_params.keys()
-  params_vars += bn_params.values()
-  moments_keys += bn_moments.keys()
-  moments_vars += bn_moments.values()
+  params_keys.extend(bn_params.keys())
+  params_vars.extend(bn_params.values())
+  moments_keys.extend(bn_moments.keys())
+  moments_vars.extend(bn_moments.values())
 
   params = collections.OrderedDict(zip(params_keys, params_vars))
   moments = collections.OrderedDict(zip(moments_keys, moments_vars))
@@ -188,10 +192,10 @@ def bottleneck(x,
         moments=moments,
         maml_arch=maml_arch,
         backprop_through_moments=backprop_through_moments)
-    params_keys += conv_bn_params.keys()
-    params_vars += conv_bn_params.values()
-    moments_keys += conv_bn_moments.keys()
-    moments_vars += conv_bn_moments.values()
+    params_keys.extend(conv_bn_params.keys())
+    params_vars.extend(conv_bn_params.values())
+    moments_keys.extend(conv_bn_moments.keys())
+    moments_vars.extend(conv_bn_moments.values())
     h = tf.nn.relu(h)
 
   with tf.variable_scope('conv2'):
@@ -203,10 +207,10 @@ def bottleneck(x,
         moments=moments,
         maml_arch=maml_arch,
         backprop_through_moments=backprop_through_moments)
-    params_keys += conv_bn_params.keys()
-    params_vars += conv_bn_params.values()
-    moments_keys += conv_bn_moments.keys()
-    moments_vars += conv_bn_moments.values()
+    params_keys.extend(conv_bn_params.keys())
+    params_vars.extend(conv_bn_params.values())
+    moments_keys.extend(conv_bn_moments.keys())
+    moments_vars.extend(conv_bn_moments.values())
 
   with tf.variable_scope('identity'):
     if use_project:
@@ -219,10 +223,10 @@ def bottleneck(x,
             moments=moments,
             maml_arch=maml_arch,
             backprop_through_moments=backprop_through_moments)
-        params_keys += conv_bn_params.keys()
-        params_vars += conv_bn_params.values()
-        moments_keys += conv_bn_moments.keys()
-        moments_vars += conv_bn_moments.values()
+        params_keys.extend(conv_bn_params.keys())
+        params_vars.extend(conv_bn_params.values())
+        moments_keys.extend(conv_bn_moments.keys())
+        moments_vars.extend(conv_bn_moments.values())
     x = tf.nn.relu(x + h)
 
   params = collections.OrderedDict(zip(params_keys, params_vars))
@@ -270,10 +274,10 @@ def _resnet(x,
           moments=moments,
           maml_arch=maml_arch,
           backprop_through_moments=backprop_through_moments)
-      params_keys += conv_bn_params.keys()
-      params_vars += conv_bn_params.values()
-      moments_keys += conv_bn_moments.keys()
-      moments_vars += conv_bn_moments.values()
+      params_keys.extend(conv_bn_params.keys())
+      params_vars.extend(conv_bn_params.values())
+      moments_keys.extend(conv_bn_moments.keys())
+      moments_vars.extend(conv_bn_moments.values())
       x = tf.nn.relu(x)
 
     def _bottleneck(x, i, depth, params, moments, stride=2):
@@ -297,40 +301,40 @@ def _resnet(x,
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
               x, i, 64, params, moments, stride=1)
-          params_keys += bottleneck_params.keys()
-          params_vars += bottleneck_params.values()
-          moments_keys += bottleneck_moments.keys()
-          moments_vars += bottleneck_moments.values()
+          params_keys.extend(bottleneck_params.keys())
+          params_vars.extend(bottleneck_params.values())
+          moments_keys.extend(bottleneck_moments.keys())
+          moments_vars.extend(bottleneck_moments.values())
 
     with tf.variable_scope('conv3_x'):
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
               x, i, 128, params, moments)
-          params_keys += bottleneck_params.keys()
-          params_vars += bottleneck_params.values()
-          moments_keys += bottleneck_moments.keys()
-          moments_vars += bottleneck_moments.values()
+          params_keys.extend(bottleneck_params.keys())
+          params_vars.extend(bottleneck_params.values())
+          moments_keys.extend(bottleneck_moments.keys())
+          moments_vars.extend(bottleneck_moments.values())
 
     with tf.variable_scope('conv4_x'):
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
               x, i, 256, params, moments)
-          params_keys += bottleneck_params.keys()
-          params_vars += bottleneck_params.values()
-          moments_keys += bottleneck_moments.keys()
-          moments_vars += bottleneck_moments.values()
+          params_keys.extend(bottleneck_params.keys())
+          params_vars.extend(bottleneck_params.values())
+          moments_keys.extend(bottleneck_moments.keys())
+          moments_vars.extend(bottleneck_moments.values())
 
     with tf.variable_scope('conv5_x'):
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
               x, i, 512, params, moments)
-          params_keys += bottleneck_params.keys()
-          params_vars += bottleneck_params.values()
-          moments_keys += bottleneck_moments.keys()
-          moments_vars += bottleneck_moments.values()
+          params_keys.extend(bottleneck_params.keys())
+          params_vars.extend(bottleneck_params.values())
+          moments_keys.extend(bottleneck_moments.keys())
+          moments_vars.extend(bottleneck_moments.values())
 
     x = tf.reduce_mean(x, axis=[1, 2])
     x = tf.reshape(x, [-1, 512])
@@ -402,10 +406,10 @@ def _four_layer_convnet(inputs,
             moments=moments,
             maml_arch=maml_arch,
             backprop_through_moments=backprop_through_moments)
-        model_params_keys += conv_bn_params.keys()
-        model_params_vars += conv_bn_params.values()
-        moments_keys += conv_bn_moments.keys()
-        moments_vars += conv_bn_moments.values()
+        model_params_keys.extend(conv_bn_params.keys())
+        model_params_vars.extend(conv_bn_params.values())
+        moments_keys.extend(conv_bn_moments.keys())
+        moments_vars.extend(conv_bn_moments.values())
 
       layer = tf.nn.relu(layer)
       layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
@@ -1263,7 +1267,7 @@ class MAMLLearner(Learner):
     embedding_vars_keys = []
     embedding_vars = []
     embedding_vars_copy_ops = []
-    for name, var in embedding_vars_dict.iteritems():
+    for name, var in six.iteritems(embedding_vars_dict):
       embedding_vars_keys.append(name)
       if not self.is_training:
         with tf.variable_scope('weight_copy'):

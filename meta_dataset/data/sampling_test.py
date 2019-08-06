@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
 """Tests for `sampling` module."""
 
 from __future__ import absolute_import
@@ -25,6 +26,8 @@ from meta_dataset.data import sampling
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.data.learning_spec import Split
 import numpy as np
+from six.moves import range
+from six.moves import zip
 import tensorflow as tf
 
 # DatasetSpecification to use in tests
