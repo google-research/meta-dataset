@@ -38,6 +38,13 @@ def conv2d(x, w, stride=1, b=None):
   return h
 
 
+def relu(x, use_bounded_activation=False):
+  if use_bounded_activation:
+    return tf.nn.relu6(x)
+  else:
+    return tf.nn.relu(x)
+
+
 # TODO(tylerzhu): Accumulate batch norm statistics (moving {var, mean})
 # during training and use them during testing. However need to be careful
 # about leaking information across episodes.
@@ -148,7 +155,6 @@ def conv_bn(x,
             maml_arch=False,
             backprop_through_moments=True):
   """A block that performs convolution, followed by batch-norm."""
-
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []
   x, conv_params = conv(
@@ -179,7 +185,8 @@ def bottleneck(x,
                moments=None,
                maml_arch=False,
                use_project=False,
-               backprop_through_moments=True):
+               backprop_through_moments=True,
+               use_bounded_activation=False):
   """ResNet18 residual block."""
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []  # means and vars of different layers.
@@ -196,7 +203,8 @@ def bottleneck(x,
     params_vars.extend(conv_bn_params.values())
     moments_keys.extend(conv_bn_moments.keys())
     moments_vars.extend(conv_bn_moments.values())
-    h = tf.nn.relu(h)
+
+    h = relu(h, use_bounded_activation=use_bounded_activation)
 
   with tf.variable_scope('conv2'):
     h, conv_bn_params, conv_bn_moments = conv_bn(
@@ -207,6 +215,9 @@ def bottleneck(x,
         moments=moments,
         maml_arch=maml_arch,
         backprop_through_moments=backprop_through_moments)
+    if use_bounded_activation:
+      h = tf.clip_by_value(h, -6.0, 6.0)
+
     params_keys.extend(conv_bn_params.keys())
     params_vars.extend(conv_bn_params.values())
     moments_keys.extend(conv_bn_moments.keys())
@@ -227,7 +238,7 @@ def bottleneck(x,
         params_vars.extend(conv_bn_params.values())
         moments_keys.extend(conv_bn_moments.keys())
         moments_vars.extend(conv_bn_moments.values())
-    x = tf.nn.relu(x + h)
+    x = relu(x + h, use_bounded_activation=use_bounded_activation)
 
   params = collections.OrderedDict(zip(params_keys, params_vars))
   moments = collections.OrderedDict(zip(moments_keys, moments_vars))
@@ -241,7 +252,8 @@ def _resnet(x,
             params=None,
             moments=None,
             maml_arch=False,
-            backprop_through_moments=True):
+            backprop_through_moments=True,
+            use_bounded_activation=False):
   """A ResNet18 network."""
   # `is_training` will be used when start to use moving {var, mean} in batch
   # normalization. This refers to 'meta-training'.
@@ -278,7 +290,8 @@ def _resnet(x,
       params_vars.extend(conv_bn_params.values())
       moments_keys.extend(conv_bn_moments.keys())
       moments_vars.extend(conv_bn_moments.values())
-      x = tf.nn.relu(x)
+
+      x = relu(x, use_bounded_activation=use_bounded_activation)
 
     def _bottleneck(x, i, depth, params, moments, stride=2):
       """Wrapper for bottleneck."""
@@ -350,7 +363,8 @@ def resnet(x,
            moments=None,
            reuse=tf.AUTO_REUSE,
            scope='resnet18',
-           backprop_through_moments=True):
+           backprop_through_moments=True,
+           use_bounded_activation=False):
   return _resnet(
       x,
       is_training,
@@ -359,7 +373,8 @@ def resnet(x,
       params=None,
       moments=moments,
       maml_arch=False,
-      backprop_through_moments=backprop_through_moments)
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation)
 
 
 def resnet_maml(x,
@@ -368,7 +383,8 @@ def resnet_maml(x,
                 depth_multiplier=1.0,
                 reuse=tf.AUTO_REUSE,
                 scope='resnet_maml',
-                backprop_through_moments=True):
+                backprop_through_moments=True,
+                use_bounded_activation=False):
   del depth_multiplier
   return _resnet(
       x,
@@ -378,7 +394,8 @@ def resnet_maml(x,
       params=params,
       moments=moments,
       maml_arch=True,
-      backprop_through_moments=backprop_through_moments)
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation)
 
 
 def _four_layer_convnet(inputs,
@@ -388,7 +405,8 @@ def _four_layer_convnet(inputs,
                         moments=None,
                         maml_arch=False,
                         depth_multiplier=1.0,
-                        backprop_through_moments=True):
+                        backprop_through_moments=True,
+                        use_bounded_activation=False):
   """A four-layer-convnet architecture."""
   layer = tf.stop_gradient(inputs)
   model_params_keys, model_params_vars = [], []
@@ -411,7 +429,10 @@ def _four_layer_convnet(inputs,
         moments_keys.extend(conv_bn_moments.keys())
         moments_vars.extend(conv_bn_moments.values())
 
-      layer = tf.nn.relu(layer)
+      if use_bounded_activation:
+        layer = tf.nn.relu6(layer)
+      else:
+        layer = tf.nn.relu(layer)
       layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
       tf.logging.info('Output of block %d: %s' % (i, layer.shape))
 
@@ -432,7 +453,8 @@ def four_layer_convnet(inputs,
                        depth_multiplier=1.0,
                        reuse=tf.AUTO_REUSE,
                        scope='four_layer_convnet',
-                       backprop_through_moments=True):
+                       backprop_through_moments=True,
+                       use_bounded_activation=False):
   """Embeds inputs using a standard four-layer convnet.
 
   Args:
@@ -446,6 +468,8 @@ def four_layer_convnet(inputs,
     scope: An optional scope for the tf operations.
     backprop_through_moments: Whether to allow gradients to flow through the
       given support set moments. Only applies to non-transductive batch norm.
+    use_bounded_activation: Whether to enable bounded activation. This is useful
+      for post-training quantization.
 
   Returns:
     A 2D Tensor, where each row is the embedding of an input in inputs.
@@ -459,7 +483,8 @@ def four_layer_convnet(inputs,
       moments=moments,
       maml_arch=False,
       depth_multiplier=depth_multiplier,
-      backprop_through_moments=backprop_through_moments)
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation)
 
 
 def four_layer_convnet_maml(inputs,
@@ -468,7 +493,8 @@ def four_layer_convnet_maml(inputs,
                             depth_multiplier=1.0,
                             reuse=tf.AUTO_REUSE,
                             scope='four_layer_convnet_maml',
-                            backprop_through_moments=True):
+                            backprop_through_moments=True,
+                            use_bounded_activation=False):
   """Embeds inputs using a standard four-layer convnet for the MAML model.
 
   Args:
@@ -485,6 +511,8 @@ def four_layer_convnet_maml(inputs,
     scope: An optional scope for the tf operations.
     backprop_through_moments: Whether to allow gradients to flow through the
       given support set moments. Only applies to non-transductive batch norm.
+    use_bounded_activation: Whether to enable bounded activation. This is useful
+      for post-training quantization.
 
   Returns:
     A 2D Tensor, where each row is the embedding of an input in inputs.
@@ -498,7 +526,8 @@ def four_layer_convnet_maml(inputs,
       moments=moments,
       maml_arch=True,
       depth_multiplier=depth_multiplier,
-      backprop_through_moments=backprop_through_moments)
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation)
 
 
 NAME_TO_EMBEDDING_NETWORK = {
