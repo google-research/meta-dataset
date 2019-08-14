@@ -270,10 +270,11 @@ class Trainer(object):
   """A Trainer for training a Learner on data provided by ReaderDataSource."""
 
   def __init__(self, train_learner, eval_learner, is_training,
-               train_dataset_list, eval_dataset_list, checkpoint_dir,
-               summary_dir, eval_finegrainedness, eval_finegrainedness_split,
-               eval_imbalance_dataset, train_episode_config,
-               eval_episode_config, learn_config, learner_config, data_config):
+               train_dataset_list, eval_dataset_list, restrict_num_per_class,
+               checkpoint_dir, summary_dir, eval_finegrainedness,
+               eval_finegrainedness_split, eval_imbalance_dataset,
+               train_episode_config, eval_episode_config, learn_config,
+               learner_config, data_config):
     """Initializes a Trainer.
 
     Args:
@@ -285,6 +286,11 @@ class Trainer(object):
       eval_dataset_list: A list of names of datasets to evaluate on either for
         validation during train or for final test evaluation, depending on the
         nature of the experiment, as dictated by `is_training'.
+      restrict_num_per_class: A dict that maps dataset names to a dict that
+        specifies for each of 'train', 'valid' and 'test' the number of examples
+        per class to restrict to. For datasets / splits that are not mentioned,
+        no restriction is applied. If restrict_num_per_class is the empty dict,
+        no restriction is applied to any split of any dataset.
       checkpoint_dir: A string, the path to the checkpoint directory, or None if
         no checkpointing should occur.
       summary_dir: A string, the path to the checkpoint directory, or None if no
@@ -312,6 +318,7 @@ class Trainer(object):
     self.is_training = is_training
     self.train_dataset_list = train_dataset_list
     self.eval_dataset_list = eval_dataset_list
+    self.restrict_num_per_class = restrict_num_per_class
     self.checkpoint_dir = checkpoint_dir
     self.summary_dir = summary_dir
     self.eval_finegrainedness = eval_finegrainedness
@@ -789,6 +796,15 @@ class Trainer(object):
         updated_list.append(dataset_list[dataset_num])
     return updated_list
 
+  def get_num_to_take(self, dataset_name, split):
+    """Return the number of examples to restrict to for a dataset/split pair."""
+    num_to_take = -1  # By default, no restriction.
+    if dataset_name in self.restrict_num_per_class:
+      dataset_restrict_num_per_class = self.restrict_num_per_class[dataset_name]
+      if split in dataset_restrict_num_per_class:
+        num_to_take = dataset_restrict_num_per_class[split]
+    return num_to_take
+
   def build_episode(self, split):
     """Builds an EpisodeDataset containing the next data for "split".
 
@@ -829,6 +845,12 @@ class Trainer(object):
       raise ValueError('Unexpected split: {}. Was expecting "train", "valid" '
                        'or "test".'.format(split))
 
+    # Decide how many examples per class to restrict to for each dataset for the
+    # given split (by default there is no restriction).
+    num_per_class = []  # A list whose length is the number of datasets.
+    for dataset_spec in dataset_spec_list:
+      num_per_class.append(self.get_num_to_take(dataset_spec.name, split))
+
     # TODO(lamblinp): pass specs directly to the pipeline builder.
     # TODO(lamblinp): move the special case directly in make_..._pipeline
     if len(dataset_spec_list) == 1:
@@ -845,7 +867,8 @@ class Trainer(object):
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
-          image_size=image_size)
+          image_size=image_size,
+          num_to_take=num_per_class[0])
     else:
       data_pipeline = pipeline.make_multisource_episode_pipeline(
           dataset_spec_list,
@@ -856,7 +879,8 @@ class Trainer(object):
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
-          image_size=image_size)
+          image_size=image_size,
+          num_to_take=num_per_class)
 
     data_pipeline = apply_dataset_options(data_pipeline)
 
@@ -890,6 +914,12 @@ class Trainer(object):
     dataset_spec_list = self._restrict_dataset_list_for_split(
         split, splits_to_contribute, dataset_spec_list)
 
+    # Decide how many examples per class to restrict to for each dataset for the
+    # given split (by default there is no restriction).
+    num_per_class = []  # A list whose length is the number of datasets.
+    for dataset_spec in dataset_spec_list:
+      num_per_class.append(self.get_num_to_take(dataset_spec.name, split))
+
     dataset_split, batch_size = self.split_episode_or_batch_specs[split]
     for dataset_spec in dataset_spec_list:
       if dataset_spec.name in DATASETS_WITH_EXAMPLE_SPLITS:
@@ -907,7 +937,8 @@ class Trainer(object):
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
-          image_size=image_shape[0])
+          image_size=image_shape[0],
+          num_to_take=num_per_class[0])
     else:
       data_pipeline = pipeline.make_multisource_batch_pipeline(
           dataset_spec_list,
@@ -916,7 +947,8 @@ class Trainer(object):
           shuffle_buffer_size=shuffle_buffer_size,
           read_buffer_size_bytes=read_buffer_size_bytes,
           num_prefetch=num_prefetch,
-          image_size=image_shape[0])
+          image_size=image_shape[0],
+          num_to_take=num_per_class)
 
     data_pipeline = apply_dataset_options(data_pipeline)
     iterator = data_pipeline.make_one_shot_iterator()

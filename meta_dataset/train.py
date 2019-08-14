@@ -95,19 +95,27 @@ EPISODIC_LEARNERS = ['MatchingNet', 'PrototypicalNet', 'MAML']
 
 
 @gin.configurable('benchmark')
-def get_datasets(train_datasets='', eval_datasets=''):
-  """Gets the lists of dataset names.
+def get_datasets_and_restrictions(train_datasets='',
+                                  eval_datasets='',
+                                  restrict_num_per_class=None):
+  """Gets the list of dataset names and possible restrictions on their classes.
 
   Args:
-    train_datasets: A string of comma separated dataset names for training.
-    eval_datasets: A string of comma separated dataset names for evaluation.
+    train_datasets: A string of comma-separated dataset names for training.
+    eval_datasets: A string of comma-separated dataset names for evaluation.
+    restrict_num_per_class: If provided, a dict that maps dataset names to a
+      dict that specifies for each of 'train', 'valid' and 'test' the number of
+      examples per class to restrict to. For datasets / splits that are not
+      specified, no restriction is applied.
 
   Returns:
-    Two lists of dataset names, to be used for training and validation, resp.
-    The second one might be empty.
+    Two lists of dataset names and a possibly empty dictionary.
   """
+  if restrict_num_per_class is None:
+    restrict_num_per_class = {}
   return [d.strip() for d in train_datasets.split(',')
-         ], [d.strip() for d in eval_datasets.split(',')]
+         ], [d.strip() for d in eval_datasets.split(',')
+            ], restrict_num_per_class
 
 
 def main(unused_argv):
@@ -128,7 +136,8 @@ def main(unused_argv):
                      'pre-trained weights. It is also only applicable to '
                      'episodic models and restores only the embedding weights.')
 
-  train_datasets, eval_datasets = get_datasets()
+  (train_datasets, eval_datasets,
+   restrict_num_per_class) = get_datasets_and_restrictions()
 
   train_learner = None
   if FLAGS.is_training or (FLAGS.eval_finegrainedness and
@@ -143,9 +152,9 @@ def main(unused_argv):
   if learner_config.episodic:
     trainer_instance = trainer.EpisodicTrainer(
         train_learner, eval_learner, FLAGS.is_training, train_datasets,
-        eval_datasets, FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
-        FLAGS.eval_finegrainedness, FLAGS.eval_finegrainedness_split,
-        FLAGS.eval_imbalance_dataset)
+        eval_datasets, restrict_num_per_class, FLAGS.train_checkpoint_dir,
+        FLAGS.summary_dir, FLAGS.eval_finegrainedness,
+        FLAGS.eval_finegrainedness_split, FLAGS.eval_imbalance_dataset)
     if learner_config.train_learner not in EPISODIC_LEARNERS:
       raise ValueError(
           'When "episodic" is True, "train_learner" should be an episodic one, '
@@ -153,9 +162,9 @@ def main(unused_argv):
   else:
     trainer_instance = trainer.BatchTrainer(
         train_learner, eval_learner, FLAGS.is_training, train_datasets,
-        eval_datasets, FLAGS.train_checkpoint_dir, FLAGS.summary_dir,
-        FLAGS.eval_finegrainedness, FLAGS.eval_finegrainedness_split,
-        FLAGS.eval_imbalance_dataset)
+        eval_datasets, restrict_num_per_class, FLAGS.train_checkpoint_dir,
+        FLAGS.summary_dir, FLAGS.eval_finegrainedness,
+        FLAGS.eval_finegrainedness_split, FLAGS.eval_imbalance_dataset)
     if learner_config.train_learner not in BATCH_LEARNERS:
       raise ValueError(
           'When "episodic" is False, "train_learner" should be a batch one, '

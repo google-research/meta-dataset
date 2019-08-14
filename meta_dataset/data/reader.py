@@ -149,8 +149,13 @@ class Reader(object):
   that reads data from TFRecords and assembles examples from them.
   """
 
-  def __init__(self, dataset_spec, split, shuffle_buffer_size,
-               read_buffer_size_bytes, num_prefetch):
+  def __init__(self,
+               dataset_spec,
+               split,
+               shuffle_buffer_size,
+               read_buffer_size_bytes,
+               num_prefetch,
+               num_to_take=-1):
     """Initializes a Reader from a source.
 
     The source is identified by dataset_spec and split.
@@ -164,12 +169,17 @@ class Reader(object):
       num_prefetch: int, the number of examples to prefetch for each class of
         each dataset. Prefetching occurs just after the class-specific Dataset
         object is constructed. If < 1, no prefetching occurs.
+      num_to_take: Optional, an int specifying a number of elements to pick from
+        each tfrecord. If specified, the available images of each class will be
+        restricted to that int. By default (-1) no restriction is applied and
+        all data is used.
     """
     self.dataset_spec = dataset_spec
     self.split = split
     self.shuffle_buffer_size = shuffle_buffer_size
     self.read_buffer_size_bytes = read_buffer_size_bytes
     self.num_prefetch = num_prefetch
+    self.num_to_take = num_to_take
 
     self.base_path = self.dataset_spec.path
     self.class_set = self.dataset_spec.get_classes(self.split)
@@ -219,6 +229,11 @@ class Reader(object):
 
       example_string_dataset = tf.data.TFRecordDataset(
           filename, buffer_size=self.read_buffer_size_bytes)
+
+      # Create a dataset containing only num_to_take elements from
+      # example_string_dataset. By default, takes all elements.
+      example_string_dataset = example_string_dataset.take(self.num_to_take)
+
       if self.num_prefetch > 0:
         example_string_dataset = example_string_dataset.prefetch(
             self.num_prefetch)
@@ -249,7 +264,9 @@ class Reader(object):
 class EpisodeReader(Reader):
   """Subclass of Reader assembling the examples as Episodes."""
 
-  def create_dataset_input_pipeline(self, sampler, pool=None,
+  def create_dataset_input_pipeline(self,
+                                    sampler,
+                                    pool=None,
                                     shuffle_seed=None):
     """Creates a Dataset encapsulating the input pipeline for one data source.
 
