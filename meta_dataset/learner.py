@@ -778,7 +778,7 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
 
 
 def linear_classifier_forward_pass(embeddings, w_fc, b_fc, cosine_classifier,
-                                   cosine_logits_multiplier):
+                                   cosine_logits_multiplier, use_weight_norm):
   """Passes embeddings through the linear layer defined by w_fc and b_fc.
 
   Args:
@@ -790,6 +790,8 @@ def linear_classifier_forward_pass(embeddings, w_fc, b_fc, cosine_classifier,
       not require the bias b_fc.
     cosine_logits_multiplier: A float. Only used if cosine_classifier is True,
       and multiplies the resulting logits.
+    use_weight_norm: A bool. Whether weight norm was used. If so, then if using
+      cosine classifier, normalize only the embeddings but not the weights.
 
   Returns:
     logits: A Tensor of size [batch size, num outputs].
@@ -800,7 +802,9 @@ def linear_classifier_forward_pass(embeddings, w_fc, b_fc, cosine_classifier,
     # logit for an embedding vector belonging to that class is the cosine
     # similarity between that embedding and that class representation.
     embeddings = tf.nn.l2_normalize(embeddings, axis=1, epsilon=1e-3)
-    w_fc = tf.nn.l2_normalize(w_fc, axis=0, epsilon=1e-3)
+    if not use_weight_norm:
+      # Only normalize the weights if weight norm was not used.
+      w_fc = tf.nn.l2_normalize(w_fc, axis=0, epsilon=1e-3)
     logits = tf.matmul(embeddings, w_fc)
     # Scale the logits as passing numbers in [-1, 1] to softmax is not very
     # expressive.
@@ -870,7 +874,7 @@ def linear_classifier_logits(embeddings, num_classes, cosine_classifier,
       # Forward pass through the layer defined by w_fc and b_fc.
       logits = linear_classifier_forward_pass(embeddings, w_fc, b_fc,
                                               cosine_classifier,
-                                              cosine_logits_multiplier)
+                                              cosine_logits_multiplier, True)
 
   else:
     # No weight norm.
@@ -882,7 +886,7 @@ def linear_classifier_logits(embeddings, num_classes, cosine_classifier,
     # Forward pass through the layer defined by w_fc and b_fc.
     logits = linear_classifier_forward_pass(embeddings, w_fc, b_fc,
                                             cosine_classifier,
-                                            cosine_logits_multiplier)
+                                            cosine_logits_multiplier, False)
   return logits
 
 
