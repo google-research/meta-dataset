@@ -1,0 +1,4 @@
+include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
+
+BaselineLearner.cosine_classifier = True
+BaselineLearner.cosine_logits_multiplier = 1

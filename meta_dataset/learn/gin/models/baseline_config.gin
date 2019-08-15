@@ -7,4 +7,6 @@ weight_decay = 1e-4
 BaselineLearner.weight_decay = %weight_decay
 BaselineLearner.knn_in_fc = False
 BaselineLearner.knn_distance = 'l2'
-
+BaselineLearner.cosine_classifier = False
+BaselineLearner.cosine_logits_multiplier = None
+BaselineLearner.use_weight_norm = False

@@ -613,9 +613,10 @@ class PrototypicalNetworkLearner(Learner):
       reader: A SplitReader that reads episodes or batches.
       weight_decay: coefficient for L2 regularization.
     """
-    super(PrototypicalNetworkLearner, self).__init__(
-        is_training, transductive_batch_norm, backprop_through_moments,
-        ema_object, embedding_fn, reader)
+    super(PrototypicalNetworkLearner,
+          self).__init__(is_training, transductive_batch_norm,
+                         backprop_through_moments, ema_object, embedding_fn,
+                         reader)
 
     # The data for the next episode.
     self.episode = self.data
@@ -720,9 +721,10 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
         the query set embeddings are left unnormalized when computing the dot
         product.
     """
-    super(MatchingNetworkLearner, self).__init__(
-        is_training, transductive_batch_norm, backprop_through_moments,
-        ema_object, embedding_fn, reader, weight_decay)
+    super(MatchingNetworkLearner,
+          self).__init__(is_training, transductive_batch_norm,
+                         backprop_through_moments, ema_object, embedding_fn,
+                         reader, weight_decay)
 
     self.exact_cosine_distance = exact_cosine_distance
     self.weight_decay = weight_decay
@@ -775,6 +777,115 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
     return loss
 
 
+def linear_classifier_forward_pass(embeddings, w_fc, b_fc, cosine_classifier,
+                                   cosine_logits_multiplier):
+  """Passes embeddings through the linear layer defined by w_fc and b_fc.
+
+  Args:
+    embeddings: A Tensor of size [batch size, embedding dim].
+    w_fc: A Tensor of size [embedding dim, num outputs].
+    b_fc: Either None, or a Tensor of size [num outputs] or []. If
+      cosine_classifier is False, it can not be None.
+    cosine_classifier: A bool. If true, a cosine classifier is used which does
+      not require the bias b_fc.
+    cosine_logits_multiplier: A float. Only used if cosine_classifier is True,
+      and multiplies the resulting logits.
+
+  Returns:
+    logits: A Tensor of size [batch size, num outputs].
+  """
+  if cosine_classifier:
+    # Each column of the weight matrix may be interpreted as a class
+    # representation (of the same dimenionality as the embedding space). The
+    # logit for an embedding vector belonging to that class is the cosine
+    # similarity between that embedding and that class representation.
+    embeddings = tf.nn.l2_normalize(embeddings, axis=1, epsilon=1e-3)
+    w_fc = tf.nn.l2_normalize(w_fc, axis=0, epsilon=1e-3)
+    logits = tf.matmul(embeddings, w_fc)
+    # Scale the logits as passing numbers in [-1, 1] to softmax is not very
+    # expressive.
+    logits *= cosine_logits_multiplier
+  else:
+    assert b_fc is not None
+    logits = tf.matmul(embeddings, w_fc) + b_fc
+  return logits
+
+
+def linear_classifier_logits(embeddings, num_classes, cosine_classifier,
+                             cosine_logits_multiplier, use_weight_norm):
+  """Forward pass through a linear classifier, possibly a cosine classifier."""
+
+  # A variable to keep track of whether the initialization has already happened.
+  data_dependent_init_done = tf.get_variable(
+      'data_dependent_init_done',
+      initializer=0,
+      dtype=tf.int32,
+      trainable=False)
+
+  embedding_dims = embeddings.get_shape().as_list()[-1]
+
+  if use_weight_norm:
+    w_fc = tf.get_variable(
+        'w_fc', [embedding_dims, num_classes],
+        initializer=tf.random_normal_initializer(0, 0.05),
+        trainable=True)
+    # This init is temporary as it needs to be done in a data-dependent way.
+    # It will be overwritten during the first forward pass through this layer.
+    g = tf.get_variable(
+        'g',
+        dtype=tf.float32,
+        initializer=tf.ones([num_classes]),
+        trainable=True)
+    b_fc = None
+    if not cosine_classifier:
+      # Also initialize a bias.
+      b_fc = tf.get_variable(
+          'b_fc', initializer=tf.zeros([num_classes]), trainable=True)
+
+    def _do_data_dependent_init():
+      """Returns ops for the data-dependent init of g and maybe b_fc."""
+      w_fc_normalized = tf.nn.l2_normalize(w_fc.read_value(), [0])
+      output_init = tf.matmul(embeddings, w_fc_normalized)
+      mean_init, var_init = tf.nn.moments(output_init, [0])
+      # Data-dependent init values.
+      g_init_value = 1. / tf.sqrt(var_init + 1e-10)
+      ops = [tf.assign(g, g_init_value)]
+      if not cosine_classifier:
+        # Also initialize a bias in a data-dependent way.
+        b_fc_init_value = -mean_init * g_init_value
+        ops.append(tf.assign(b_fc, b_fc_init_value))
+      # Mark that the data-dependent initialization is done to prevent it from
+      # happening again in the future.
+      ops.append(tf.assign(data_dependent_init_done, 1))
+      return tf.group(*ops)
+
+    # Possibly perform data-dependent init (if it hasn't been done already).
+    init_op = tf.cond(
+        tf.equal(data_dependent_init_done, 0), _do_data_dependent_init,
+        tf.no_op)
+
+    with tf.control_dependencies([init_op]):
+      # Apply weight normalization.
+      w_fc *= g / tf.sqrt(tf.reduce_sum(tf.square(w_fc), [0]))
+      # Forward pass through the layer defined by w_fc and b_fc.
+      logits = linear_classifier_forward_pass(embeddings, w_fc, b_fc,
+                                              cosine_classifier,
+                                              cosine_logits_multiplier)
+
+  else:
+    # No weight norm.
+    w_fc = weight_variable([embedding_dims, num_classes])
+    b_fc = None
+    if not cosine_classifier:
+      # Also initialize a bias.
+      b_fc = bias_variable([num_classes])
+    # Forward pass through the layer defined by w_fc and b_fc.
+    logits = linear_classifier_forward_pass(embeddings, w_fc, b_fc,
+                                            cosine_classifier,
+                                            cosine_logits_multiplier)
+  return logits
+
+
 # TODO(tylerzhu): Consider adding an episodic kNN learner as well so we can
 # create a baseline leaner by composing a batch learner and the evaluation
 # process of an episodic kNN learner.
@@ -786,7 +897,8 @@ class BaselineLearner(Learner):
   def __init__(self, is_training, transductive_batch_norm,
                backprop_through_moments, ema_object, embedding_fn, reader,
                num_train_classes, num_test_classes, weight_decay, knn_in_fc,
-               knn_distance):
+               knn_distance, cosine_classifier, cosine_logits_multiplier,
+               use_weight_norm):
     """Initializes a baseline learner.
 
     Args:
@@ -807,7 +919,19 @@ class BaselineLearner(Learner):
         embedding on which kNN lookup is performed. Otherwise, the penultimate
         layer is what the kNN lookup is performed on.
       knn_distance: The distance measurement used by kNN lookup. 'l2', 'cosine'
+      cosine_classifier: A bool. Whether to use a cosine classifier at training
+        time when performing the all-way classification task to train the
+        backbone.
+      cosine_logits_multiplier: A float. A scalar that will multiply the logits
+        computed by the cosine classifier (if applicable) before passing them
+        into the softmax.
+      use_weight_norm: A bool. Whether to apply weight normalization to the
+        linear classifier layer.
     """
+    self.cosine_classifier = cosine_classifier
+    self.cosine_logits_multiplier = cosine_logits_multiplier
+    self.use_weight_norm = use_weight_norm
+
     super(BaselineLearner, self).__init__(is_training, transductive_batch_norm,
                                           backprop_through_moments, ema_object,
                                           embedding_fn, reader)
@@ -853,8 +977,9 @@ class BaselineLearner(Learner):
     # Hyperparameters.
     self.weight_decay = weight_decay
     self.distance = knn_distance
-    tf.logging.info('BaselineLearner: distance {}, weight_decay {}'.format(
-        knn_distance, weight_decay))
+    tf.logging.info(
+        'BaselineLearner: distance {}, weight_decay {}, cosine_classifier: {}'
+        .format(knn_distance, weight_decay, cosine_classifier))
 
     self.forward_pass()
 
@@ -895,12 +1020,13 @@ class BaselineLearner(Learner):
       The fc layer activations.
     """
     with tf.variable_scope('fc', reuse=tf.AUTO_REUSE):
-      embedding_dims = embeddings.get_shape().as_list()[-1]
       # Always maps to a space whose dimensionality is the number of classes
       # at meta-training time.
-      w_fc = weight_variable([embedding_dims, self.num_train_classes])
-      b_fc = bias_variable([self.num_train_classes])
-      return tf.matmul(embeddings, w_fc) + b_fc
+      logits = linear_classifier_logits(embeddings, self.num_train_classes,
+                                        self.cosine_classifier,
+                                        self.cosine_logits_multiplier,
+                                        self.use_weight_norm)
+      return logits
 
   def compute_logits(self):
     """Returns the logits.
@@ -1024,10 +1150,11 @@ class BaselineFinetuneLearner(BaselineLearner):
     self.finetune_opt = tf.train.AdamOptimizer(self.finetune_lr)
     # Note: the weight_decay value provided here overrides the value gin might
     # have for BaselineLearner's own weight_decay.
-    super(BaselineFinetuneLearner, self).__init__(
-        is_training, transductive_batch_norm, backprop_through_moments,
-        ema_object, embedding_fn, reader, num_train_classes, num_test_classes,
-        weight_decay)
+    super(BaselineFinetuneLearner,
+          self).__init__(is_training, transductive_batch_norm,
+                         backprop_through_moments, ema_object, embedding_fn,
+                         reader, num_train_classes, num_test_classes,
+                         weight_decay)
 
   def compute_logits(self):
     """Computes the logits."""
@@ -1037,8 +1164,9 @@ class BaselineFinetuneLearner(BaselineLearner):
     else:
       self.train_logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
       # ------------------------ Finetuning -------------------------------
-      finetune_loss = self._classification_loss(
-          self.train_logits, self.data.train_labels, self.way)
+      finetune_loss = self._classification_loss(self.train_logits,
+                                                self.data.train_labels,
+                                                self.way)
       vars_to_finetune = []
       for var in tf.all_variables():
         if 'fc_finetune' in var.name:
@@ -1067,8 +1195,9 @@ class BaselineFinetuneLearner(BaselineLearner):
             with tf.control_dependencies([print_op]):
               logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
               test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
-              finetune_loss = self._classification_loss(
-                  logits, self.data.train_labels, self.way)
+              finetune_loss = self._classification_loss(logits,
+                                                        self.data.train_labels,
+                                                        self.way)
               finetune_op = self.finetune_opt.minimize(
                   finetune_loss, var_list=vars_to_finetune)
         else:
@@ -1087,8 +1216,9 @@ class BaselineFinetuneLearner(BaselineLearner):
             with tf.control_dependencies([print_op]):
               logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
               test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
-              finetune_loss = self._classification_loss(
-                  logits, self.data.train_labels, self.way)
+              finetune_loss = self._classification_loss(logits,
+                                                        self.data.train_labels,
+                                                        self.way)
               finetune_op = self.finetune_opt.minimize(
                   finetune_loss, var_list=vars_to_finetune)
 
@@ -1112,11 +1242,11 @@ class BaselineFinetuneLearner(BaselineLearner):
   def _fc_layer(self, embedding):
     """The fully connected layer to be finetuned."""
     with tf.variable_scope('fc_finetune', reuse=tf.AUTO_REUSE):
-      embedding_dims = embedding.get_shape().as_list()[-1]
-      w_fc = weight_variable([embedding_dims, MAX_WAY])
-      b_fc = bias_variable([MAX_WAY])
-      y = tf.matmul(embedding, w_fc) + b_fc
-      return y
+      logits = linear_classifier_logits(embedding, MAX_WAY,
+                                        self.cosine_classifier,
+                                        self.cosine_logits_multiplier,
+                                        self.use_weight_norm)
+    return logits
 
   def _classification_loss(self, logits, labels, num_classes):
     """Computes softmax cross entropy loss."""
