@@ -960,7 +960,7 @@ class VGGFlowerConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
     imagelabels_path = os.path.join(self.data_root, 'imagelabels.mat')
-    with tf.gfile.GFile(imagelabels_path, 'r') as f:
+    with tf.gfile.GFile(imagelabels_path, 'rb') as f:
       labels = loadmat(f)['labels'][0]
     filepaths = collections.defaultdict(list)
     for i, label in enumerate(labels):
@@ -1327,7 +1327,7 @@ class MSCOCOConverter(DatasetConverter):
       # The bounding box is represented as (x_topleft, y_topleft, width, height)
       bbox = annotation['bbox']
       coco_class_id = annotation['category_id']
-      with tf.gfile.Open(image_path) as f:
+      with tf.gfile.Open(image_path, 'rb') as f:
         # The image shape is [?, ?, 3] and the type is uint8.
         image = Image.open(f)
         image = image.convert(mode='RGB')
