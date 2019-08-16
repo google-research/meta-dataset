@@ -133,12 +133,13 @@ def conv(x, conv_size, depth, stride, params=None, maml_arch=False):
     b_conv = bias_variable([depth]) if maml_arch else None
   else:
     w_conv = params[scope_name + '/kernel']
-    b_conv = params[scope_name + '/bias']
+    b_conv = params[scope_name + '/bias'] if maml_arch else None
 
   params_keys += [scope_name + '/kernel']
   params_vars += [w_conv]
-  params_keys += [scope_name + '/bias']
-  params_vars += [b_conv]
+  if maml_arch:
+    params_keys += [scope_name + '/bias']
+    params_vars += [b_conv]
 
   x = conv2d(x, w_conv, stride=stride, b=b_conv)
   params = collections.OrderedDict(zip(params_keys, params_vars))
@@ -360,6 +361,7 @@ def _resnet(x,
 
 def resnet(x,
            is_training,
+           params=None,
            moments=None,
            reuse=tf.AUTO_REUSE,
            scope='resnet18',
@@ -370,7 +372,7 @@ def resnet(x,
       is_training,
       scope,
       reuse=reuse,
-      params=None,
+      params=params,
       moments=moments,
       maml_arch=False,
       backprop_through_moments=backprop_through_moments,
@@ -378,6 +380,7 @@ def resnet(x,
 
 
 def resnet_maml(x,
+                is_training,
                 params=None,
                 moments=None,
                 depth_multiplier=1.0,
@@ -385,10 +388,11 @@ def resnet_maml(x,
                 scope='resnet_maml',
                 backprop_through_moments=True,
                 use_bounded_activation=False):
+  """A MAML-specific variant of resnet."""
   del depth_multiplier
   return _resnet(
       x,
-      True,
+      is_training,
       scope,
       reuse=reuse,
       params=params,
@@ -444,11 +448,13 @@ def _four_layer_convnet(inputs,
         'params': model_params,
         'moments': moments
     }
+
     return return_dict
 
 
 def four_layer_convnet(inputs,
                        is_training,
+                       params=None,
                        moments=None,
                        depth_multiplier=1.0,
                        reuse=tf.AUTO_REUSE,
@@ -460,6 +466,10 @@ def four_layer_convnet(inputs,
   Args:
     inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
     is_training: Whether we are in the training phase.
+    params: None will create new params (or reuse from scope), otherwise an
+      ordered dict of convolutional kernels and biases such that
+      params['kernel_0'] stores the kernel of the first convolutional layer,
+      etc.
     moments: A dict of the means and vars of the different layers to use for
       batch normalization. If not provided, the mean and var are computed based
       on the given inputs.
@@ -479,7 +489,7 @@ def four_layer_convnet(inputs,
       inputs,
       scope,
       reuse=reuse,
-      params=None,
+      params=params,
       moments=moments,
       maml_arch=False,
       depth_multiplier=depth_multiplier,
@@ -488,6 +498,7 @@ def four_layer_convnet(inputs,
 
 
 def four_layer_convnet_maml(inputs,
+                            is_training,
                             params=None,
                             moments=None,
                             depth_multiplier=1.0,
@@ -499,6 +510,7 @@ def four_layer_convnet_maml(inputs,
 
   Args:
     inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
+    is_training: Whether we are in the training phase.
     params: None will create new params (or reuse from scope), otherwise an
       ordered dict of convolutional kernels and biases such that
       params['kernel_0'] stores the kernel of the first convolutional layer,
@@ -518,6 +530,7 @@ def four_layer_convnet_maml(inputs,
     A 2D Tensor, where each row is the embedding of an input in inputs.
     A dictionary that maps model parameter name to the TF variable.
   """
+  del is_training
   return _four_layer_convnet(
       inputs,
       scope,
@@ -552,6 +565,118 @@ def compute_way(episode):
   episode_classes, _ = tf.unique(episode.train_labels)
   way = tf.size(episode_classes)
   return way
+
+
+def get_embeddings_vars_copy_ops(embedding_vars_dict, make_copies):
+  """Gets copies of the embedding variables or returns those variables.
+
+  This is useful at meta-test time for MAML and the finetuning baseline. In
+  particular, at meta-test time, we don't want to make permanent updates to
+  the model's variables, but only modifications that persist in the given
+  episode. This can be achieved by creating copies of each variable and
+  modifying and using these copies instead of the variables themselves.
+
+  Args:
+    embedding_vars_dict: A dict mapping each variable name to the corresponding
+      Variable.
+    make_copies: A bool. Whether to copy the given variables. If not, those
+      variables themselves will be returned. Typically, this is True at meta-
+      test time and False at meta-training time.
+
+  Returns:
+    embedding_vars_keys: A list of variable names.
+    embeddings_vars: A corresponding list of Variables.
+    embedding_vars_copy_ops: A (possibly empty) list of operations, each of
+      which assigns the value of one of the provided Variables to a new
+      Variable which is its copy.
+  """
+  embedding_vars_keys = []
+  embedding_vars = []
+  embedding_vars_copy_ops = []
+  for name, var in six.iteritems(embedding_vars_dict):
+    embedding_vars_keys.append(name)
+    if make_copies:
+      with tf.variable_scope('weight_copy'):
+        shape = var.shape.as_list()
+        var_copy = tf.Variable(
+            tf.zeros(shape), collections=[tf.GraphKeys.LOCAL_VARIABLES])
+        var_copy_op = tf.assign(var_copy, var)
+        embedding_vars_copy_ops.append(var_copy_op)
+      embedding_vars.append(var_copy)
+    else:
+      embedding_vars.append(var)
+  return embedding_vars_keys, embedding_vars, embedding_vars_copy_ops
+
+
+def get_fc_vars_copy_ops(fc_weights, fc_bias, make_copies):
+  """Gets copies of the classifier layer variables or returns those variables.
+
+  At meta-test time, a copy is created for the given Variables, and these copies
+  copies will be used in place of the original ones.
+
+  Args:
+    fc_weights: A Variable for the weights of the fc layer.
+    fc_bias: A Variable for the bias of the fc layer.
+    make_copies: A bool. Whether to copy the given variables. If not, those
+      variables themselves are returned.
+
+  Returns:
+    fc_weights: A Variable for the weights of the fc layer. Might be the same as
+      the input fc_weights or a copy of it.
+    fc_bias: Analogously, a Variable for the bias of the fc layer.
+    fc_vars_copy_ops: A (possibly empty) list of operations for assigning the
+      value of each of fc_weights and fc_bias to a respective copy variable.
+  """
+  fc_vars_copy_ops = []
+  if make_copies:
+    with tf.variable_scope('weight_copy'):
+      # fc_weights copy
+      fc_weights_copy = tf.Variable(
+          tf.zeros(fc_weights.shape.as_list()),
+          collections=[tf.GraphKeys.LOCAL_VARIABLES])
+      fc_weights_copy_op = tf.assign(fc_weights_copy, fc_weights)
+      fc_vars_copy_ops.append(fc_weights_copy_op)
+
+      # fc_bias copy
+      fc_bias_copy = tf.Variable(
+          tf.zeros(fc_bias.shape.as_list()),
+          collections=[tf.GraphKeys.LOCAL_VARIABLES])
+      fc_bias_copy_op = tf.assign(fc_bias_copy, fc_bias)
+      fc_vars_copy_ops.append(fc_bias_copy_op)
+
+      fc_weights = fc_weights_copy
+      fc_bias = fc_bias_copy
+  return fc_weights, fc_bias, fc_vars_copy_ops
+
+
+def gradient_descent_step(loss,
+                          variables,
+                          stop_grads,
+                          allow_grads_to_batch_norm_vars,
+                          learning_rate,
+                          get_update_ops=True):
+  """Returns the updated vars after one step of gradient descent."""
+  grads = tf.gradients(loss, variables)
+
+  if stop_grads:
+    grads = [tf.stop_gradient(dv) for dv in grads]
+
+  def _apply_grads(variables, grads):
+    """Applies gradients using SGD on a list of variables."""
+    v_new, update_ops = [], []
+    for (v, dv) in zip(variables, grads):
+      if (not allow_grads_to_batch_norm_vars and
+          ('offset' in v.name or 'scale' in v.name)):
+        updated_value = v  # no update.
+      else:
+        updated_value = v - learning_rate * dv  # gradient descent update.
+        if get_update_ops:
+          update_ops.append(tf.assign(v, updated_value))
+      v_new.append(updated_value)
+    return v_new, update_ops
+
+  updated_vars, update_ops = _apply_grads(variables, grads)
+  return {'updated_vars': updated_vars, 'update_ops': update_ops}
 
 
 class Learner(object):
@@ -947,9 +1072,9 @@ class BaselineLearner(Learner):
                                           backprop_through_moments=True,
                                           reuse=tf.AUTO_REUSE,
                                           scope='four_layer_convnet_maml'):
-        del is_training
         return four_layer_convnet_maml(
             inputs,
+            is_training,
             moments=moments,
             reuse=reuse,
             scope=scope,
@@ -965,9 +1090,9 @@ class BaselineLearner(Learner):
                               backprop_through_moments=True,
                               reuse=tf.AUTO_REUSE,
                               scope='resnet_maml'):
-        del is_training
         return resnet_maml(
             inputs,
+            is_training,
             moments=moments,
             reuse=reuse,
             scope=scope,
@@ -997,15 +1122,17 @@ class BaselineLearner(Learner):
   def forward_pass(self):
     if self.is_training:
       images = self.data.images
-      embeddings = self.embedding_fn(images, self.is_training)['embeddings']
-      self.train_embeddings = embeddings
+      embeddings_params_moments = self.embedding_fn(images, self.is_training)
+      self.train_embeddings = embeddings_params_moments['embeddings']
+      self.train_embeddings_var_dict = embeddings_params_moments['params']
     else:
-      train_embeddings = self.embedding_fn(self.data.train_images,
-                                           self.is_training)
-      self.train_embeddings = train_embeddings['embeddings']
+      train_embeddings_params_moments = self.embedding_fn(
+          self.data.train_images, self.is_training)
+      self.train_embeddings = train_embeddings_params_moments['embeddings']
+      self.train_embeddings_var_dict = train_embeddings_params_moments['params']
       support_set_moments = None
       if not self.transductive_batch_norm:
-        support_set_moments = train_embeddings['moments']
+        support_set_moments = train_embeddings_params_moments['moments']
       test_embeddings = self.embedding_fn(
           self.data.test_images,
           self.is_training,
@@ -1128,7 +1255,9 @@ class BaselineFinetuneLearner(BaselineLearner):
                weight_decay,
                num_finetune_steps,
                finetune_lr,
-               debug_log=False):
+               debug_log=True,
+               finetune_all_layers=False,
+               finetune_with_adam=False):
     """Initializes a baseline learner.
 
     Args:
@@ -1147,11 +1276,20 @@ class BaselineFinetuneLearner(BaselineLearner):
       num_finetune_steps: number of finetune steps.
       finetune_lr: the learning rate used for finetuning.
       debug_log: If True, print out debug logs.
+      finetune_all_layers: Whether to finetune all embedding variables. If
+        False, only trains a linear classifier on top of the embedding.
+      finetune_with_adam: Whether to use Adam for the within-episode finetuning.
+        If False, gradient descent is used instead.
     """
     self.num_finetune_steps = num_finetune_steps
     self.finetune_lr = finetune_lr
     self.debug_log = debug_log
-    self.finetune_opt = tf.train.AdamOptimizer(self.finetune_lr)
+    self.finetune_all_layers = finetune_all_layers
+    self.finetune_with_adam = finetune_with_adam
+
+    if finetune_with_adam:
+      self.finetune_opt = tf.train.AdamOptimizer(self.finetune_lr)
+
     # Note: the weight_decay value provided here overrides the value gin might
     # have for BaselineLearner's own weight_decay.
     super(BaselineFinetuneLearner,
@@ -1166,47 +1304,77 @@ class BaselineFinetuneLearner(BaselineLearner):
     if self.is_training:
       logits = self.forward_pass_fc(self.train_embeddings)
     else:
-      self.train_logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
       # ------------------------ Finetuning -------------------------------
-      finetune_loss = self._classification_loss(self.train_logits,
-                                                self.data.train_labels,
+      # Possibly make copies of embedding variables, if they will get modified.
+      # This is for making temporary-only updates to the embedding network
+      # which will not persist after the end of the episode.
+      make_copies = self.finetune_all_layers
+      (self.embedding_vars_keys, self.embedding_vars,
+       embedding_vars_copy_ops) = get_embeddings_vars_copy_ops(
+           self.train_embeddings_var_dict, make_copies)
+      embedding_vars_copy_op = tf.group(*embedding_vars_copy_ops)
+
+      # Compute the initial training loss (only for printing purposes). This
+      # line is also needed for adding the fc variables to the graph so that the
+      # tf.all_variables() line below detects them.
+      logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
+      finetune_loss = self._classification_loss(logits, self.data.train_labels,
                                                 self.way)
-      vars_to_finetune = []
-      for var in tf.all_variables():
+
+      # Decide which variables to finetune.
+      fc_vars, vars_to_finetune = [], []
+      for var in tf.trainable_variables():
         if 'fc_finetune' in var.name:
+          fc_vars.append(var)
           vars_to_finetune.append(var)
+      if self.finetune_all_layers:
+        vars_to_finetune.extend(self.embedding_vars)
+      self.vars_to_finetune = vars_to_finetune
+      tf.logging.info(
+          'Finetuning will optimize variables: {}'.format(vars_to_finetune))
 
       for i in range(self.num_finetune_steps):
         if i == 0:
-          fc_reset = tf.variables_initializer(var_list=vars_to_finetune)
+          # Randomly initialize the fc layer.
+          fc_reset = tf.variables_initializer(var_list=fc_vars)
           # Adam related variables are created when minimize() is called.
           # We create an unused op here to put all adam varariables under
           # the 'adam_opt' namescope and create a reset op to reinitialize
           # these variables before the first finetune step.
-          with tf.variable_scope('adam_opt'):
-            unused_op = self.finetune_opt.minimize(
-                finetune_loss, var_list=vars_to_finetune)
-          adam_reset = tf.variables_initializer(self.finetune_opt.variables())
-          with tf.control_dependencies([fc_reset, adam_reset, finetune_loss] +
-                                       vars_to_finetune):
+          adam_reset = tf.no_op()
+          if self.finetune_with_adam:
+            with tf.variable_scope('adam_opt'):
+              unused_op = self.finetune_opt.minimize(
+                  finetune_loss, var_list=vars_to_finetune)
+            adam_reset = tf.variables_initializer(self.finetune_opt.variables())
+          with tf.control_dependencies(
+              [fc_reset, adam_reset, finetune_loss, embedding_vars_copy_op] +
+              vars_to_finetune):
+            print_op = tf.no_op()
             if self.debug_log:
               print_op = tf.print([
                   'step: %d' % i, vars_to_finetune[0][0, 0], 'loss:',
                   finetune_loss
               ])
-            else:
-              print_op = tf.no_op()
+
             with tf.control_dependencies([print_op]):
-              logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
-              test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
-              finetune_loss = self._classification_loss(logits,
-                                                        self.data.train_labels,
-                                                        self.way)
-              finetune_op = self.finetune_opt.minimize(
-                  finetune_loss, var_list=vars_to_finetune)
+              # Get the operation for finetuning.
+              # (The logits and loss are returned just for printing).
+              logits, finetune_loss, finetune_op = self._get_finetune_op()
+
+              # Test logits are computed only for printing logs.
+              test_embeddings = self.embedding_fn(
+                  self.data.test_images,
+                  self.is_training,
+                  params=collections.OrderedDict(
+                      zip(self.embedding_vars_keys, self.embedding_vars)),
+                  reuse=True)['embeddings']
+              test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
+
         else:
           with tf.control_dependencies([finetune_op, finetune_loss] +
                                        vars_to_finetune):
+            print_op = tf.no_op()
             if self.debug_log:
               print_op = tf.print([
                   'step: %d' % i, vars_to_finetune[0][0, 0], 'loss:',
@@ -1215,20 +1383,42 @@ class BaselineFinetuneLearner(BaselineLearner):
                   'test accuracy:',
                   self._compute_accuracy(test_logits, self.data.test_labels)
               ])
-            else:
-              print_op = tf.no_op()
-            with tf.control_dependencies([print_op]):
-              logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
-              test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
-              finetune_loss = self._classification_loss(logits,
-                                                        self.data.train_labels,
-                                                        self.way)
-              finetune_op = self.finetune_opt.minimize(
-                  finetune_loss, var_list=vars_to_finetune)
 
+            with tf.control_dependencies([print_op]):
+              # Get the operation for finetuning.
+              # (The logits and loss are returned just for printing).
+              logits, finetune_loss, finetune_op = self._get_finetune_op()
+
+              # Test logits are computed only for printing logs.
+              test_embeddings = self.embedding_fn(
+                  self.data.test_images,
+                  self.is_training,
+                  params=collections.OrderedDict(
+                      zip(self.embedding_vars_keys, self.embedding_vars)),
+                  reuse=True)['embeddings']
+              test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
+
+      # Finetuning is now over, compute the test performance using the updated
+      # fc layer, and possibly the updated embedding network.
       with tf.control_dependencies([finetune_op] + vars_to_finetune):
-        logits = self._fc_layer(self.train_embeddings)[:, 0:self.way]
-        test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
+        test_embeddings = self.embedding_fn(
+            self.data.test_images,
+            self.is_training,
+            params=collections.OrderedDict(
+                zip(self.embedding_vars_keys, self.embedding_vars)),
+            reuse=True)['embeddings']
+        test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
+
+        # The train logits are computed only for printing.
+        train_embeddings = self.embedding_fn(
+            self.data.train_images,
+            self.is_training,
+            params=collections.OrderedDict(
+                zip(self.embedding_vars_keys, self.embedding_vars)),
+            reuse=True)['embeddings']
+        logits = self._fc_layer(train_embeddings)[:, 0:self.way]
+
+        print_op = tf.no_op()
         if self.debug_log:
           print_op = tf.print([
               'accuracy: ',
@@ -1236,12 +1426,33 @@ class BaselineFinetuneLearner(BaselineLearner):
               'test accuracy: ',
               self._compute_accuracy(test_logits, self.data.test_labels)
           ])
-        else:
-          print_op = tf.no_op()
         with tf.control_dependencies([print_op]):
-          self.test_logits = self._fc_layer(self.test_embeddings)[:, 0:self.way]
+          self.test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
           logits = self.test_logits
     return logits
+
+  def _get_finetune_op(self):
+    """Returns the operation for performing a finetuning step."""
+    train_embeddings = self.embedding_fn(
+        self.data.train_images,
+        self.is_training,
+        params=collections.OrderedDict(
+            zip(self.embedding_vars_keys, self.embedding_vars)),
+        reuse=True)['embeddings']
+    logits = self._fc_layer(train_embeddings)[:, 0:self.way]
+    finetune_loss = self._classification_loss(logits, self.data.train_labels,
+                                              self.way)
+    # Perform one step of finetuning.
+    if self.finetune_with_adam:
+      finetune_op = self.finetune_opt.minimize(
+          finetune_loss, var_list=self.vars_to_finetune)
+    else:
+      # Apply vanilla gradient descent instead of Adam.
+      update_ops = gradient_descent_step(finetune_loss, self.vars_to_finetune,
+                                         True, False,
+                                         self.finetune_lr)['update_ops']
+      finetune_op = tf.group(*update_ops)
+    return logits, finetune_loss, finetune_op
 
   def _fc_layer(self, embedding):
     """The fully connected layer to be finetuned."""
@@ -1280,9 +1491,8 @@ class MAMLLearner(Learner):
   def __init__(self, is_training, transductive_batch_norm,
                backprop_through_moments, ema_object, embedding_fn, reader,
                weight_decay, num_update_steps, additional_test_update_steps,
-               first_order, alpha, train_batch_norm, depth_multiplier, debug,
-               zero_fc_layer, proto_maml_fc_layer_on_query_set,
-               proto_maml_fc_layer_on_support_set, proto_maml_fc_layer_init):
+               first_order, alpha, train_batch_norm, debug, zero_fc_layer,
+               proto_maml_fc_layer_init):
     """Initializes a baseline learner.
 
     Args:
@@ -1302,13 +1512,8 @@ class MAMLLearner(Learner):
       first_order: If True, ignore second-order gradients (faster).
       alpha: The inner-loop learning rate.
       train_batch_norm: If True, train batch norm during meta training.
-      depth_multiplier: The depth multiplier to use for convnet filters.
       debug: If True, print out debug logs.
       zero_fc_layer: Whether to use zero fc layer initialization.
-      proto_maml_fc_layer_on_query_set: Whether to use ProtoNets equivalent fc
-        layer on query set.
-      proto_maml_fc_layer_on_support_set: Whether to use ProtoNets equivalent fc
-        layer on support set.
       proto_maml_fc_layer_init: Whether to use ProtoNets equivalent fc layer
         initialization.
 
@@ -1318,13 +1523,6 @@ class MAMLLearner(Learner):
     super(MAMLLearner, self).__init__(is_training, transductive_batch_norm,
                                       backprop_through_moments, ema_object,
                                       embedding_fn, reader)
-
-    maml_embedding_fns = [
-        four_layer_convnet_maml,
-        resnet_maml,
-    ]
-    if not any(self.embedding_fn is maml_fn for maml_fn in maml_embedding_fns):
-      raise ValueError('MAML requires a specific architecture to work.')
 
     # For aggregating statistics later.
     self.test_targets = self.data.test_labels
@@ -1337,10 +1535,7 @@ class MAMLLearner(Learner):
     self.first_order = first_order
     self.train_batch_norm = train_batch_norm
     self.debug_log = debug
-    self.depth_multiplier = depth_multiplier
     self.zero_fc_layer = zero_fc_layer
-    self.proto_maml_fc_layer_on_query_set = proto_maml_fc_layer_on_query_set
-    self.proto_maml_fc_layer_on_support_set = proto_maml_fc_layer_on_support_set
     self.proto_maml_fc_layer_init = proto_maml_fc_layer_init
 
     tf.logging.info('alpha: {}, num_update_steps: {}'.format(
@@ -1416,9 +1611,7 @@ class MAMLLearner(Learner):
     # second derivatives.
     one_hot_train_labels = tf.one_hot(self.data.train_labels, self.way)
     train_embeddings_ = self.embedding_fn(
-        self.data.train_images,
-        depth_multiplier=self.depth_multiplier,
-        reuse=tf.AUTO_REUSE)
+        self.data.train_images, self.is_training, reuse=tf.AUTO_REUSE)
     train_embeddings = train_embeddings_['embeddings']
     embedding_vars_dict = train_embeddings_['params']
 
@@ -1427,41 +1620,16 @@ class MAMLLearner(Learner):
       fc_weights = weight_variable([embedding_depth, MAX_WAY])
       fc_bias = bias_variable([MAX_WAY])
 
-    embedding_vars_keys = []
-    embedding_vars = []
-    embedding_vars_copy_ops = []
-    for name, var in six.iteritems(embedding_vars_dict):
-      embedding_vars_keys.append(name)
-      if not self.is_training:
-        with tf.variable_scope('weight_copy'):
-          shape = var.shape.as_list()
-          var_copy = tf.Variable(
-              tf.zeros(shape), collections=[tf.GraphKeys.LOCAL_VARIABLES])
-          var_copy_op = tf.assign(var_copy, var)
-          embedding_vars_copy_ops.append(var_copy_op)
-        embedding_vars.append(var_copy)
-      else:
-        embedding_vars.append(var)
+    # A list of variable names, a list of corresponding Variables, and a list
+    # of operations (possibly empty) that creates a copy of each Variable.
+    (embedding_vars_keys, embedding_vars,
+     embedding_vars_copy_ops) = get_embeddings_vars_copy_ops(
+         embedding_vars_dict, make_copies=not self.is_training)
 
-    fc_vars_copy_ops = []
-    if not self.is_training:
-      with tf.variable_scope('weight_copy'):
-        # fc_weights copy
-        fc_weights_copy = tf.Variable(
-            tf.zeros(fc_weights.shape.as_list()),
-            collections=[tf.GraphKeys.LOCAL_VARIABLES])
-        fc_weights_copy_op = tf.assign(fc_weights_copy, fc_weights)
-        fc_vars_copy_ops.append(fc_weights_copy_op)
-
-        # fc_bias copy
-        fc_bias_copy = tf.Variable(
-            tf.zeros(fc_bias.shape.as_list()),
-            collections=[tf.GraphKeys.LOCAL_VARIABLES])
-        fc_bias_copy_op = tf.assign(fc_bias_copy, fc_bias)
-        fc_vars_copy_ops.append(fc_bias_copy_op)
-
-        fc_weights = fc_weights_copy
-        fc_bias = fc_bias_copy
+    # A Variable for the weights of the fc layer, a Variable for the bias of the
+    # fc layer, and a list of operations (possibly empty) that copies them.
+    (fc_weights, fc_bias, fc_vars_copy_ops) = get_fc_vars_copy_ops(
+        fc_weights, fc_bias, make_copies=not self.is_training)
 
     fc_vars = [fc_weights, fc_bias]
     num_embedding_vars = len(embedding_vars)
@@ -1481,65 +1649,32 @@ class MAMLLearner(Learner):
                              num_fc_vars]
       train_embeddings = self.embedding_fn(
           self.data.train_images,
+          self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
-          depth_multiplier=self.depth_multiplier,
           reuse=True)['embeddings']
 
-      if self.proto_maml_fc_layer_on_support_set:
-        # Set fc layer weights with prototypical equivalent values.
-        prototypes = self.proto_maml_prototypes(train_embeddings)
-        pmaml_fc_weights = self.proto_maml_fc_weights(
-            prototypes, zero_pad_to_max_way=True)
-        pmaml_fc_bias = self.proto_maml_fc_bias(
-            prototypes, zero_pad_to_max_way=True)
-        train_logits = tf.matmul(train_embeddings,
-                                 pmaml_fc_weights) + pmaml_fc_bias
-      else:
-        updated_fc_weights, updated_fc_bias = updated_fc_vars
-        train_logits = tf.matmul(train_embeddings,
-                                 updated_fc_weights) + updated_fc_bias
+      updated_fc_weights, updated_fc_bias = updated_fc_vars
+      train_logits = tf.matmul(train_embeddings,
+                               updated_fc_weights) + updated_fc_bias
 
       train_logits = train_logits[:, 0:self.way]
       loss = tf.losses.softmax_cross_entropy(one_hot_train_labels, train_logits)
 
+      print_op = tf.no_op()
       if self.debug_log:
         print_op = tf.print(['step: ', step, updated_fc_bias[0], 'loss:', loss])
-      else:
-        print_op = tf.no_op()
-
-      embedding_grads = tf.gradients(loss, updated_embedding_vars)
-      # Only computes fc grad when it's not created from prototypes.
-      if not self.proto_maml_fc_layer_on_support_set:
-        fc_grads = tf.gradients(loss, updated_fc_vars)
-
-      if self.first_order:
-
-        def _stop_grads(grads):
-          return [tf.stop_gradient(dv) for dv in grads]
-
-        embedding_grads = _stop_grads(embedding_grads)
-        if not self.proto_maml_fc_layer_on_support_set:
-          fc_grads = _stop_grads(fc_grads)
-
-      # Apply gradients
-      def _apply_grads(variables, grads):
-        """Applies gradients using SGD on a list of variables."""
-        v_new = []
-        for (v, dv) in zip(variables, grads):
-          if (not self.train_batch_norm and
-              ('offset' in v.name or 'scale' in v.name)):
-            v_new.append(v)
-          else:
-            v_new.append(v - self.alpha * dv)
-        return v_new
 
       with tf.control_dependencies([print_op]):
-        updated_embedding_vars = _apply_grads(updated_embedding_vars,
-                                              embedding_grads)
-        # Only apply fc grad when it's not created from prototypes.
-        if not self.proto_maml_fc_layer_on_support_set:
-          updated_fc_vars = _apply_grads(updated_fc_vars, fc_grads)
+        updated_embedding_vars = gradient_descent_step(
+            loss, updated_embedding_vars, self.first_order,
+            self.train_batch_norm, self.alpha, False)['updated_vars']
+        updated_fc_vars = gradient_descent_step(loss, updated_fc_vars,
+                                                self.first_order,
+                                                self.train_batch_norm,
+                                                self.alpha,
+                                                False)['updated_vars']
+
         step = step + 1
       return tuple([step] + list(updated_embedding_vars) +
                    list(updated_fc_vars))
@@ -1557,9 +1692,9 @@ class MAMLLearner(Learner):
     if self.proto_maml_fc_layer_init:
       train_embeddings = self.embedding_fn(
           self.data.train_images,
+          self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
-          depth_multiplier=self.depth_multiplier,
           reuse=True)['embeddings']
       prototypes = self.proto_maml_prototypes(train_embeddings)
       pmaml_fc_weights = self.proto_maml_fc_weights(
@@ -1568,9 +1703,11 @@ class MAMLLearner(Learner):
           prototypes, zero_pad_to_max_way=True)
       fc_vars = [pmaml_fc_weights, pmaml_fc_bias]
 
+    # These control dependencies assign the value of each variable to a new copy
+    # variable that corresponds to it. This is required at test time for
+    # initilizing the copies as they are used in place of the original vars.
     with tf.control_dependencies(fc_vars_init_ops + embedding_vars_copy_ops):
-      # We will first compute gradients using the initial weights
-      # Don't want to restore it during eval.
+      # Make step a local variable as we don't want to save and restore it.
       step = tf.Variable(
           0,
           trainable=False,
@@ -1591,35 +1728,22 @@ class MAMLLearner(Learner):
     if not self.transductive_batch_norm:
       support_set_moments = self.embedding_fn(
           self.data.train_images,
+          self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
-          depth_multiplier=self.depth_multiplier,
           reuse=True)['moments']
 
     test_embeddings = self.embedding_fn(
         self.data.test_images,
+        self.is_training,
         params=collections.OrderedDict(
             zip(embedding_vars_keys, updated_embedding_vars)),
         moments=support_set_moments,  # Use support set stats for batch norm.
-        depth_multiplier=self.depth_multiplier,
         reuse=True,
         backprop_through_moments=self.backprop_through_moments)['embeddings']
 
-    if not self.proto_maml_fc_layer_on_query_set:
-      self.test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
-                          updated_fc_bias)[:, 0:self.way]
-    else:
-      train_embeddings = self.embedding_fn(
-          self.data.train_images,
-          params=collections.OrderedDict(
-              zip(embedding_vars_keys, updated_embedding_vars)),
-          depth_multiplier=self.depth_multiplier,
-          reuse=True)['embeddings']
-      prototypes = self.proto_maml_prototypes(train_embeddings)
-      pmaml_fc_weights = self.proto_maml_fc_weights(prototypes)
-      pmaml_fc_bias = self.proto_maml_fc_bias(prototypes)
-      self.test_logits = (
-          tf.matmul(test_embeddings, pmaml_fc_weights) + pmaml_fc_bias)
+    self.test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
+                        updated_fc_bias)[:, 0:self.way]
 
   def compute_loss(self):
     one_hot_test_labels = tf.one_hot(self.data.test_labels, self.way)
