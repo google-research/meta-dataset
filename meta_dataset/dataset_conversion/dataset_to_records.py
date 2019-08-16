@@ -21,7 +21,7 @@ dataset to the format necessary for its addition in the benchmark. This involves
 creating a DatasetSpecification for the dataset in question, and creating (and
 storing) a tf.record for every one of its classes.
 
-Some subclasses make use of a "split file", which is a `.pkl` file file that
+Some subclasses make use of a "split file", which is a JSON file file that
 stores a dictionary whose keys are 'train', 'valid', and 'test' and whose values
 indicate the corresponding classes assigned to these splits. Note that not all
 datasets require a split file. For example it may be the case that a dataset
@@ -39,7 +39,6 @@ import io
 import json
 import operator
 import os
-import random
 from meta_dataset.data import dataset_spec as ds_spec
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
@@ -428,7 +427,7 @@ class DatasetConverter(object):
       records_path: optional path to store the created records. If it's not
         provided, the default path for the dataset will be used.
       split_file: optional path to a file storing the training, validation and
-        testing splits of the dataset's classes. If provided, it's a .pkl file
+        testing splits of the dataset's classes. If provided, it's a JSON file
         that stores a dictionary whose keys are 'train', 'valid', and 'test' and
         whose values indicate the corresponding classes assigned to these
         splits. Note that not all datasets require a split file. For example it
@@ -455,7 +454,7 @@ class DatasetConverter(object):
     self.split_file = split_file
     if self.split_file is None:
       self.split_file = os.path.join(FLAGS.splits_root,
-                                     '{}_splits.pkl'.format(self.name))
+                                     '{}_splits.json'.format(self.name))
       if not tf.gfile.IsDirectory(FLAGS.splits_root):
         tf.gfile.MakeDirs(FLAGS.splits_root)
 
@@ -585,8 +584,8 @@ class DatasetConverter(object):
     """
     tf.logging.info('Attempting to read splits from %s...', self.split_file)
     if tf.gfile.Exists(self.split_file):
-      with tf.gfile.Open(self.split_file, 'rb') as f:
-        splits = pkl.load(f)
+      with tf.gfile.Open(self.split_file, 'r') as f:
+        splits = json.load(f)
         tf.logging.info('Successful.')
         return splits
     else:
@@ -623,7 +622,7 @@ class DatasetConverter(object):
 
     Returns:
       splits: a dictionary whose keys are 'train', 'valid', and 'test', and
-      whose values are lists of the corresponding classes.
+      whose values are lists of the corresponding class names.
     """
     # Check if the splits already exist.
     splits = self.read_splits()
@@ -639,8 +638,8 @@ class DatasetConverter(object):
     # Finally, write the splits in the designated location.
     tf.logging.info('Saving new splits for dataset %s at %s...', self.name,
                     self.split_file)
-    with tf.gfile.Open(self.split_file, 'wb') as f:
-      pkl.dump(splits, f, protocol=pkl.HIGHEST_PROTOCOL)
+    with tf.gfile.Open(self.split_file, 'w') as f:
+      json.dump(splits, f, indent=2)
     tf.logging.info('Done.')
 
     return splits
@@ -788,9 +787,9 @@ class QuickdrawConverter(DatasetConverter):
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         num_train_classes, num_valid_classes, num_test_classes)
     splits = {
-        'train': np.array(class_names)[train_inds],
-        'valid': np.array(class_names)[valid_inds],
-        'test': np.array(class_names)[test_inds]
+        'train': [class_names[i] for i in train_inds],
+        'valid': [class_names[i] for i in valid_inds],
+        'test': [class_names[i] for i in test_inds]
     }
     return splits
 
@@ -881,9 +880,9 @@ class CUBirdsConverter(DatasetConverter):
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
     splits = {
-        'train': np.array(class_names)[train_inds],
-        'valid': np.array(class_names)[valid_inds],
-        'test': np.array(class_names)[test_inds]
+        'train': [class_names[i] for i in train_inds],
+        'valid': [class_names[i] for i in valid_inds],
+        'test': [class_names[i] for i in test_inds]
     }
     return splits
 
@@ -903,7 +902,8 @@ class CUBirdsConverter(DatasetConverter):
     image_root_folder = os.path.join(self.data_root, 'images')
     all_classes = np.concatenate([train_classes, valid_classes, test_classes])
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d...', class_id)
+      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
+                      class_label)
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_label
@@ -936,9 +936,14 @@ class VGGFlowerConverter(DatasetConverter):
       The splits for this dataset, represented as a dictionary mapping each of
       'train', 'valid', and 'test' to a list of class integers.
     """
+    # Provided class labels are numbers started at 1.
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
-    splits = {'train': train_inds, 'valid': valid_inds, 'test': test_inds}
+    splits = {
+        'train': [(i + 1) for i in train_inds],
+        'valid': [(i + 1) for i in valid_inds],
+        'test': [(i + 1) for i in test_inds]
+    }
     return splits
 
   def create_dataset_specification_and_records(self):
@@ -959,7 +964,7 @@ class VGGFlowerConverter(DatasetConverter):
       labels = loadmat(f)['labels'][0]
     filepaths = collections.defaultdict(list)
     for i, label in enumerate(labels):
-      filepaths[label - 1].append(
+      filepaths[label].append(
           os.path.join(self.data_root, 'jpg', 'image_{:05d}.jpg'.format(i + 1)))
 
     all_classes = np.concatenate([train_classes, valid_classes, test_classes])
@@ -970,7 +975,8 @@ class VGGFlowerConverter(DatasetConverter):
     #   - test class IDs lie in
     #     [num_train_classes + num_validation_classes, num_classes).
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d...', class_id)
+      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
+                      class_label)
       class_paths = filepaths[class_label]
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
@@ -1002,11 +1008,17 @@ class DTDConverter(DatasetConverter):
 
     Returns:
       The splits for this dataset, represented as a dictionary mapping each of
-      'train', 'valid', and 'test' to a list of class integers.
+      'train', 'valid', and 'test' to a list of strings (class names).
     """
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
-    splits = {'train': train_inds, 'valid': valid_inds, 'test': test_inds}
+    class_names = sorted(
+        tf.gfile.ListDirectory(os.path.join(self.data_root, 'images')))
+    splits = {
+        'train': [class_names[i] for i in train_inds],
+        'valid': [class_names[i] for i in valid_inds],
+        'test': [class_names[i] for i in test_inds]
+    }
     return splits
 
   def create_dataset_specification_and_records(self):
@@ -1023,12 +1035,10 @@ class DTDConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
     all_classes = np.concatenate([train_classes, valid_classes, test_classes])
-    class_names = sorted(
-        tf.gfile.ListDirectory(os.path.join(self.data_root, 'images')))
 
-    for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d...', class_id)
-      class_name = class_names[class_label]
+    for class_id, class_name in enumerate(all_classes):
+      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
+                      class_name)
       class_directory = os.path.join(self.data_root, 'images', class_name)
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
@@ -1065,11 +1075,24 @@ class AircraftConverter(DatasetConverter):
 
     Returns:
       The splits for this dataset, represented as a dictionary mapping each of
-      'train', 'valid', and 'test' to a list of class integers.
+      'train', 'valid', and 'test' to a list of strings (class names).
     """
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
-    splits = {'train': train_inds, 'valid': valid_inds, 'test': test_inds}
+    # "Variant" refers to the aircraft model variant (e.g., A330-200) and is
+    # used as the class name in the dataset.
+    variants_path = os.path.join(self.data_root, 'data', 'variants.txt')
+    with tf.gfile.GFile(variants_path, 'r') as f:
+      variants = [line.strip() for line in f.readlines() if line]
+    variants = sorted(variants)
+    assert len(variants) == (
+        self.NUM_TRAIN_CLASSES + self.NUM_VALID_CLASSES + self.NUM_TEST_CLASSES)
+
+    splits = {
+        'train': [variants[i] for i in train_inds],
+        'valid': [variants[i] for i in valid_inds],
+        'test': [variants[i] for i in test_inds]
+    }
     return splits
 
   def create_dataset_specification_and_records(self):
@@ -1123,10 +1146,8 @@ class AircraftConverter(DatasetConverter):
 
     # Build mapping from variant to filenames. "Variant" refers to the aircraft
     # model variant (e.g., A330-200) and is used as the class name in the
-    # dataset. The index of a given variant in the sorted list of variants
-    # constitutes its class label, an the position of the class label in the
-    # concatenated list of training, validation, and test class labels
-    # constitutes its class ID.
+    # dataset. The position of the class name in the concatenated list of
+    # training, validation, and test class name constitutes its class ID.
     variants_to_names = collections.defaultdict(list)
     for name, variant in names_to_variants.items():
       variants_to_names[variant].append(name)
@@ -1134,10 +1155,11 @@ class AircraftConverter(DatasetConverter):
     all_classes = np.concatenate([train_classes, valid_classes, test_classes])
     class_names = sorted(variants_to_names.keys())
     assert len(class_names) == len(all_classes)
+    assert class_names == all_classes
 
-    for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d...', class_id)
-      class_name = class_names[class_label]
+    for class_id, class_name in enumerate(all_classes):
+      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
+                      class_name)
       class_files = [
           os.path.join(self.data_root, 'data', 'images',
                        '{}.jpg'.format(filename))
@@ -1176,7 +1198,7 @@ class TrafficSignConverter(DatasetConverter):
 
     Returns:
       The splits for this dataset, represented as a dictionary mapping each of
-      'train', 'valid', and 'test' to a list of class integers.
+      'train', 'valid', and 'test' to a list of class names.
     """
     return {
         'train': [],
@@ -1272,29 +1294,15 @@ class MSCOCOConverter(DatasetConverter):
 
     Returns:
       The splits for this dataset, represented as a dictionary mapping each of
-      'train', 'valid', and 'test' to a list of class integers.
+      'train', 'valid', and 'test' to a list of class names.
     """
-    tf.logging.info(
-        'Created splits with %d train, %d validation and %d test classes.',
+    train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
 
-    train_class_start = 0
-    val_class_start = self.NUM_TRAIN_CLASSES
-    test_class_start = (self.NUM_TRAIN_CLASSES + self.NUM_VALID_CLASSES)
-    shuffled_categories = random.sample(self.coco_categories,
-                                        len(self.coco_categories))
-    shuffled_coco_id = [category['id'] for category in shuffled_categories]
-
     splits = {
-        'train':
-            shuffled_coco_id[train_class_start:train_class_start +
-                             self.NUM_TRAIN_CLASSES],
-        'valid':
-            shuffled_coco_id[val_class_start:val_class_start +
-                             self.NUM_VALID_CLASSES],
-        'test':
-            shuffled_coco_id[test_class_start:test_class_start +
-                             self.NUM_TEST_CLASSES]
+        'train': [self.coco_categories[i]['name'] for i in train_inds],
+        'valid': [self.coco_categories[i]['name'] for i in valid_inds],
+        'test': [self.coco_categories[i]['name'] for i in test_inds]
     }
     return splits
 
@@ -1305,16 +1313,12 @@ class MSCOCOConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.VALID] = len(splits['valid'])
     self.classes_per_split[learning_spec.Split.TEST] = len(splits['test'])
 
-    # Derives new class ids that conform to DataConverter's contract.
-    shuffled_coco_id = splits['train'] + splits['valid'] + splits['test']
-    coco_id_to_class_id = {
-        coco_id: class_id for class_id, coco_id in enumerate(shuffled_coco_id)
-    }
-
-    for category in self.coco_categories:
-      coco_id = category['id']
-      coco_name = category['name']
-      self.class_names[coco_id_to_class_id[coco_id]] = coco_name
+    # Map original COCO "id" to class ids that conform to DatasetConverter's
+    # contract.
+    coco_id_to_class_id = {}
+    for class_id, category in enumerate(self.coco_categories):
+      self.class_names[class_id] = category['name']
+      coco_id_to_class_id[category['id']] = class_id
 
     def get_image_crop_and_class_id(annotation):
       """Gets image crop and its class label."""
@@ -1519,12 +1523,36 @@ class FungiConverter(DatasetConverter):
 
     Returns:
       The splits for this dataset, represented as a dictionary mapping each of
-      'train', 'valid', and 'test' to a list of class ids (a value ranging from
-      0 to N-1, with N the total number of classes in the dataset)..
+      'train', 'valid', and 'test' to a list of class names.
     """
+    # We ignore the original train and validation splits (the test set cannot be
+    # used since it is not labeled).
+    with tf.gfile.GFile(os.path.join(self.data_root, 'train.json')) as f:
+      original_train = json.load(f)
+    with tf.gfile.GFile(os.path.join(self.data_root, 'val.json')) as f:
+      original_val = json.load(f)
+
+    # The categories (classes) for train and validation should be the same.
+    assert original_train['categories'] == original_val['categories']
+    category_ids = [category['id'] for category in original_train['categories']]
+    # Assert contiguous range [0:category_number]
+    assert set(category_ids) == set(range(len(original_train['categories'])))
+
+    # Some categories share the same name (see
+    # https://github.com/visipedia/fgvcx_fungi_comp/issues/1)
+    # so we include the category id in the label
+    labels = [
+        '{:04d}.{}'.format(category['id'], category['name'])
+        for category in original_train['categories']
+    ]
+
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
-    splits = {'train': train_inds, 'valid': valid_inds, 'test': test_inds}
+    splits = {
+        'train': [labels[i] for i in train_inds],
+        'valid': [labels[i] for i in valid_inds],
+        'test': [labels[i] for i in test_inds]
+    }
     return splits
 
   def create_dataset_specification_and_records(self):
@@ -1540,25 +1568,10 @@ class FungiConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.VALID] = len(valid_classes)
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
-    # We ignore the original train and validation splits (the test set cannot be
-    # used since it is not labeled).
     with tf.gfile.GFile(os.path.join(self.data_root, 'train.json')) as f:
       original_train = json.load(f)
     with tf.gfile.GFile(os.path.join(self.data_root, 'val.json')) as f:
       original_val = json.load(f)
-
-    # The categories (classes) for train and validation should be the same.
-    assert original_train['categories'] == original_val['categories']
-    class_labels = ([c['id'] for c in original_train['categories']])
-    # Assert no repeated categories
-    assert len(class_labels) == len(set(class_labels))
-    # Assert contiguous range [0:category_number]
-    assert 0 == min(class_labels)
-    assert len(class_labels) - 1 == max(class_labels)
-    assert len(set(class_labels)) == len(class_labels)
-    # The index in the list is the id
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
-    assert len(all_classes) == len(class_labels)
 
     image_list = original_train['images'] + original_val['images']
     image_id_dict = {}
@@ -1580,14 +1593,10 @@ class FungiConverter(DatasetConverter):
       class_filepaths[image['class']].append(
           os.path.join(self.data_root, image['file_name']))
 
-    # Class IDs are constructed in such a way that
-    #   - training class IDs lie in [0, num_train_classes),
-    #   - validation class IDs lie in
-    #     [num_train_classes, num_train_classes + num_validation_classes), and
-    #   - test class IDs lie in
-    #     [num_train_classes + num_validation_classes, num_classes).
+    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d...' % class_id)
+      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
+                      class_label)
       class_paths = class_filepaths[class_label]
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
