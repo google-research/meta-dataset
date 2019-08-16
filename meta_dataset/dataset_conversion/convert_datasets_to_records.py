@@ -49,67 +49,67 @@ tf.flags.DEFINE_string('dataset', 'omniglot',
 FLAGS = tf.flags.FLAGS
 
 
+class ConverterArgs(
+    collections.namedtuple('ConverterArgs', 'data_root, long_name')):
+  """Arguments to be passed to a DatasetConverter's constructor.
+
+  Args:
+    data_root: string, path to the root of the dataset.
+    long_name: string, dataset name in longer or capitalized form.
+  """
+
+
+# Maps dataset name to (converter class, arguments) pairs.
+# This will be used to build the corresponding DatasetConverter object.
+dataset_name_to_converter_and_args = {
+    # Datasets in the same order as reported in the article.
+    'ilsvrc_2012': (dataset_to_records.ImageNetConverter,
+                    ConverterArgs(
+                        data_root=FLAGS.ilsvrc_2012_data_root,
+                        long_name='ImageNet ILSVRC-2012')),
+    'omniglot': (dataset_to_records.OmniglotConverter,
+                 ConverterArgs(
+                     data_root=FLAGS.omniglot_data_root, long_name='Omniglot')),
+    'aircraft': (dataset_to_records.AircraftConverter,
+                 ConverterArgs(
+                     data_root=FLAGS.aircraft_data_root,
+                     long_name='FGVC-Aircraft Benchmark')),
+    'cu_birds': (dataset_to_records.CUBirdsConverter,
+                 ConverterArgs(
+                     data_root=FLAGS.cu_birds_data_root, long_name='CU Birds')),
+    'dtd': (dataset_to_records.DTDConverter,
+            ConverterArgs(
+                data_root=FLAGS.dtd_data_root,
+                long_name='Describable Textures Dataset')),
+    'quickdraw': (dataset_to_records.QuickdrawConverter,
+                  ConverterArgs(
+                      data_root=FLAGS.quickdraw_data_root,
+                      long_name='Quick, Draw!')),
+    'fungi': (dataset_to_records.FungiConverter,
+              ConverterArgs(
+                  data_root=FLAGS.fungi_data_root,
+                  long_name='fungi 2018 FGVCx')),
+    'vgg_flower': (dataset_to_records.VGGFlowerConverter,
+                   ConverterArgs(
+                       data_root=FLAGS.vgg_flower_data_root,
+                       long_name='VGG Flower')),
+    'traffic_sign': (dataset_to_records.TrafficSignConverter,
+                     ConverterArgs(
+                         data_root=FLAGS.traffic_sign_data_root,
+                         long_name='Traffic Sign')),
+    'mscoco':
+        (dataset_to_records.MSCOCOConverter,
+         ConverterArgs(data_root=FLAGS.mscoco_data_root, long_name='MSCOCO')),
+    # Diagnostics-only dataset
+    'mini_imagenet': (dataset_to_records.MiniImageNetConverter,
+                      ConverterArgs(
+                          data_root=FLAGS.mini_imagenet_data_root,
+                          long_name='MiniImageNet')),
+}
+
+
 def main(argv):
   del argv
-
-  class ConverterArgs(
-      collections.namedtuple('ConverterArgs', 'data_root, long_name')):
-    """Arguments to be passed to a DatasetConverter's constructor.
-
-    Args:
-      data_root: string, path to the root of the dataset.
-      long_name: string, dataset name in longer or capitalized form.
-    """
-
-  # Maps dataset name to (converter class, arguments) pairs.
-  # This will be used to build the corresponding DatasetConverter object.
-  dataset_name_to_converter_and_args = {
-      # Datasets in the same order as reported in the article.
-      'ilsvrc_2012': (dataset_to_records.ImageNetConverter,
-                      ConverterArgs(
-                          data_root=FLAGS.ilsvrc_2012_data_root,
-                          long_name='ImageNet ILSVRC-2012')),
-      'omniglot': (dataset_to_records.OmniglotConverter,
-                   ConverterArgs(
-                       data_root=FLAGS.omniglot_data_root,
-                       long_name='Omniglot')),
-      'aircraft': (dataset_to_records.AircraftConverter,
-                   ConverterArgs(
-                       data_root=FLAGS.aircraft_data_root,
-                       long_name='FGVC-Aircraft Benchmark')),
-      'cu_birds': (dataset_to_records.CUBirdsConverter,
-                   ConverterArgs(
-                       data_root=FLAGS.cu_birds_data_root,
-                       long_name='CU Birds')),
-      'dtd': (dataset_to_records.DTDConverter,
-              ConverterArgs(
-                  data_root=FLAGS.dtd_data_root,
-                  long_name='Describable Textures Dataset')),
-      'quickdraw': (dataset_to_records.QuickdrawConverter,
-                    ConverterArgs(
-                        data_root=FLAGS.quickdraw_data_root,
-                        long_name='Quick, Draw!')),
-      'fungi': (dataset_to_records.FungiConverter,
-                ConverterArgs(
-                    data_root=FLAGS.fungi_data_root,
-                    long_name='fungi 2018 FGVCx')),
-      'vgg_flower': (dataset_to_records.VGGFlowerConverter,
-                     ConverterArgs(
-                         data_root=FLAGS.vgg_flower_data_root,
-                         long_name='VGG Flower')),
-      'traffic_sign': (dataset_to_records.TrafficSignConverter,
-                       ConverterArgs(
-                           data_root=FLAGS.traffic_sign_data_root,
-                           long_name='Traffic Sign')),
-      'mscoco': (dataset_to_records.MSCOCOConverter,
-                 ConverterArgs(
-                     data_root=FLAGS.mscoco_data_root, long_name='MSCOCO')),
-      # Diagnostics-only dataset
-      'mini_imagenet': (dataset_to_records.MiniImageNetConverter,
-                        ConverterArgs(
-                            data_root=FLAGS.mini_imagenet_data_root,
-                            long_name='MiniImageNet')),
-  }
 
   if FLAGS.dataset not in dataset_name_to_converter_and_args:
     raise NotImplementedError(

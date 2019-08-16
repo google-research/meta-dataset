@@ -625,9 +625,10 @@ class DatasetConverter(object):
       whose values are lists of the corresponding class names.
     """
     # Check if the splits already exist.
-    splits = self.read_splits()
-    if splits and not force_create:
-      return splits
+    if not force_create:
+      splits = self.read_splits()
+      if splits:
+        return splits
 
     # First, re-set numpy's random seed, for reproducibility.
     np.random.seed(self.seed)
