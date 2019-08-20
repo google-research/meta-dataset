@@ -45,6 +45,34 @@ def relu(x, use_bounded_activation=False):
     return tf.nn.relu(x)
 
 
+def compute_prototypes(embeddings, labels):
+  """Computes class prototypes over the last dimension of embeddings.
+
+  Args:
+    embeddings: Tensor of examples of shape [num_examples, embedding_size].
+    labels: Tensor of one-hot encoded labels of shape [num_examples,
+      num_classes].
+
+  Returns:
+    prototypes: Tensor of class prototypes of shape [num_classes,
+    embedding_size].
+  """
+  # [num examples, 1, embedding size].
+  embeddings = tf.expand_dims(embeddings, 1)
+
+  # [num examples, num classes, 1].
+  labels = tf.expand_dims(labels, 2)
+
+  # Sums each class' embeddings. [num classes, embedding size].
+  class_sums = tf.reduce_sum(labels * embeddings, 0)
+
+  # The prototype of each class is the averaged embedding of its examples.
+  class_num_images = tf.reduce_sum(labels, 0)  # [way].
+  prototypes = class_sums / class_num_images
+
+  return prototypes
+
+
 # TODO(tylerzhu): Accumulate batch norm statistics (moving {var, mean})
 # during training and use them during testing. However need to be careful
 # about leaking information across episodes.
@@ -772,24 +800,6 @@ class PrototypicalNetworkLearner(Learner):
         backprop_through_moments=self.backprop_through_moments)
     self.test_embeddings = test_embeddings['embeddings']
 
-  def compute_prototypes(self):
-    """Computes the class prototypes."""
-    # [num train images, 1, embedding size].
-    train_embeddings = tf.expand_dims(self.train_embeddings, 1)
-
-    # [num train labels, num classes] where each row is a one-hot-encoded label.
-    one_hot_train_labels = tf.one_hot(self.episode.train_labels, self.way)
-    # [num train labels, num classes, 1].
-    one_hot_train_labels = tf.expand_dims(one_hot_train_labels, 2)
-
-    # Sums each class' embeddings. [num classes, embedding size].
-    class_sums = tf.reduce_sum(one_hot_train_labels * train_embeddings, 0)
-
-    # The prototype of each class is the average embedding of its train points.
-    class_num_images = tf.reduce_sum(one_hot_train_labels, 0)  # [way].
-    prototypes = class_sums / class_num_images
-    return prototypes
-
   def compute_logits(self):
     """Computes the negative distances of each test point to each prototype."""
     # [num test images, 1, embedding size].
@@ -805,7 +815,9 @@ class PrototypicalNetworkLearner(Learner):
 
   def compute_loss(self):
     """Returns the loss of the Prototypical Network."""
-    self.prototypes = self.compute_prototypes()
+    onehot_train_labels = tf.one_hot(self.episode.train_labels, self.way)
+    self.prototypes = compute_prototypes(self.train_embeddings,
+                                         onehot_train_labels)
     self.test_logits = self.compute_logits()
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=self.episode.test_labels, logits=self.test_logits)
@@ -868,7 +880,7 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
       The class logits as a [num_test_images, way] matrix.
     """
     # [num train labels, num classes] where each row is a one-hot-encoded label.
-    one_hot_train_labels = tf.one_hot(self.data.train_labels, self.way)
+    onehot_train_labels = tf.one_hot(self.data.train_labels, self.way)
 
     # Undocumented in the paper, but *very important*: *only* the support set
     # embeddings is L2-normalized, which means that the distance is not exactly
@@ -886,7 +898,7 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
     attention = tf.nn.softmax(similarities)
 
     # [num_test_images, way]
-    probs = tf.matmul(attention, one_hot_train_labels)
+    probs = tf.matmul(attention, onehot_train_labels)
     self.test_logits = tf.log(probs)
     return self.test_logits
 
@@ -1542,30 +1554,6 @@ class MAMLLearner(Learner):
         self.alpha, self.num_update_steps))
     self.forward_pass()
 
-  # TODO(tylerzhu): Refactor this method. An extremely similar function is
-  # implemented as a method of the PrototypicalNetworkLearner.
-  def proto_maml_prototypes(self, train_embeddings):
-    """Computes the support-set prototypes.
-
-    Args:
-      train_embeddings: Tensor of shape [num_train_images, embedding_size]
-
-    Returns:
-      prototypes: Tensor of shape [num_classes, embedding_size]
-    """
-    # [num train images, 1, embedding size].
-    train_embeddings = tf.expand_dims(train_embeddings, 1)
-    # [num train labels, num classes] where each row is a one-hot-encoded label.
-    one_hot_train_labels = tf.one_hot(self.data.train_labels, self.way)
-    # [num train labels, num classes, 1].
-    one_hot_train_labels = tf.expand_dims(one_hot_train_labels, 2)
-    # Sums each class' embeddings. [num classes, embedding size].
-    class_sums = tf.reduce_sum(one_hot_train_labels * train_embeddings, 0)
-    # The prototype of each class is the average embedding of its train points.
-    class_num_images = tf.reduce_sum(one_hot_train_labels, 0)  # [way].
-    prototypes = class_sums / class_num_images
-    return prototypes
-
   def proto_maml_fc_weights(self, prototypes, zero_pad_to_max_way=False):
     """Computes the Prototypical MAML fc layer's weights.
 
@@ -1607,9 +1595,9 @@ class MAMLLearner(Learner):
     Computes the test logits of MAML on the query (test) set after running
     meta update steps on the support (train) set.
     """
-    # Have to use one_hot labels since sparse softmax doesn't allow
+    # Have to use one-hot labels since sparse softmax doesn't allow
     # second derivatives.
-    one_hot_train_labels = tf.one_hot(self.data.train_labels, self.way)
+    onehot_train_labels = tf.one_hot(self.data.train_labels, self.way)
     train_embeddings_ = self.embedding_fn(
         self.data.train_images, self.is_training, reuse=tf.AUTO_REUSE)
     train_embeddings = train_embeddings_['embeddings']
@@ -1659,7 +1647,7 @@ class MAMLLearner(Learner):
                                updated_fc_weights) + updated_fc_bias
 
       train_logits = train_logits[:, 0:self.way]
-      loss = tf.losses.softmax_cross_entropy(one_hot_train_labels, train_logits)
+      loss = tf.losses.softmax_cross_entropy(onehot_train_labels, train_logits)
 
       print_op = tf.no_op()
       if self.debug_log:
@@ -1696,7 +1684,8 @@ class MAMLLearner(Learner):
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
-      prototypes = self.proto_maml_prototypes(train_embeddings)
+
+      prototypes = compute_prototypes(train_embeddings, onehot_train_labels)
       pmaml_fc_weights = self.proto_maml_fc_weights(
           prototypes, zero_pad_to_max_way=True)
       pmaml_fc_bias = self.proto_maml_fc_bias(
@@ -1746,9 +1735,8 @@ class MAMLLearner(Learner):
                         updated_fc_bias)[:, 0:self.way]
 
   def compute_loss(self):
-    one_hot_test_labels = tf.one_hot(self.data.test_labels, self.way)
-    loss = tf.losses.softmax_cross_entropy(one_hot_test_labels,
-                                           self.test_logits)
+    onehot_test_labels = tf.one_hot(self.data.test_labels, self.way)
+    loss = tf.losses.softmax_cross_entropy(onehot_test_labels, self.test_logits)
     regularization = tf.reduce_sum(
         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
     loss = loss + self.weight_decay * regularization
