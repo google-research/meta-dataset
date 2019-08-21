@@ -1,4 +1,6 @@
-include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
+include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
+EpisodeDescriptionConfig.num_support = 5
+
 include 'meta_dataset/learn/gin/models/matching_config.gin'
 
 LearnerConfig.embedding_network = 'four_layer_convnet'
@@ -8,4 +10,5 @@ LearnerConfig.decay_every = 1000000
 LearnerConfig.decay_rate = 1
 LearnerConfig.learning_rate = 0.001700672128058636
 LearnerConfig.pretrained_source = 'scratch'
+
 weight_decay = 0

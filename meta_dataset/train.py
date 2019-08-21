@@ -37,12 +37,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
 import os
 
 import gin.tf
 from meta_dataset import data
 from meta_dataset import learner
 from meta_dataset import trainer
+from meta_dataset.data import config  # pylint: disable=unused-import
 import tensorflow as tf
 
 tf.flags.DEFINE_string('train_checkpoint_dir', '/tmp/metadataset',
@@ -80,6 +82,13 @@ tf.flags.DEFINE_enum(
     'exhibit enough variation in the fine-grainedness of its different tasks '
     'to allow for a meaningful analysis.')
 
+tf.flags.DEFINE_multi_enum(
+    'omit_from_saving_and_reloading',
+    ['num_left_in_epoch', 'finetune', 'linear_classifier'],
+    ['num_left_in_epoch', 'finetune', 'linear_classifier'],
+    'A comma-separated list of substrings such that all variables containing '
+    'them should not be saved and reloaded.')
+
 FLAGS = tf.flags.FLAGS
 
 NAME_TO_LEARNER = {
@@ -92,30 +101,6 @@ NAME_TO_LEARNER = {
 
 BATCH_LEARNERS = ['Baseline', 'BaselineFinetune']
 EPISODIC_LEARNERS = ['MatchingNet', 'PrototypicalNet', 'MAML']
-
-
-@gin.configurable('benchmark')
-def get_datasets_and_restrictions(train_datasets='',
-                                  eval_datasets='',
-                                  restrict_num_per_class=None):
-  """Gets the list of dataset names and possible restrictions on their classes.
-
-  Args:
-    train_datasets: A string of comma-separated dataset names for training.
-    eval_datasets: A string of comma-separated dataset names for evaluation.
-    restrict_num_per_class: If provided, a dict that maps dataset names to a
-      dict that specifies for each of 'train', 'valid' and 'test' the number of
-      examples per class to restrict to. For datasets / splits that are not
-      specified, no restriction is applied.
-
-  Returns:
-    Two lists of dataset names and a possibly empty dictionary.
-  """
-  if restrict_num_per_class is None:
-    restrict_num_per_class = {}
-  return [d.strip() for d in train_datasets.split(',')
-         ], [d.strip() for d in eval_datasets.split(',')
-            ], restrict_num_per_class
 
 
 def main(unused_argv):
@@ -136,8 +121,9 @@ def main(unused_argv):
                      'pre-trained weights. It is also only applicable to '
                      'episodic models and restores only the embedding weights.')
 
+
   (train_datasets, eval_datasets,
-   restrict_num_per_class) = get_datasets_and_restrictions()
+   restrict_num_per_class) = trainer.get_datasets_and_restrictions()
 
   train_learner = None
   if FLAGS.is_training or (FLAGS.eval_finegrainedness and
@@ -149,22 +135,29 @@ def main(unused_argv):
   eval_learner = NAME_TO_LEARNER[learner_config.eval_learner]
 
   # Get a trainer or evaluator.
+  trainer_kwargs = {
+      'train_learner': train_learner,
+      'eval_learner': eval_learner,
+      'is_training': FLAGS.is_training,
+      'train_dataset_list': train_datasets,
+      'eval_dataset_list': eval_datasets,
+      'restrict_num_per_class': restrict_num_per_class,
+      'checkpoint_dir': FLAGS.train_checkpoint_dir,
+      'summary_dir': FLAGS.summary_dir,
+      'records_root_dir': FLAGS.records_root_dir,
+      'eval_finegrainedness': FLAGS.eval_finegrainedness,
+      'eval_finegrainedness_split': FLAGS.eval_finegrainedness_split,
+      'eval_imbalance_dataset': FLAGS.eval_imbalance_dataset,
+      'omit_from_saving_and_reloading': FLAGS.omit_from_saving_and_reloading,
+  }
   if learner_config.episodic:
-    trainer_instance = trainer.EpisodicTrainer(
-        train_learner, eval_learner, FLAGS.is_training, train_datasets,
-        eval_datasets, restrict_num_per_class, FLAGS.train_checkpoint_dir,
-        FLAGS.summary_dir, FLAGS.eval_finegrainedness,
-        FLAGS.eval_finegrainedness_split, FLAGS.eval_imbalance_dataset)
+    trainer_instance = trainer.EpisodicTrainer(**trainer_kwargs)
     if learner_config.train_learner not in EPISODIC_LEARNERS:
       raise ValueError(
           'When "episodic" is True, "train_learner" should be an episodic one, '
           'among {}.'.format(EPISODIC_LEARNERS))
   else:
-    trainer_instance = trainer.BatchTrainer(
-        train_learner, eval_learner, FLAGS.is_training, train_datasets,
-        eval_datasets, restrict_num_per_class, FLAGS.train_checkpoint_dir,
-        FLAGS.summary_dir, FLAGS.eval_finegrainedness,
-        FLAGS.eval_finegrainedness_split, FLAGS.eval_imbalance_dataset)
+    trainer_instance = trainer.BatchTrainer(**trainer_kwargs)
     if learner_config.train_learner not in BATCH_LEARNERS:
       raise ValueError(
           'When "episodic" is False, "train_learner" should be a batch one, '

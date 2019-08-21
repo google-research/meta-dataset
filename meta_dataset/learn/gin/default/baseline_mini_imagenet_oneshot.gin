@@ -1,4 +1,4 @@
-include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
+include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
 EpisodeDescriptionConfig.num_support = 1
 
 include 'meta_dataset/learn/gin/models/baseline_config.gin'

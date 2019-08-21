@@ -1,4 +1,6 @@
-include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
+include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
+EpisodeDescriptionConfig.num_support = 5
+
 include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
 
 LearnerConfig.embedding_network = 'resnet'

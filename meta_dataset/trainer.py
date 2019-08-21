@@ -40,24 +40,6 @@ import tensorflow as tf
 
 from tensorflow.core.protobuf import rewriter_config_pb2  # pylint: disable=g-direct-tensorflow-import
 
-# The following flag specifies substrings of variable names that should not be
-# reloaded. `num_left_in_epoch' is a variable that influences the behavior of
-# the EpochTrackers. Since the state of those trackers is not reloaded, neither
-# should this variable. `finetune' is a substring of the names of the variables
-# of the linear layer in the finetune baseline, e.g. `fc_finetune'. We may want
-# to not attempt to reload this for example if we are reloading the baseline's
-# weights for further episodic training. In that case, that fc layer will not be
-# in the computational graph of the episodic model and an error will be thrown.
-# If we are instead continuing the training of the baseline after pre-emption
-# for example, `finetune' should not be included in this list since it should.
-# then be reloaded. `linear_classifier' plays that role but for the MAML model.
-tf.flags.DEFINE_string(
-    'omit_from_saving_and_reloading', 'num_left_in_epoch,finetune,'
-    'linear_classifier', 'A comma-separated string of substrings such that all '
-    'variables containing them should not be saved and reloaded.')
-
-FLAGS = tf.flags.FLAGS
-
 # Enable TensorFlow optimizations. It can add a few minutes to the first
 # calls to session.run(), but decrease memory usage.
 ENABLE_TF_OPTIMIZATIONS = True
@@ -76,6 +58,32 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   # optimizations to apply.
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
+
+
+@gin.configurable('benchmark')
+def get_datasets_and_restrictions(train_datasets='',
+                                  eval_datasets='',
+                                  restrict_num_per_class=None):
+  """Gets the list of dataset names and possible restrictions on their classes.
+
+  Args:
+    train_datasets: A string of comma-separated dataset names for training.
+    eval_datasets: A string of comma-separated dataset names for evaluation.
+    restrict_num_per_class: If provided, a dict that maps dataset names to a
+      dict that specifies for each of 'train', 'valid' and 'test' the number of
+      examples per class to restrict to. For datasets / splits that are not
+      specified, no restriction is applied.
+
+  Returns:
+    Two lists of dataset names and a possibly empty dictionary.
+  """
+  if restrict_num_per_class is None:
+    restrict_num_per_class = {}
+
+  train_datasets = [d.strip() for d in train_datasets.split(',')]
+  eval_datasets = [d.strip() for d in eval_datasets.split(',')]
+
+  return train_datasets, eval_datasets, restrict_num_per_class
 
 
 def apply_dataset_options(dataset):
@@ -269,12 +277,27 @@ class LearnerConfig(object):
 class Trainer(object):
   """A Trainer for training a Learner on data provided by ReaderDataSource."""
 
-  def __init__(self, train_learner, eval_learner, is_training,
-               train_dataset_list, eval_dataset_list, restrict_num_per_class,
-               checkpoint_dir, summary_dir, eval_finegrainedness,
-               eval_finegrainedness_split, eval_imbalance_dataset,
-               train_episode_config, eval_episode_config, learn_config,
-               learner_config, data_config):
+  def __init__(
+      self,
+      train_learner,
+      eval_learner,
+      is_training,
+      train_dataset_list,
+      eval_dataset_list,
+      restrict_num_per_class,
+      checkpoint_dir,
+      summary_dir,
+      records_root_dir,
+      eval_finegrainedness,
+      eval_finegrainedness_split,
+      eval_imbalance_dataset,
+      omit_from_saving_and_reloading,
+      train_episode_config,
+      eval_episode_config,
+      learn_config,
+      learner_config,
+      data_config,
+  ):
     """Initializes a Trainer.
 
     Args:
@@ -295,6 +318,7 @@ class Trainer(object):
         no checkpointing should occur.
       summary_dir: A string, the path to the checkpoint directory, or None if no
         summaries should be saved.
+      records_root_dir: A string, the path to the dataset records directory.
       eval_finegrainedness: Whether to perform binary ImageNet evaluation for
         assessing the performance on fine- vs coarse- grained tasks.
       eval_finegrainedness_split: The subgraph of ImageNet to perform the
@@ -304,6 +328,8 @@ class Trainer(object):
       eval_imbalance_dataset: A dataset on which to perform evaluation for
         assessing how class imbalance affects performance in binary episodes. By
         default it is empty and no imbalance analysis is performed.
+      omit_from_saving_and_reloading: A list of strings that specifies
+        substrings of variable names that should not be reloaded.
       train_episode_config: An instance of EpisodeDescriptionConfig (in
         data/config.py). This is a config for setting the ways and shots of
         training episodes or the parameters for sampling them, if variable.
@@ -321,6 +347,7 @@ class Trainer(object):
     self.restrict_num_per_class = restrict_num_per_class
     self.checkpoint_dir = checkpoint_dir
     self.summary_dir = summary_dir
+    self.records_root_dir = records_root_dir
     self.eval_finegrainedness = eval_finegrainedness
     self.eval_finegrainedness_split = eval_finegrainedness_split
     self.eval_imbalance_dataset = eval_imbalance_dataset
@@ -447,12 +474,13 @@ class Trainer(object):
     # Omit from reloading any variables that contains as a substring anything in
     # the following list. For example, those that track iterator state, as
     # iterator state is not saved.
-    omit_substrings = FLAGS.omit_from_saving_and_reloading.split(',')
     tf.logging.info('Omitting from saving / reloading any variable that '
                     'contains any of the following substrings: %s' %
-                    omit_substrings)
+                    omit_from_saving_and_reloading)
     for var in tf.global_variables():
-      if not any([substring in var.name for substring in omit_substrings]):
+      if not any([
+          substring in var.name for substring in omit_from_saving_and_reloading
+      ]):
         vars_to_restore.append(var)
       else:
         tf.logging.info('Omitting variable %s' % var.name)
@@ -570,7 +598,7 @@ class Trainer(object):
         to locate that dataset's records and dataset specification. If it's a
         string, that path will be used for all datasets. If it's a list, its
         length must be the same as the number of datasets, in order to specify a
-        different such directory for each. If None, FLAGS.records_root_dir will
+        different such directory for each. If None, self.records_root_dir will
         be used for all datasets.
 
     Raises:
@@ -597,7 +625,7 @@ class Trainer(object):
     elif isinstance(records_root_dir, six.text_type):
       records_roots_for_datasets = [records_root_dir] * len(benchmark_datasets)
     elif records_root_dir is None:
-      records_roots_for_datasets = [FLAGS.records_root_dir
+      records_roots_for_datasets = [self.records_root_dir
                                    ] * len(benchmark_datasets)
 
     for dataset_name, dataset_records_root in zip(benchmark_datasets,

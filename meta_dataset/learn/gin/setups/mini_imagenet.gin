@@ -6,3 +6,4 @@ include 'meta_dataset/learn/gin/setups/fixed_way_and_shot.gin'
 Trainer.data_config = @DataConfig()
 Trainer.train_episode_config = @train/EpisodeDescriptionConfig()
 Trainer.eval_episode_config = @EpisodeDescriptionConfig()
+DataConfig.image_height = 84
