@@ -40,6 +40,7 @@ import itertools
 import json
 import operator
 import os
+import traceback
 from meta_dataset.data import dataset_spec as ds_spec
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
@@ -586,7 +587,12 @@ class DatasetConverter(object):
     tf.logging.info('Attempting to read splits from %s...', self.split_file)
     if tf.gfile.Exists(self.split_file):
       with tf.gfile.Open(self.split_file, 'r') as f:
-        splits = json.load(f)
+        try:
+          splits = json.load(f)
+        except json.decoder.JSONDecodeError:
+          tf.logging.info('Unsuccessful: file exists, but loading failed. %s',
+                          traceback.format_exc())
+          return False
         tf.logging.info('Successful.')
         return splits
     else:
