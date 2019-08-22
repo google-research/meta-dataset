@@ -36,6 +36,7 @@ from __future__ import print_function
 import binascii
 import collections
 import io
+import itertools
 import json
 import operator
 import os
@@ -901,7 +902,8 @@ class CUBirdsConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
     image_root_folder = os.path.join(self.data_root, 'images')
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
     for class_id, class_label in enumerate(all_classes):
       tf.logging.info('Creating record for class ID %d (%s)...', class_id,
                       class_label)
@@ -941,9 +943,9 @@ class VGGFlowerConverter(DatasetConverter):
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
     splits = {
-        'train': [(i + 1) for i in train_inds],
-        'valid': [(i + 1) for i in valid_inds],
-        'test': [(i + 1) for i in test_inds]
+        'train': [int(i + 1) for i in train_inds],
+        'valid': [int(i + 1) for i in valid_inds],
+        'test': [int(i + 1) for i in test_inds]
     }
     return splits
 
@@ -968,7 +970,8 @@ class VGGFlowerConverter(DatasetConverter):
       filepaths[label].append(
           os.path.join(self.data_root, 'jpg', 'image_{:05d}.jpg'.format(i + 1)))
 
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
     # Class IDs are constructed in such a way that
     #   - training class IDs lie in [0, num_train_classes),
     #   - validation class IDs lie in
@@ -1035,7 +1038,8 @@ class DTDConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.VALID] = len(valid_classes)
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
 
     for class_id, class_name in enumerate(all_classes):
       tf.logging.info('Creating record for class ID %d (%s)...', class_id,
@@ -1153,10 +1157,9 @@ class AircraftConverter(DatasetConverter):
     for name, variant in names_to_variants.items():
       variants_to_names[variant].append(name)
 
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
-    class_names = sorted(variants_to_names.keys())
-    assert len(class_names) == len(all_classes)
-    assert class_names == all_classes
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
+    assert set(variants_to_names.keys()) == set(all_classes)
 
     for class_id, class_name in enumerate(all_classes):
       tf.logging.info('Creating record for class ID %d (%s)...', class_id,
@@ -1594,7 +1597,8 @@ class FungiConverter(DatasetConverter):
       class_filepaths[image['class']].append(
           os.path.join(self.data_root, image['file_name']))
 
-    all_classes = np.concatenate([train_classes, valid_classes, test_classes])
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
     for class_id, class_label in enumerate(all_classes):
       tf.logging.info('Creating record for class ID %d (%s)...', class_id,
                       class_label)
