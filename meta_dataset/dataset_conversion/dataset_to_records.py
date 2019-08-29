@@ -1608,7 +1608,15 @@ class FungiConverter(DatasetConverter):
     for class_id, class_label in enumerate(all_classes):
       tf.logging.info('Creating record for class ID %d (%s)...', class_id,
                       class_label)
-      class_paths = class_filepaths[class_label]
+      # Extract the "category_id" information from the class label
+      category_id = int(class_label[:4])
+      # Check that the key is actually in `class_filepaths`, so that an empty
+      # list is not accidentally used.
+      if category_id not in class_filepaths:
+        raise ValueError('class_filepaths does not contain paths to any '
+                         'image for category %d. Existing categories are: %s.' %
+                         (category_id, class_filepaths.keys()))
+      class_paths = class_filepaths[category_id]
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_label
