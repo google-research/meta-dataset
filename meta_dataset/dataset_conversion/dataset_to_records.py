@@ -1544,16 +1544,20 @@ class FungiConverter(DatasetConverter):
 
     # The categories (classes) for train and validation should be the same.
     assert original_train['categories'] == original_val['categories']
-    category_ids = [category['id'] for category in original_train['categories']]
+    # Sort by category ID for reproducibility.
+    categories = sorted(
+        original_train['categories'], key=operator.itemgetter('id'))
+
     # Assert contiguous range [0:category_number]
-    assert set(category_ids) == set(range(len(original_train['categories'])))
+    assert ([category['id'] for category in categories
+            ] == list(range(len(categories))))
 
     # Some categories share the same name (see
     # https://github.com/visipedia/fgvcx_fungi_comp/issues/1)
-    # so we include the category id in the label
+    # so we include the category id in the label.
     labels = [
         '{:04d}.{}'.format(category['id'], category['name'])
-        for category in original_train['categories']
+        for category in categories
     ]
 
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
