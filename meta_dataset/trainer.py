@@ -35,7 +35,6 @@ import numpy as np
 import six
 from six.moves import range
 from six.moves import zip
-import six.moves.cPickle as pkl
 import tensorflow as tf
 
 from tensorflow.core.protobuf import rewriter_config_pb2  # pylint: disable=g-direct-tensorflow-import
@@ -637,25 +636,7 @@ class Trainer(object):
         continue
 
       dataset_records_path = os.path.join(dataset_records_root, dataset_name)
-      dataset_spec_path = os.path.join(dataset_records_path, 'dataset_spec.pkl')
-      if not tf.gfile.Exists(dataset_spec_path):
-        raise ValueError(
-            'Dataset specification for {} is not found in the expected path '
-            '({}).'.format(dataset_name, dataset_spec_path))
-
-      with tf.gfile.Open(dataset_spec_path, 'rb') as f:
-        data_spec = pkl.load(f)
-
-      # Replace outdated path of where to find the dataset's records.
-      data_spec = data_spec._replace(path=dataset_records_path)
-
-      if dataset_name in DATASETS_WITH_EXAMPLE_SPLITS:
-        # Check the file_pattern field is correct now.
-        if data_spec.file_pattern != '{}_{}.tfrecords':
-          raise RuntimeError(
-              'The DatasetSpecification should be regenerated, as it does not '
-              'have the correct value for "file_pattern". Expected "%s", but '
-              'got "%s".' % ('{}_{}.tfrecords', data_spec.file_pattern))
+      data_spec = dataset_spec_lib.load_dataset_spec(dataset_records_path)
 
       # Only ImageNet has a DAG ontology.
       has_dag = (dataset_name == 'ilsvrc_2012')

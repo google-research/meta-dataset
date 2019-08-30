@@ -48,6 +48,7 @@ import numpy as np
 from PIL import Image
 from PIL import ImageOps
 from scipy.io import loadmat
+import six
 from six.moves import range
 import six.moves.cPickle as pkl
 import tensorflow as tf
@@ -58,7 +59,7 @@ tf.flags.DEFINE_string(
     'ilsvrc_2012_num_leaf_images_path', '',
     'A path used as a cache for a dict mapping the WordNet id of each Synset '
     'of a ILSVRC 2012 class to its number of images. If empty, it defaults to '
-    '"ilsvrc_2012/num_leaf_images.pkl" inside records_root.')
+    '"ilsvrc_2012/num_leaf_images.json" inside records_root.')
 
 tf.flags.DEFINE_string(
     'omniglot_data_root',
@@ -451,7 +452,8 @@ class DatasetConverter(object):
     self.records_path = records_path
 
     # Where to write the DatasetSpecification instance.
-    self.dataset_spec_path = os.path.join(self.records_path, 'dataset_spec.pkl')
+    self.dataset_spec_path = os.path.join(self.records_path,
+                                          'dataset_spec.json')
 
     self.split_file = split_file
     if self.split_file is None:
@@ -548,7 +550,7 @@ class DatasetConverter(object):
     self.create_dataset_specification_and_records()
 
     # Write the DatasetSpecification to the designated location.
-    self.write_data_spec_pkl()
+    self.write_data_spec()
 
   def create_dataset_specification_and_records(self):
     """Creates a DatasetSpecification and records for the dataset.
@@ -586,7 +588,7 @@ class DatasetConverter(object):
     """
     tf.logging.info('Attempting to read splits from %s...', self.split_file)
     if tf.gfile.Exists(self.split_file):
-      with tf.gfile.Open(self.split_file, 'r') as f:
+      with tf.io.gfile.GFile(self.split_file, 'r') as f:
         try:
           splits = json.load(f)
         except json.decoder.JSONDecodeError:
@@ -599,19 +601,11 @@ class DatasetConverter(object):
       tf.logging.info('Unsuccessful.')
       return False
 
-  def write_data_spec_pkl(self):
-    """Write the dataset's specification to its pickle file."""
-    with tf.gfile.Open(self.dataset_spec_path, 'wb') as f:
-      pkl.dump(self.dataset_spec, f, protocol=pkl.HIGHEST_PROTOCOL)
-
-  def read_data_spec_pkl(self):
-    """Read the dataset's specification from its pickle file."""
-    if tf.gfile.Exists(self.dataset_spec_path):
-      with tf.gfile.Open(self.dataset_spec_path, 'rb') as f:
-        data = pkl.load(f)
-        return data
-    else:
-      raise ValueError('No such pkl file: {}.'.format(self.dataset_spec_path))
+  def write_data_spec(self):
+    """Write the dataset's specification to a JSON file."""
+    with tf.io.gfile.GFile(self.dataset_spec_path, 'w') as f:
+      # Use 2-space indentation (which also add newlines) for legibility.
+      json.dump(self.dataset_spec.to_dict(), f, indent=2)
 
   def get_splits(self, force_create=False):
     """Returns the class splits.
@@ -646,7 +640,7 @@ class DatasetConverter(object):
     # Finally, write the splits in the designated location.
     tf.logging.info('Saving new splits for dataset %s at %s...', self.name,
                     self.split_file)
-    with tf.gfile.Open(self.split_file, 'w') as f:
+    with tf.io.gfile.GFile(self.split_file, 'w') as f:
       json.dump(splits, f, indent=2)
     tf.logging.info('Done.')
 
@@ -852,8 +846,6 @@ class QuickdrawConverter(DatasetConverter):
     self.parse_split_data(learning_spec.Split.VALID, valid_classes)
     self.parse_split_data(learning_spec.Split.TEST, test_classes)
 
-    self.write_data_spec_pkl()
-
 
 class CUBirdsConverter(DatasetConverter):
   """Prepares CU-Birds dataset as required to integrate it in the benchmark."""
@@ -921,7 +913,6 @@ class CUBirdsConverter(DatasetConverter):
           tf.gfile.ListDirectory(class_directory))
       write_tfrecord_from_directory(class_directory, class_id,
                                     class_records_path)
-    self.write_data_spec_pkl()
 
 
 class VGGFlowerConverter(DatasetConverter):
@@ -996,8 +987,6 @@ class VGGFlowerConverter(DatasetConverter):
       # Create and write the tf.Record of the examples of this class.
       write_tfrecord_from_image_files(class_paths, class_id, class_records_path)
 
-    self.write_data_spec_pkl()
-
 
 class DTDConverter(DatasetConverter):
   """Prepares DTD as required to integrate it in the benchmark."""
@@ -1063,8 +1052,6 @@ class DTDConverter(DatasetConverter):
           class_id,
           class_records_path,
           files_to_skip=files_to_skip)
-
-    self.write_data_spec_pkl()
 
 
 class AircraftConverter(DatasetConverter):
@@ -1187,8 +1174,6 @@ class AircraftConverter(DatasetConverter):
       write_tfrecord_from_image_files(
           class_files, class_id, class_records_path, bboxes=bboxes)
 
-    self.write_data_spec_pkl()
-
 
 class TrafficSignConverter(DatasetConverter):
   """Prepares Traffic Sign as required to integrate it in the benchmark."""
@@ -1246,8 +1231,6 @@ class TrafficSignConverter(DatasetConverter):
           class_id,
           class_records_path,
           files_to_skip=set(['GT-{:05d}.csv'.format(class_id)]))
-
-    self.write_data_spec_pkl()
 
 
 class MSCOCOConverter(DatasetConverter):
@@ -1337,7 +1320,7 @@ class MSCOCOConverter(DatasetConverter):
       # The bounding box is represented as (x_topleft, y_topleft, width, height)
       bbox = annotation['bbox']
       coco_class_id = annotation['category_id']
-      with tf.gfile.Open(image_path, 'rb') as f:
+      with tf.io.gfile.GFile(image_path, 'rb') as f:
         # The image shape is [?, ?, 3] and the type is uint8.
         image = Image.open(f)
         image = image.convert(mode='RGB')
@@ -1401,8 +1384,6 @@ class MSCOCOConverter(DatasetConverter):
     for writer in class_tf_record_writers:
       writer.close()
 
-    self.write_data_spec_pkl()
-
 
 class ImageNetConverter(DatasetConverter):
   """Prepares ImageNet for integration in the benchmark.
@@ -1431,7 +1412,7 @@ class ImageNetConverter(DatasetConverter):
           ILSCRC_DUPLICATES_PATH,
           'ImageNet_{}_duplicates.txt'.format(other_dataset))
 
-      with tf.gfile.Open(duplicates_file) as fd:
+      with tf.io.gfile.GFile(duplicates_file) as fd:
         duplicates = fd.read()
       lines = duplicates.splitlines()
 
@@ -1450,7 +1431,7 @@ class ImageNetConverter(DatasetConverter):
     ilsvrc_2012_num_leaf_images_path = FLAGS.ilsvrc_2012_num_leaf_images_path
     if not ilsvrc_2012_num_leaf_images_path:
       ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
-                                                      'num_leaf_images.pkl')
+                                                      'num_leaf_images.json')
     specification = imagenet_specification.create_imagenet_specification(
         learning_spec.Split, self.files_to_skip,
         ilsvrc_2012_num_leaf_images_path)
@@ -1629,8 +1610,6 @@ class FungiConverter(DatasetConverter):
       # Create and write the tf.Record of the examples of this class
       write_tfrecord_from_image_files(class_paths, class_id, class_records_path)
 
-    self.write_data_spec_pkl()
-
 
 class MiniImageNetConverter(DatasetConverter):
   """Prepares MiniImageNet as required to integrate it in the benchmark.
@@ -1680,7 +1659,7 @@ class MiniImageNetConverter(DatasetConverter):
                               ['train', 'val', 'test']):
       path = os.path.join(self.data_root,
                           'mini-imagenet-cache-{}.pkl'.format(split))
-      with tf.gfile.GFile(path) as f:
+      with tf.gfile.GFile(path, 'rb') as f:
         data = pkl.load(f)
       # We sort class names to make the dataset creation deterministic
       names = sorted(data['class_dict'].keys())
@@ -1700,5 +1679,3 @@ class MiniImageNetConverter(DatasetConverter):
           buf.seek(0)
           write_example(buf.getvalue(), class_id, writer)
         writer.close()
-
-    self.write_data_spec_pkl()

@@ -50,7 +50,7 @@ from __future__ import print_function
 import collections
 import os
 
-from meta_dataset.data import dataset_spec  # pylint: disable=unused-import
+from meta_dataset.data import dataset_spec
 from meta_dataset.data import imagenet_specification as imagenet_spec
 from meta_dataset.data import learning_spec
 import numpy as np
@@ -271,14 +271,7 @@ def get_synsets_from_class_ids(class_ids):
   """
   # First load the DatasetSpecification of ImageNet.
   dataset_records_path = os.path.join(FLAGS.records_root_dir, 'ilsvrc_2012')
-  dataset_spec_path = os.path.join(dataset_records_path, 'dataset_spec.pkl')
-  if not tf.gfile.Exists(dataset_spec_path):
-    raise ValueError(
-        'Dataset specification is not found in the expected path ({}).'.format(
-            dataset_spec_path))
-
-  with tf.gfile.Open(dataset_spec_path, 'rb') as f:
-    imagenet_data_spec = pkl.load(f)
+  imagenet_data_spec = dataset_spec.load_dataset_spec(dataset_records_path)
 
   # A set of Synsets of the split's subgraph.
   split_enum = get_finegrainedness_split_enum()

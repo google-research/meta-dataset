@@ -404,7 +404,7 @@ class BatchReader(Reader):
 
       dataset = tf.data.experimental.sample_from_datasets(
           class_datasets, weights=class_proportions, seed=shuffle_seed)
-      if self.shuffle_buffer_size > 0:
+      if self.shuffle_buffer_size and self.shuffle_buffer_size > 0:
         dataset = dataset.shuffle(
             buffer_size=self.shuffle_buffer_size,
             seed=shuffle_seed,

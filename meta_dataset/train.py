@@ -178,7 +178,7 @@ def main(unused_argv):
     # This just saves the previous one, not all the ones before.
     if tf.gfile.Exists(gin_log_file):
       tf.gfile.Rename(gin_log_file, gin_log_file + '.old', overwrite=True)
-    with tf.gfile.Open(gin_log_file, 'w') as f:
+    with tf.io.gfile.GFile(gin_log_file, 'w') as f:
       f.write(gin_operative_config)
 
   if FLAGS.is_training:

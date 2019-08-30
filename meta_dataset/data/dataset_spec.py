@@ -21,9 +21,14 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import json
+import os
 from meta_dataset import data
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
+import numpy as np
+import six
+from six.moves import cPickle as pkl
 from six.moves import range
 from six.moves import zip
 import tensorflow as tf
@@ -277,6 +282,32 @@ class DatasetSpecification(
     """
     return get_classes(split, self.classes_per_split)
 
+  def to_dict(self):
+    """Returns a dictionary for serialization to JSON.
+
+    Each member is converted to an elementary type that can be serialized to
+    JSON readily.
+    """
+    # Start with the dict representation of the namedtuple
+    ret_dict = self._asdict()
+    # Add the class name for reconstruction when deserialized
+    ret_dict['__class__'] = self.__class__.__name__
+    # Convert Split enum instances to their name (string)
+    ret_dict['classes_per_split'] = {
+        split.name: count
+        for split, count in six.iteritems(ret_dict['classes_per_split'])
+    }
+    # Convert binary class names to unicode strings if necessary
+    class_names = {}
+    for class_id, name in six.iteritems(ret_dict['class_names']):
+      if isinstance(name, six.binary_type):
+        name = name.decode()
+      elif isinstance(name, np.integer):
+        name = six.text_type(name)
+      class_names[class_id] = name
+    ret_dict['class_names'] = class_names
+    return ret_dict
+
 
 class BiLevelDatasetSpecification(
     collections.namedtuple('BiLevelDatasetSpecification',
@@ -435,6 +466,23 @@ class BiLevelDatasetSpecification(
 
     return rel_class_ids, class_ids
 
+  def to_dict(self):
+    """Returns a dictionary for serialization to JSON.
+
+    Each member is converted to an elementary type that can be serialized to
+    JSON readily.
+    """
+    # Start with the dict representation of the namedtuple
+    ret_dict = self._asdict()
+    # Add the class name for reconstruction when deserialized
+    ret_dict['__class__'] = self.__class__.__name__
+    # Convert Split enum instances to their name (string)
+    ret_dict['superclasses_per_split'] = {
+        split.name: count
+        for split, count in six.iteritems(ret_dict['superclasses_per_split'])
+    }
+    return ret_dict
+
 
 class HierarchicalDatasetSpecification(
     collections.namedtuple('HierarchicalDatasetSpecification',
@@ -573,3 +621,177 @@ class HierarchicalDatasetSpecification(
         if self.class_names_to_ids[n.wn_id] == class_id:
           return self.images_per_class[s][n]
     raise ValueError('Class id {} not found.'.format(class_id))
+
+  def to_dict(self):
+    """Returns a dictionary for serialization to JSON.
+
+    Each member is converted to an elementary type that can be serialized to
+    JSON readily.
+    """
+    # Start with the dict representation of the namedtuple
+    ret_dict = self._asdict()
+    # Add the class name for reconstruction when deserialized
+    ret_dict['__class__'] = self.__class__.__name__
+    # Convert the graph for each split into a serializable form
+    split_subgraphs = {}
+    for split, subgraph in six.iteritems(ret_dict['split_subgraphs']):
+      exported_subgraph = imagenet_specification.export_graph(subgraph)
+      split_subgraphs[split.name] = exported_subgraph
+    ret_dict['split_subgraphs'] = split_subgraphs
+    # WordNet synsets to their WordNet ID as a string in images_per_class.
+    images_per_class = {}
+    for split, synset_counts in six.iteritems(ret_dict['images_per_class']):
+      wn_id_counts = {
+          synset.wn_id: count for synset, count in six.iteritems(synset_counts)
+      }
+      images_per_class[split.name] = wn_id_counts
+    ret_dict['images_per_class'] = images_per_class
+
+    return ret_dict
+
+
+def as_dataset_spec(dct):
+  """Hook to `json.loads` that builds a DatasetSpecification from a dict.
+
+  Args:
+     dct: A dictionary with string keys, corresponding to a JSON file.
+
+  Returns:
+    Depending on the '__class__' key of the dictionary, a DatasetSpecification,
+    HierarchicalDatasetSpecification, or BiLevelDatasetSpecification. Defaults
+    to returning `dct`.
+  """
+  if '__class__' not in dct:
+    return dct
+
+  if dct['__class__'] not in ('DatasetSpecification',
+                              'HierarchicalDatasetSpecification',
+                              'BiLevelDatasetSpecification'):
+    return dct
+
+  def _key_to_int(dct):
+    """Returns a new dictionary whith keys converted to ints."""
+    return {int(key): value for key, value in six.iteritems(dct)}
+
+  def _key_to_split(dct):
+    """Returns a new dictionary whith keys converted to Split enums."""
+    return {
+        learning_spec.Split[key]: value for key, value in six.iteritems(dct)
+    }
+
+  if dct['__class__'] == 'DatasetSpecification':
+    images_per_class = {}
+    for class_id, n_images in six.iteritems(dct['images_per_class']):
+      # If n_images is a dict, it maps each class ID to a string->int
+      # dictionary containing the size of each pool.
+      if isinstance(n_images, dict):
+        # Convert the number of classes in each pool to int.
+        n_images = {
+            pool: int(pool_size) for pool, pool_size in six.iteritems(n_images)
+        }
+      else:
+        n_images = int(n_images)
+      images_per_class[int(class_id)] = n_images
+
+    return DatasetSpecification(
+        name=dct['name'],
+        classes_per_split=_key_to_split(dct['classes_per_split']),
+        images_per_class=images_per_class,
+        class_names=_key_to_int(dct['class_names']),
+        path=dct['path'],
+        file_pattern=dct['file_pattern'])
+
+  elif dct['__class__'] == 'BiLevelDatasetSpecification':
+    return BiLevelDatasetSpecification(
+        name=dct['name'],
+        superclasses_per_split=_key_to_split(dct['superclasses_per_split']),
+        classes_per_superclass=_key_to_int(dct['classes_per_superclass']),
+        images_per_class=_key_to_int(dct['images_per_class']),
+        superclass_names=_key_to_int(dct['superclass_names']),
+        class_names=_key_to_int(dct['class_names']),
+        path=dct['path'],
+        file_pattern=dct['file_pattern'])
+
+  elif dct['__class__'] == 'HierarchicalDatasetSpecification':
+    # Load subgraphs associated to each split, and build global mapping from
+    # WordNet ID to Synset objects.
+    split_subgraphs = {}
+    wn_id_to_node = {}
+    for split in learning_spec.Split:
+      split_subgraphs[split] = imagenet_specification.import_graph(
+          dct['split_subgraphs'][split.name])
+      for synset in split_subgraphs[split]:
+        wn_id = synset.wn_id
+        if wn_id in wn_id_to_node:
+          raise ValueError(
+              'Multiple `Synset` objects associated to the same WordNet ID')
+        wn_id_to_node[wn_id] = synset
+
+    images_per_class = {}
+    for split_name, wn_id_counts in six.iteritems(dct['images_per_class']):
+      synset_counts = {
+          wn_id_to_node[wn_id]: int(count)
+          for wn_id, count in six.iteritems(wn_id_counts)
+      }
+      images_per_class[learning_spec.Split[split_name]] = synset_counts
+
+    return HierarchicalDatasetSpecification(
+        name=dct['name'],
+        split_subgraphs=split_subgraphs,
+        images_per_class=images_per_class,
+        class_names=_key_to_int(dct['class_names']),
+        path=dct['path'],
+        file_pattern=dct['file_pattern'])
+
+  else:
+    return dct
+
+
+def load_dataset_spec(dataset_records_path, convert_from_pkl=False):
+  """Loads dataset specification from directory containing the dataset records.
+
+  Newly-generated datasets have the dataset specification serialized as JSON,
+  older ones have it as a .pkl file. If no JSON file is present and
+  `convert_from_pkl` is passed, this method will load the .pkl and serialize it
+  to JSON.
+
+  Args:
+    dataset_records_path: A string, the path to the directory containing
+      .tfrecords files and dataset_spec.
+    convert_from_pkl: A boolean (False by default), whether to convert a
+      dataset_spec.pkl file to JSON.
+
+  Returns:
+    A DatasetSpecification, BiLevelDatasetSpecification, or
+      HierarchicalDatasetSpecification, depending on the dataset.
+
+  Raises:
+    RuntimeError: If no suitable dataset_spec file is found in directory
+      (.json or .pkl depending on `convert_from_pkl`).
+  """
+  json_path = os.path.join(dataset_records_path, 'dataset_spec.json')
+  pkl_path = os.path.join(dataset_records_path, 'dataset_spec.pkl')
+  if tf.io.gfile.exists(json_path):
+    with tf.io.gfile.GFile(json_path, 'r') as f:
+      data_spec = json.load(f, object_hook=as_dataset_spec)
+  elif tf.io.gfile.exists(pkl_path):
+    if convert_from_pkl:
+      tf.logging.info('Loading older dataset_spec.pkl to convert it.')
+      with tf.io.gfile.GFile(pkl_path, 'rb') as f:
+        data_spec = pkl.load(f)
+      with tf.io.gfile.GFile(json_path, 'w') as f:
+        json.dump(data_spec.to_dict(), f, indent=2)
+    else:
+      raise RuntimeError(
+          'No dataset_spec.json file found in directory %s, but an older '
+          'dataset_spec.pkl was found. You can try to pass '
+          '`convert_from_pkl=True` to convert it, or you may need to run the '
+          'conversion again in order to make sure you have the latest version.'
+          % dataset_records_path)
+  else:
+    raise RuntimeError('No dataset_spec file found in directory %s' %
+                       dataset_records_path)
+
+  # Replace outdated path of where to find the dataset's records.
+  data_spec = data_spec._replace(path=dataset_records_path)
+  return data_spec

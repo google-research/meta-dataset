@@ -28,8 +28,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
 import os
-import pickle as pkl
 from meta_dataset.data import imagenet_stats
 import numpy as np
 import six
@@ -805,8 +805,8 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
     tf.logging.info(
         'Attempting to read number of leaf images from {}...'.format(path))
     if tf.gfile.Exists(path):
-      with tf.gfile.Open(path, 'rb') as f:
-        num_synset_2012_images = pkl.load(f)
+      with tf.io.gfile.GFile(path, 'r') as f:
+        num_synset_2012_images = json.load(f)
         tf.logging.info('Successful.')
         return num_synset_2012_images
 
@@ -821,10 +821,90 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
         set(tf.gfile.ListDirectory(synset_dir)) - files_to_skip)
 
   if path:
-    with tf.gfile.Open(path, 'wb') as f:
-      pkl.dump(num_synset_2012_images, f, protocol=pkl.HIGHEST_PROTOCOL)
+    with tf.io.gfile.GFile(path, 'w') as f:
+      json.dump(num_synset_2012_images, f, indent=2)
 
   return num_synset_2012_images
+
+
+def export_graph(nodes):
+  """Returns a JSON-serializable representation of a graph.
+
+  Synset objects are represented by a dictionary containing:
+  - their WordNet ID ("wn_id")
+  - their text description in words ("words")
+  - the WordNet IDs of their children ("children_ids")
+  - the WordNet IDs of their parents ("parents_ids")
+
+  The conversion expects that:
+  - The WordNet ID is a unique identifier for a Synset object.
+  - The parents and children of each Synset in `nodes` is also in `nodes`.
+
+  Args:
+    nodes: A set of Synset objects, representing a complete graph.
+
+  Returns:
+    A list of dictionaries, following the representation described above.
+  """
+  node_representations = []
+  wn_ids_to_synsets = {synset.wn_id: synset for synset in nodes}
+  wn_ids = set(wn_ids_to_synsets.keys())
+  if len(wn_ids) != len(nodes):
+    raise ValueError('Duplicate WordNet IDs in the same graph')
+  # Iterate in lexicographic order over the WordNet IDs
+  for wn_id in sorted(wn_ids):
+    synset = wn_ids_to_synsets[wn_id]
+    children_ids = {child.wn_id for child in synset.children}
+    if not children_ids.issubset(wn_ids):
+      raise ValueError('Synset has children outside of the graph')
+    parents_ids = {parent.wn_id for parent in synset.parents}
+    if not parents_ids.issubset(wn_ids):
+      raise ValueError('Synset has parents outside of the graph')
+    node_repr = dict(
+        wn_id=wn_id,
+        words=synset.words,
+        children_ids=sorted(children_ids),
+        parents_ids=sorted(parents_ids))
+    node_representations.append(node_repr)
+  return node_representations
+
+
+def import_graph(node_representations):
+  """Returns a set of Synset nodes from JSON-serializable representation.
+
+  See the documentation of `export_graph` for a description of the format
+  of that representation.
+
+  Args:
+    node_representations: A list of dictionaries, each representing a Synset.
+
+  Returns:
+    A set of Synset objects (nodes), representing a graph.
+  """
+  graph = set()
+  # Build one Synset node for each WordNet ID, and keep a mapping.
+  # `children` and `parents` are initialized with empty sets.
+  wn_id_to_node = dict()
+  for node_repr in node_representations:
+    wn_id = node_repr['wn_id']
+    words = node_repr['words']
+    if wn_id in wn_id_to_node:
+      raise ValueError('Duplicate Word ID (%s, %s) in the imported graph.' %
+                       (wn_id, words))
+    node = Synset(wn_id=wn_id, words=words, children=set(), parents=set())
+    wn_id_to_node[wn_id] = node
+
+  # Fill in the `children` and `parents` with the Synset objects.
+  for node_repr in node_representations:
+    wn_id = node_repr['wn_id']
+    node = wn_id_to_node[wn_id]
+    children_ids = node_repr['children_ids']
+    node.children.update(wn_id_to_node[child_id] for child_id in children_ids)
+    parents_ids = node_repr['parents_ids']
+    node.parents.update(wn_id_to_node[parent_id] for parent_id in parents_ids)
+    graph.add(node)
+
+  return graph
 
 
 def create_imagenet_specification(split_enum,
@@ -875,7 +955,7 @@ def create_imagenet_specification(split_enum,
   path_to_words = FLAGS.path_to_words
   if not path_to_words:
     path_to_words = os.path.join(data_root, 'words.txt')
-  with tf.gfile.Open(path_to_words) as f:
+  with tf.io.gfile.GFile(path_to_words) as f:
     for line in f:
       wn_id, words = line.rstrip().split('\t')
       synsets[wn_id] = Synset(wn_id, words, set(), set())
@@ -884,7 +964,7 @@ def create_imagenet_specification(split_enum,
   path_to_is_a = FLAGS.path_to_is_a
   if not path_to_is_a:
     path_to_is_a = os.path.join(data_root, 'wordnet.is_a.txt')
-  with tf.gfile.Open(path_to_is_a, 'r') as f:
+  with tf.io.gfile.GFile(path_to_is_a, 'r') as f:
     for line in f:
       parent, child = line.rstrip().split(' ')
       synsets[parent].children.add(synsets[child])
