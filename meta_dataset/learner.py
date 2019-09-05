@@ -121,8 +121,14 @@ def bn(x, params=None, moments=None, backprop_through_moments=True):
     moments_vars += [var]
 
     if params is None:
-      offset = tf.get_variable('offset', initializer=tf.zeros_like(mean))
-      scale = tf.get_variable('scale', initializer=tf.ones_like(var))
+      offset = tf.get_variable(
+          'offset',
+          shape=mean.get_shape().as_list(),
+          initializer=tf.initializers.zeros())
+      scale = tf.get_variable(
+          'scale',
+          shape=var.get_shape().as_list(),
+          initializer=tf.initializers.ones())
     else:
       offset = params[scope_name + '/offset']
       scale = params[scope_name + '/scale']
@@ -140,15 +146,15 @@ def bn(x, params=None, moments=None, backprop_through_moments=True):
 
 def weight_variable(shape):
   """weight_variable generates a weight variable of a given shape."""
-  initial = tf.truncated_normal(shape, stddev=0.1)
+  initial = tf.initializers.truncated_normal(stddev=0.1)
   return tf.get_variable(
-      'weight', initializer=initial, regularizer=tf.nn.l2_loss)
+      'weight', shape=shape, initializer=initial, regularizer=tf.nn.l2_loss)
 
 
 def bias_variable(shape):
   """bias_variable generates a bias variable of a given shape."""
-  initial = tf.constant(0.1, shape=shape)
-  return tf.get_variable('bias', initializer=initial)
+  initial = tf.initializers.constant(0.1)
+  return tf.get_variable('bias', shape=shape, initializer=initial)
 
 
 def conv(x, conv_size, depth, stride, params=None, maml_arch=False):
