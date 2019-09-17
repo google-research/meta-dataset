@@ -1274,6 +1274,7 @@ class MSCOCOConverter(DatasetConverter):
             'train, val, test classes %d.' %
             (len(categories), self.num_all_classes))
       self.coco_categories = categories
+    self.coco_name_to_category = {cat['name']: cat for cat in categories}
 
     if box_scale_ratio < 1.0:
       raise ValueError('Box scale ratio must be greater or equal to 1.0.')
@@ -1305,12 +1306,15 @@ class MSCOCOConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.TRAIN] = len(splits['train'])
     self.classes_per_split[learning_spec.Split.VALID] = len(splits['valid'])
     self.classes_per_split[learning_spec.Split.TEST] = len(splits['test'])
+    all_classes = list(
+        itertools.chain(splits['train'], splits['valid'], splits['test']))
 
     # Map original COCO "id" to class ids that conform to DatasetConverter's
     # contract.
     coco_id_to_class_id = {}
-    for class_id, category in enumerate(self.coco_categories):
-      self.class_names[class_id] = category['name']
+    for class_id, class_name in enumerate(all_classes):
+      self.class_names[class_id] = class_name
+      category = self.coco_name_to_category[class_name]
       coco_id_to_class_id[category['id']] = class_id
 
     def get_image_crop_and_class_id(annotation):
@@ -1320,6 +1324,8 @@ class MSCOCOConverter(DatasetConverter):
       # The bounding box is represented as (x_topleft, y_topleft, width, height)
       bbox = annotation['bbox']
       coco_class_id = annotation['category_id']
+      class_id = coco_id_to_class_id[coco_class_id]
+
       with tf.io.gfile.GFile(image_path, 'rb') as f:
         # The image shape is [?, ?, 3] and the type is uint8.
         image = Image.open(f)
@@ -1350,7 +1356,6 @@ class MSCOCOConverter(DatasetConverter):
         crop_width, crop_height = image_crop.size
         if crop_width <= 0 or crop_height <= 0:
           raise ValueError('crops are not valid.')
-        class_id = coco_id_to_class_id[coco_class_id]
       return image_crop, class_id
 
     class_tf_record_writers = []
