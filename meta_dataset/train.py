@@ -199,7 +199,8 @@ def main(unused_argv):
     trainer_instance.evaluate(eval_split)
 
   # Flushes the event file to disk and closes the file.
-  trainer_instance.summary_writer.close()
+  if trainer_instance.summary_writer:
+    trainer_instance.summary_writer.close()
 
 
 if __name__ == '__main__':
