@@ -178,7 +178,8 @@
 ## traffic_sign
 
 1.  Download
-    [`GTSRB_Final_Training_Images.zip`](http://benchmark.ini.rub.de/Dataset/GTSRB_Final_Training_Images.zip)
+    [`GTSRB_Final_Training_Images.zip`](https://sid.erda.dk/public/archives/daaeac0d7ce1152aea9b61d9f1e19370/GTSRB_Final_Training_Images.zip)
+    If the link happens to be broken, browse the GTSRB dataset [website](http://benchmark.ini.rub.de) for more information.
 2.  Extract it in `$DATASRC`, it will create a `GTSRB/` sub-directory
 3.  The conversion should take about one minute:
 
