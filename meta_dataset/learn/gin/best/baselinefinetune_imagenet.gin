@@ -1,6 +1,7 @@
 include 'meta_dataset/learn/gin/setups/imagenet.gin'
 
 include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
+BaselineFinetuneLearner.finetune_with_adam = True
 LearnerConfig.embedding_network = 'resnet'
 DataConfig.image_height = 126
 

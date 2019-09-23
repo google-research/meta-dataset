@@ -1273,7 +1273,7 @@ class BaselineFinetuneLearner(BaselineLearner):
                weight_decay,
                num_finetune_steps,
                finetune_lr,
-               debug_log=True,
+               debug_log=False,
                finetune_all_layers=False,
                finetune_with_adam=False):
     """Initializes a baseline learner.
