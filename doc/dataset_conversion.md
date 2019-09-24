@@ -1,5 +1,10 @@
 # Dataset download and conversion
 
+This file contains instructions to download the individual datasets used by
+Meta-Dataset, and convert them into a common format (one TFRecord file per
+class). See [an overview](../README.md#downloading-and-converting-datasets) for
+more context.
+
 ## ilsvrc_2012
 
 1.  Download `ilsvrc2012_img_train.tar`, from the
@@ -21,8 +26,7 @@
 4.  Download the following two files into `ILSVRC2012_img_train/`:
     -   http://www.image-net.org/archive/wordnet.is_a.txt
     -   http://www.image-net.org/archive/words.txt
-5.  The conversion itself should take 4 to 12 hours, depending on the
-    filesystem's latency and bandwidth:
+5.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -31,7 +35,9 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-6.  Expected outputs in `$RECORDS/ilsvrc_2012/`:
+6.  Expect the conversion to take 4 to 12 hours, depending on the filesystem's
+    latency and bandwidth.
+7.  Find the following outputs in `$RECORDS/ilsvrc_2012/`:
     -   1000 tfrecords files named `[0-999].tfrecords`
     -   `dataset_spec.json`
     -   `num_leaf_images.json`
@@ -43,7 +49,7 @@
     and
     [`images_evaluation.zip`](https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip)
 2.  Extract them into the same `omniglot/` directory
-3.  The conversion should take a few seconds:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -52,7 +58,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/omniglot/`:
+4.  Expect the conversion to take a few seconds.
+5.  Find the following outputs in `$RECORDS/omniglot/`:
     -   1623 tfrecords files named `[0-1622].tfrecords`
     -   `dataset_spec.json`
 
@@ -61,7 +68,7 @@
 1.  Download
     [`fgvc-aircraft-2013b.tar.gz`](http://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/archives/fgvc-aircraft-2013b.tar.gz)
 2.  Extract it into `fgvc-aircraft-2013b`
-3.  The conversion itself should take 5 to 10 minutes:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -70,7 +77,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/aircraft/`:
+4.  Expect the conversion to take 5 to 10 minutes.
+5.  Find the following outputs in `$RECORDS/aircraft/`:
     -   100 tfrecords files named `[0-99].tfrecords`
     -   `dataset_spec.json`
 
@@ -79,7 +87,7 @@
 1.  Download
     [`CUB_200_2011.tgz`](http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz)
 2.  Extract it into `CUB_200_2011/` (and `attributes.txt`)
-3.  The conversion itself should take around one minute:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -88,7 +96,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/cu_birds/`:
+4.  Expect the conversion to take around one minute.
+5.  Find the following outputs in `$RECORDS/cu_birds/`:
     -   200 tfrecords files named `[0-199].tfrecords`
     -   `dataset_spec.json`
 
@@ -97,7 +106,7 @@
 1.  Download
     [`dtd-r1.0.1.tar.gz`](https://www.robots.ox.ac.uk/~vgg/data/dtd/download/dtd-r1.0.1.tar.gz)
 2.  Extract it into `dtd/`
-3.  The conversion itself should take a few seconds:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -106,7 +115,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/dtd/`:
+4.  Expect the conversion to take a few seconds.
+5.  Find the following outputs in `$RECORDS/dtd/`:
     -   47 tfrecords files named `[0-46].tfrecords`
     -   `dataset_spec.json`
 
@@ -121,7 +131,7 @@
         ```bash
         gsutil -m cp gs://quickdraw_dataset/full/numpy_bitmap/*.npy $DATASRC/quickdraw
         ```
-2.  The conversion itself should take 3 to 4 hours:
+2.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -130,7 +140,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-3.  Expected outputs in `$RECORDS/quickdraw/`:
+3.  Expect the conversion to take 3 to 4 hours.
+4.  Find the following outputs in `$RECORDS/quickdraw/`:
     -   345 tfrecords files named `[0-344].tfrecords`
     -   `dataset_spec.json`
 
@@ -142,7 +153,7 @@
     [`train_val_annotations.tgz`](https://data.deic.dk/public.php?service=files&t=8dc110f312677d2b53003de983b3a26e&download)
 2.  Extract them into the same `fungi/` directory. It should contain one
     `images/` directory, as well as `train.json` and `val.json`.
-3.  The conversion should take 5 to 15 minutes:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -151,7 +162,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/fungi/`:
+4.  Expect the conversion to take 5 to 15 minutes.
+4.  Find the following outputs in `$RECORDS/fungi/`:
     -   1394 tfrecords files named `[0-1393].tfrecords`
     -   `dataset_spec.json`
 
@@ -162,7 +174,7 @@
     and
     [`imagelabels.mat`](http://www.robots.ox.ac.uk/~vgg/data/flowers/102/imagelabels.mat)
 2.  Extract `102flowers.tgz`, it will create a `jpg/` sub-directory
-3.  The conversion should take about one minute:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -171,7 +183,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/vgg_flower/`:
+4.  Expect the conversion to take about one minute.
+5.  Find the following outputs in `$RECORDS/vgg_flower/`:
     -   102 tfrecords files named `[0-101].tfrecords`
     -   `dataset_spec.json`
 
@@ -181,7 +194,7 @@
     [`GTSRB_Final_Training_Images.zip`](https://sid.erda.dk/public/archives/daaeac0d7ce1152aea9b61d9f1e19370/GTSRB_Final_Training_Images.zip)
     If the link happens to be broken, browse the GTSRB dataset [website](http://benchmark.ini.rub.de) for more information.
 2.  Extract it in `$DATASRC`, it will create a `GTSRB/` sub-directory
-3.  The conversion should take about one minute:
+3.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -190,7 +203,8 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-4.  Expected outputs in `$RECORDS/traffic_sign/`:
+4.  Expect the conversion to take about one minute.
+4.  Find the following outputs in `$RECORDS/traffic_sign/`:
     -   43 tfrecords files named `[0-42].tfrecords`
     -   `dataset_spec.json`
 
@@ -211,7 +225,7 @@
         [`train2017.zip`](http://images.cocodataset.org/zips/train2017.zip) and
         [`annotations_trainval2017.zip`](http://images.cocodataset.org/annotations/annotations_trainval2017.zip)
         and extract them into `mscoco/`.
-2.  The conversion should take about 4 hours:
+2.  Launch the conversion script:
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -220,6 +234,7 @@
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
-3.  Expected outputs in `$RECORDS/mscoco/`:
+3.  Expect the conversion to take about 4 hours.
+4.  Find the following outputs in `$RECORDS/mscoco/`:
     -   80 tfrecords files named `[0-79].tfrecords`
     -   `dataset_spec.json`
