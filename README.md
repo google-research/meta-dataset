@@ -54,7 +54,9 @@ You can find below a summary of these datasets, as well as instructions to downl
 For brevity of the command line examples, we assume the following environment variables are defined:
 
 - `$DATASRC`: root of where the original data is downloaded and potentially extracted from compressed files. This directory does not need to be available after the data conversion is done.
-- `$SPLITS`: directory where `*_splits.pkl` files will be created, one per dataset. For instance, `$SPLITS/fungi_splits.pkl` contains information about which classes are part of the meta-training, meta-validation, and meta-test set. This is only used during the dataset conversion phase, but can help troubleshooting later.
+- `$SPLITS`: directory where `*_splits.json` files will be created, one per dataset. For instance, `$SPLITS/fungi_splits.json` contains information about which classes are part of the meta-training, meta-validation, and meta-test set.
+  These files are only used during the dataset conversion phase, but can help troubleshooting later.
+  To re-use the [canonical splits](https://github.com/google-research/meta-dataset/tree/master/meta_dataset/dataset_conversion/splits) instead of re-generating them, you can make it point to `meta_dataset/dataset_conversion` in your checkout.
 - `$RECORDS`: root directory that will contain the converted datasets (one per sub-directory). This directory needs to be available during training and evaluation.
 
 ### Dataset summary
@@ -92,59 +94,65 @@ See [Reproducing best results](doc/reproducing_best_results.md) for instructions
 We tried our best to reproduce the original results using the public code on Google Cloud VMs, but there is inherent noise and variability in the computation.
 For transparency, we will include the results of the reproduced experiments as well as the original ones, which were reported in the article. We also include the validation errors on ILSVRC.
 
+#### Notes
+
+1.  The MSCOCO results reported in the v1 version of the arXiv paper were obtained
+    with a different valid/test split. The "repro" version is consistent with the
+    latest version of the splits.
+
 #### Models trained on ILSVRC-2012 only
 
 Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet     | fo-MAML      | Proto-MAML
 ------------------------|--------------|--------------|--------------|--------------|--------------|------------
  ILSVRC valid           |  29.54       |  37.16       |  35.68       |  38.70       |  24.91       |  42.62
-*ILSVRC valid (repro)*  | *29.23*      | *37.51*      | *35.15*      | *37.13*      | *26.14*      | *42.89* 
+*ILSVRC valid (repro)*  | *29.23*      | *37.51*      | *35.15*      | *37.13*      | *26.14*      | *42.89*
  ILSVRC test            |  38.16±1.01  |  47.47±1.10  |  43.89±1.05  |  43.43±1.07  |  29.22±1.00  |  50.23±1.13
-*ILSVRC test (repro)*   | *37.54±1.00* | *46.83±1.01* | *42.34±1.09* | *43.14±1.03* | *30.36±1.05* | *50.41±1.06* 
+*ILSVRC test (repro)*   | *37.54±1.00* | *46.83±1.01* | *42.34±1.09* | *43.14±1.03* | *30.36±1.05* | *50.41±1.06*
  Omniglot               |  59.40±1.31  |  62.97±1.39  |  62.44±1.25  |  60.41±1.35  |  45.42±1.61  |  60.65±1.40
-*Omniglot (repro)*      | *58.73±1.22* | *60.88±1.39* | *59.30±1.28* | *56.39±1.40* | *49.06±1.47* | *60.48±1.37* 
+*Omniglot (repro)*      | *58.73±1.22* | *60.88±1.39* | *59.30±1.28* | *56.39±1.40* | *49.06±1.47* | *60.48±1.37*
  Aircraft               |  44.41±0.92  |  56.35±1.03  |  50.64±0.95  |  48.60±0.88  |  33.81±0.91  |  54.53±0.95
-*Aircraft (repro)*      | *45.22±0.88* | *55.94±1.04* | *48.85±0.96* | *46.32±0.87* | *40.81±0.84* | *53.90±0.96* 
+*Aircraft (repro)*      | *45.22±0.88* | *55.94±1.04* | *48.85±0.96* | *46.32±0.87* | *40.81±0.84* | *53.90±0.96*
  Birds                  |  45.75±0.98  |  61.63±1.03  |  56.36±1.03  |  63.73±1.00  |  39.04±1.17  |  69.71±1.04
-*Birds (repro)*         | *46.20±0.95* | *61.10±1.06* | *58.35±1.05* | *63.50±0.95* | *44.36±0.84* | *68.16±0.98* 
+*Birds (repro)*         | *46.20±0.95* | *61.10±1.06* | *58.35±1.05* | *63.50±0.95* | *44.36±0.84* | *68.16±0.98*
  Textures               |  61.53±0.75  |  67.82±0.86  |  65.55±0.76  |  62.17±0.77  |  50.60±0.74  |  66.68±0.80
-*Textures (repro)*      | *61.87±0.78* | *68.29±0.77* | *64.77±0.87* | *63.15±0.75* | *52.18±0.82* | *65.68±0.79* 
+*Textures (repro)*      | *61.87±0.78* | *68.29±0.77* | *64.77±0.87* | *63.15±0.75* | *52.18±0.82* | *65.68±0.79*
  Quick Draw             |  46.42±1.10  |  50.89±1.15  |  50.24±1.12  |  50.53±0.97  |  24.33±1.39  |  49.03±1.12
-*Quick Draw (repro)*    | *51.42±1.05* | *58.11±1.02* | *54.35±1.02* | *53.62±0.98* | *36.15±1.33* | *56.57±1.02* 
+*Quick Draw (repro)*    | *51.42±1.05* | *58.11±1.02* | *54.35±1.02* | *53.62±0.98* | *36.15±1.33* | *56.57±1.02*
  Fungi                  |  29.91±0.93  |  33.01±1.06  |  33.66±1.00  |  35.95±1.09  |  16.36±0.86  |  39.04±1.03
-*Fungi (repro)*         | *29.88±1.00* | *32.81±1.00* | *32.65±1.00* | *36.02±1.05* | *19.43±0.93* | *39.66±1.12* 
+*Fungi (repro)*         | *29.88±1.00* | *32.81±1.00* | *32.65±1.00* | *36.02±1.05* | *19.43±0.93* | *39.66±1.12*
  VGG Flower             |  77.23±0.74  |  82.30±0.85  |  80.21±0.74  |  79.47±0.81  |  56.01±1.22  |  85.78±0.80
-*VGG Flower (repro)*    | *76.47±0.75* | *83.26±0.80* | *79.57±0.75* | *75.93±0.77* | *63.00±1.02* | *85.75±0.72* 
+*VGG Flower (repro)*    | *76.47±0.75* | *83.26±0.80* | *79.57±0.75* | *75.93±0.77* | *63.00±1.02* | *85.75±0.72*
  Traffic signs          |  58.42±1.28  |  55.67±1.19  |  59.64±1.20  |  46.93±1.11  |  23.53±1.17  |  47.83±1.03
-*Traffic signs (repro)* | *57.68±1.24* | *57.13±1.20* | *58.65±1.19* | *44.49±1.10* | *26.08±1.12* | *49.17±1.10* 
- MSCOCO                 |  31.46±1.00  |  33.77±1.37  |  29.83±1.15  |  35.24±1.11  |  13.47±1.04  |  38.06±1.17
-*MSCOCO (repro)*        | *38.50±1.01* | *43.44±1.12* | *40.10±1.01* | *40.96±1.04* | *24.69±1.09* | *44.43±1.12* 
+*Traffic signs (repro)* | *57.68±1.24* | *57.13±1.20* | *58.65±1.19* | *44.49±1.10* | *26.08±1.12* | *49.17±1.10*
+MSCOCO ([note 1](#notes))| 31.46±1.00  |  33.77±1.37  |  29.83±1.15  |  35.24±1.11  |  13.47±1.04  |  38.06±1.17
+*MSCOCO (repro)*        | *35.66±0.99* | *37.56±1.10* | *35.67±0.98* | *38.35±1.02* | *21.03±1.02* | *37.65±1.04*
 
 #### Models trained on all datasets
 
 Evaluation Dataset      | k-NN         | Finetune     | MatchingNet  | ProtoNet     | fo-MAML      | Proto-MAML
 ------------------------|--------------|--------------|--------------|--------------|--------------|------------
- ILSVRC valid           |  25.26       |  32.43       |  34.70       |  37.22       |  21.12       |  39.67 
-*ILSVRC valid (repro)*  | *23.94*      | *27.98*      | *34.06*      | *36.34*      | *19.73*      | *39.86* 
+ ILSVRC valid           |  25.26       |  32.43       |  34.70       |  37.22       |  21.12       |  39.67
+*ILSVRC valid (repro)*  | *23.94*      | *27.98*      | *34.06*      | *36.34*      | *19.73*      | *39.86*
  ILSVRC test            |  28.46±0.83  |  39.68±1.02  |  40.81±1.02  |  41.82±1.06  |  22.41±0.80  |  45.48±1.02
-*ILSVRC test (repro)*   | *28.43±0.90* | *31.96±0.98* | *39.43±1.05* | *40.99±1.04* | *22.44±0.82* | *46.70±1.08* 
+*ILSVRC test (repro)*   | *28.43±0.90* | *31.96±0.98* | *39.43±1.05* | *40.99±1.04* | *22.44±0.82* | *46.70±1.08*
  Omniglot               |  88.42±0.63  |  85.57±0.89  |  75.62±1.09  |  78.61±1.10  |  68.14±1.35  |  86.26±0.85
-*Omniglot (repro)*      | *88.25±0.66* | *86.19±0.88* | *74.95±1.06* | *80.91±0.98* | *68.34±1.31* | *82.31±0.99* 
+*Omniglot (repro)*      | *88.25±0.66* | *86.19±0.88* | *74.95±1.06* | *80.91±0.98* | *68.34±1.31* | *82.31±0.99*
  Aircraft               |  70.10±0.73  |  69.81±0.93  |  60.68±0.87  |  66.57±0.92  |  44.48±0.91  |  79.15±0.67
-*Aircraft (repro)*      | *65.15±0.73* | *65.08±0.88* | *59.56±0.92* | *70.11±0.86* | *44.39±0.95* | *73.53±0.82* 
+*Aircraft (repro)*      | *65.15±0.73* | *65.08±0.88* | *59.56±0.92* | *70.11±0.86* | *44.39±0.95* | *73.53±0.82*
  Birds                  |  47.34±0.97  |  54.07±1.08  |  57.09±0.95  |  63.57±1.02  |  36.70±1.13  |  72.67±0.96
-*Birds (repro)*         | *47.42±0.95* | *50.57±1.05* | *57.45±0.98* | *63.07±1.10* | *36.13±1.13* | *71.77±0.93* 
+*Birds (repro)*         | *47.42±0.95* | *50.57±1.05* | *57.45±0.98* | *63.07±1.10* | *36.13±1.13* | *71.77±0.93*
  Textures               |  56.39±0.74  |  62.66±0.81  |  64.65±0.77  |  66.60±0.80  |  45.79±0.67  |  66.69±0.77
-*Textures (repro)*      | *55.74±0.71* | *54.82±0.83* | *65.97±0.78* | *65.99±0.79* | *43.05±0.95* | *66.32±0.77* 
+*Textures (repro)*      | *55.74±0.71* | *54.82±0.83* | *65.97±0.78* | *65.99±0.79* | *43.05±0.95* | *66.32±0.77*
  Quick Draw             |  66.12±0.91  |  73.88±0.81  |  58.86±1.01  |  63.55±0.92  |  41.27±1.46  |  67.83±0.90
-*Quick Draw (repro)*    | *65.51±0.88* | *72.66±0.83* | *61.80±0.97* | *67.81±0.90* | *42.61±1.43* | *69.69±0.89* 
+*Quick Draw (repro)*    | *65.51±0.88* | *72.66±0.83* | *61.80±0.97* | *67.81±0.90* | *42.61±1.43* | *69.69±0.89*
  Fungi                  |  38.35±1.08  |  31.85±1.08  |  34.38±1.01  |  37.97±1.07  |  14.21±0.81  |  44.58±1.19
-*Fungi (repro)*         | *37.59±1.04* | *30.37±0.94* | *34.16±0.98* | *38.42±1.16* | *14.16±0.80* | *42.971.13±* 
+*Fungi (repro)*         | *37.59±1.04* | *30.37±0.94* | *34.16±0.98* | *38.42±1.16* | *14.16±0.80* | *42.971.13±*
  VGG Flower             |  73.21±0.75  |  77.55±0.94  |  82.60±0.66  |  84.43±0.69  |  61.10±1.11  |  88.21±0.68
-*VGG Flower (repro)*    | *74.41±0.74* | *72.33±1.01* | *82.40±0.70* | *85.21±0.67* | *58.75±1.12* | *88.11±0.70* 
+*VGG Flower (repro)*    | *74.41±0.74* | *72.33±1.01* | *82.40±0.70* | *85.21±0.67* | *58.75±1.12* | *88.11±0.70*
  Traffic signs          |  49.84±1.23  |  53.07±1.13  |  57.90±1.16  |  50.60±1.02  |  24.03±1.08  |  46.38±1.03
-*Traffic signs (repro)* | *49.61±1.25* | *52.03±1.22* | *57.92±1.17* | *49.63±1.01* | *23.29±1.03* | *48.74±1.11* 
- MSCOCO                 |  24.29±0.92  |  27.71±1.20  |  30.20±1.13  |  37.58±1.14  |  13.63±0.96  |  35.12±1.20
-*MSCOCO (repro)*        | *30.34±0.93* | *33.71±1.02* | *39.48±1.06* | *42.53±1.08* | *17.11±0.88* | *42.94±1.10* 
+*Traffic signs (repro)* | *49.61±1.25* | *52.03±1.22* | *57.92±1.17* | *49.63±1.01* | *23.29±1.03* | *48.74±1.11*
+MSCOCO ([note 1](#notes))| 24.29±0.92  |  27.71±1.20  |  30.20±1.13  |  37.58±1.14  |  13.63±0.96  |  35.12±1.20
+*MSCOCO (repro)*        | *27.88±0.86* | *28.40±0.95* | *36.38±1.06* | *40.30±1.05* | *16.12±0.88* | *41.64±1.08*
 
 ### Hyperparameter search
 

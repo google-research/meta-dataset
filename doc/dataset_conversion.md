@@ -33,8 +33,8 @@
     ```
 6.  Expected outputs in `$RECORDS/ilsvrc_2012/`:
     -   1000 tfrecords files named `[0-999].tfrecords`
-    -   `dataset_spec.pkl`
-    -   `num_leaf_images.pkl`
+    -   `dataset_spec.json`
+    -   `num_leaf_images.json`
 
 ## omniglot
 
@@ -54,7 +54,7 @@
     ```
 4.  Expected outputs in `$RECORDS/omniglot/`:
     -   1623 tfrecords files named `[0-1622].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## aircraft
 
@@ -72,7 +72,7 @@
     ```
 4.  Expected outputs in `$RECORDS/aircraft/`:
     -   100 tfrecords files named `[0-99].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## cu_birds
 
@@ -90,7 +90,7 @@
     ```
 4.  Expected outputs in `$RECORDS/cu_birds/`:
     -   200 tfrecords files named `[0-199].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## dtd
 
@@ -108,7 +108,7 @@
     ```
 4.  Expected outputs in `$RECORDS/dtd/`:
     -   47 tfrecords files named `[0-46].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## quickdraw
 
@@ -132,7 +132,7 @@
     ```
 3.  Expected outputs in `$RECORDS/quickdraw/`:
     -   345 tfrecords files named `[0-344].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## fungi
 
@@ -153,7 +153,7 @@
     ```
 4.  Expected outputs in `$RECORDS/fungi/`:
     -   1394 tfrecords files named `[0-1393].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## vgg_flower
 
@@ -173,7 +173,7 @@
     ```
 4.  Expected outputs in `$RECORDS/vgg_flower/`:
     -   102 tfrecords files named `[0-101].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## traffic_sign
 
@@ -192,7 +192,7 @@
     ```
 4.  Expected outputs in `$RECORDS/traffic_sign/`:
     -   43 tfrecords files named `[0-42].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
 
 ## mscoco
 
@@ -222,4 +222,4 @@
     ```
 3.  Expected outputs in `$RECORDS/mscoco/`:
     -   80 tfrecords files named `[0-79].tfrecords`
-    -   `dataset_spec.pkl`
+    -   `dataset_spec.json`
