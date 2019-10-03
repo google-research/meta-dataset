@@ -112,8 +112,8 @@ tf.flags.DEFINE_enum(
 
 def get_value_from_pkl(pickle_file, param_name):
   """Gets the value associated with param_name in the given pickle file."""
-  if tf.gfile.Exists(pickle_file):
-    with tf.gfile.Open(pickle_file, 'rb') as f:
+  if tf.io.gfile.exists(pickle_file):
+    with tf.io.gfile.GFile(pickle_file, 'rb') as f:
       params = pkl.load(f)
       if param_name not in params:
         logging.info('The dict in %s does not have the key %s', pickle_file,
@@ -195,8 +195,8 @@ def get_paths_to_events(root_dir,
             valid_variant_name)
 
   variant_names = [
-      fname for fname in tf.gfile.ListDirectory(summary_dir)
-      if tf.gfile.IsDirectory(os.path.join(summary_dir, fname))
+      fname for fname in tf.io.gfile.listdir(summary_dir)
+      if tf.io.gfile.isdir(os.path.join(summary_dir, fname))
   ]
 
   # Further filter variant names based on the given restrictions.
@@ -212,7 +212,7 @@ def get_paths_to_events(root_dir,
   event_paths = {}
   for variant_path, variant_name in zip(variant_paths, variant_names):
     event_filenames = [
-        f_name for f_name in tf.gfile.ListDirectory(variant_path)
+        f_name for f_name in tf.io.gfile.listdir(variant_path)
         if f_name.startswith('events.out.tfevents')
     ]
 
@@ -341,13 +341,13 @@ def main(argv):
 
     output_path_pklz = os.path.join(root_experiment_dir,
                                     '{}.pklz'.format(description))
-    with tf.gfile.Open(output_path_pklz, 'wb') as f:
+    with tf.io.gfile.GFile(output_path_pklz, 'wb') as f:
       pkl.dump(output_dict, f, protocol=pkl.HIGHEST_PROTOCOL)
 
     # Also write this info as a .txt file for easier reading.
     output_path_txt = os.path.join(root_experiment_dir,
                                    '{}.txt'.format(description))
-    with tf.gfile.Open(output_path_txt, 'w') as f:
+    with tf.io.gfile.GFile(output_path_txt, 'w') as f:
       f.write(
           'best_variant: {}\nbest_valid_acc: {}\nbest_update_num: {}\n'.format(
               best_variant, best_valid_acc, best_step))

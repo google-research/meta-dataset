@@ -805,7 +805,7 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
   """
   if path:
     logging.info('Attempting to read number of leaf images from %s...', path)
-    if tf.gfile.Exists(path):
+    if tf.io.gfile.exists(path):
       with tf.io.gfile.GFile(path, 'r') as f:
         num_synset_2012_images = json.load(f)
         logging.info('Successful.')
@@ -819,7 +819,7 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
     synset_dir = os.path.join(FLAGS.ilsvrc_2012_data_root, s_2012.wn_id)
     # Size of the set difference (-) between listed files and `files_to_skip`.
     num_synset_2012_images[s_2012.wn_id] = len(
-        set(tf.gfile.ListDirectory(synset_dir)) - files_to_skip)
+        set(tf.io.gfile.listdir(synset_dir)) - files_to_skip)
 
   if path:
     with tf.io.gfile.GFile(path, 'w') as f:
@@ -972,10 +972,10 @@ def create_imagenet_specification(split_enum,
       synsets[child].parents.add(synsets[parent])
 
   # Get the WordNet id's of the synsets of ILSVRC 2012.
-  wn_ids_2012 = tf.gfile.ListDirectory(data_root)
+  wn_ids_2012 = tf.io.gfile.listdir(data_root)
   wn_ids_2012 = set(
       entry for entry in wn_ids_2012
-      if tf.gfile.IsDirectory(os.path.join(data_root, entry)))
+      if tf.io.gfile.isdir(os.path.join(data_root, entry)))
   synsets_2012 = [s for s in synsets.values() if s.wn_id in wn_ids_2012]
   assert len(wn_ids_2012) == len(synsets_2012)
 

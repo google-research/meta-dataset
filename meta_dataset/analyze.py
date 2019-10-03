@@ -432,7 +432,7 @@ def read_data(input_path, do_finegrainedness_analysis, do_imbalance_analysis):
 
 def write_pkl(output_data, output_path):
   """Save output_data to the pickle at output_path."""
-  with tf.gfile.Open(output_path, 'wb') as f:
+  with tf.io.gfile.GFile(output_path, 'wb') as f:
     pkl.dump(output_data, f, protocol=pkl.HIGHEST_PROTOCOL)
   logging.info('Dumped data with keys: %s to location %s',
                list(output_data.keys()), output_path)
@@ -440,8 +440,8 @@ def write_pkl(output_data, output_path):
 
 def read_pkl(output_path):
   """Returns the contents of a pickle file or False if it doesn't exist."""
-  if tf.gfile.Exists(output_path):
-    with tf.gfile.Open(output_path, 'rb') as f:
+  if tf.io.gfile.exists(output_path):
+    with tf.io.gfile.GFile(output_path, 'rb') as f:
       data = pkl.load(f)
       logging.info('Read data with keys: %s', list(data.keys()))
       return data
@@ -460,19 +460,19 @@ def get_event_files(root_dir):
   """
   paths_to_events = []
   summaries_dir = os.path.join(root_dir, 'summaries')
-  assert tf.gfile.IsDirectory(summaries_dir), (
-      'Could not find summaries in %s.' % root_dir)
+  assert tf.io.gfile.isdir(summaries_dir), ('Could not find summaries in %s.' %
+                                            root_dir)
 
   if int(FLAGS.restrict_to_subexperiment) > 0:
     child_dirs = [os.path.join(summaries_dir, FLAGS.restrict_to_subexperiment)]
   else:
     child_dirs = [
         os.path.join(summaries_dir, f)
-        for f in tf.gfile.ListDirectory(summaries_dir)
+        for f in tf.io.gfile.listdir(summaries_dir)
     ]
   logging.info('Looking for events in dirs: %s', child_dirs)
   for child_dir in child_dirs:
-    for file_name in tf.gfile.ListDirectory(child_dir):
+    for file_name in tf.io.gfile.listdir(child_dir):
       if 'event' in file_name:
         paths_to_events.append(os.path.join(child_dir, file_name))
   logging.info('Found events: %s', paths_to_events)

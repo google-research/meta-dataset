@@ -489,8 +489,8 @@ class Trainer(object):
     self.saver = tf.train.Saver(var_list=vars_to_restore, max_to_keep=500)
 
     if self.checkpoint_dir is not None:
-      if not tf.gfile.Exists(self.checkpoint_dir):
-        tf.gfile.MakeDirs(self.checkpoint_dir)
+      if not tf.io.gfile.exists(self.checkpoint_dir):
+        tf.io.gfile.makedirs(self.checkpoint_dir)
 
     # Initialize a Session.
     self.initialize_session()
@@ -564,8 +564,8 @@ class Trainer(object):
     self.summary_writer = None
     if self.summary_dir is not None:
       self.summary_writer = tf.summary.FileWriter(self.summary_dir)
-      if not tf.gfile.Exists(self.summary_dir):
-        tf.gfile.MakeDirs(self.summary_dir)
+      if not tf.io.gfile.exists(self.summary_dir):
+        tf.io.gfile.makedirs(self.summary_dir)
 
   def create_train_learner(self, train_learner_class, episode_or_batch):
     """Instantiates a train learner.

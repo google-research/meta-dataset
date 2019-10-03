@@ -177,8 +177,8 @@ def main(unused_argv):
                                 'operative_config.gin')
     # If it exists already, rename it instead of overwriting it.
     # This just saves the previous one, not all the ones before.
-    if tf.gfile.Exists(gin_log_file):
-      tf.gfile.Rename(gin_log_file, gin_log_file + '.old', overwrite=True)
+    if tf.io.gfile.exists(gin_log_file):
+      tf.io.gfile.rename(gin_log_file, gin_log_file + '.old', overwrite=True)
     with tf.io.gfile.GFile(gin_log_file, 'w') as f:
       f.write(gin_operative_config)
 
