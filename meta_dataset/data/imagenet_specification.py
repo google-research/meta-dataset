@@ -30,6 +30,8 @@ from __future__ import print_function
 
 import json
 import os
+
+from absl import logging
 from meta_dataset.data import imagenet_stats
 import numpy as np
 import six
@@ -369,8 +371,8 @@ def propose_valid_test_roots(spanning_leaves,
 
   # For displaying the list of candidates
   for cand in valid_candidates:
-    tf.logging.info('Candidate {}, {} with {} spanning leaves'.format(
-        cand.words, cand.wn_id, len(spanning_leaves[cand])))
+    logging.info('Candidate %s, %s with %d spanning leaves', cand.words,
+                 cand.wn_id, len(spanning_leaves[cand]))
 
   # Propose the first possible candidate for each of validation and test
   valid_root = valid_candidates[0]
@@ -435,7 +437,7 @@ def get_class_splits(spanning_leaves, valid_test_roots=None, **kwargs):
   # assigning each overlapping leaf to either validation or test classes
   # (roughly equally).
   overlap = [s for s in valid_wn_ids if s in test_wn_ids]
-  tf.logging.info('Size of overlap: {} leaves'.format(len(overlap)))
+  logging.info('Size of overlap: %d leaves', len(overlap))
   assign_to_valid = True
   for s in overlap:
     if assign_to_valid:
@@ -802,15 +804,14 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
     images.
   """
   if path:
-    tf.logging.info(
-        'Attempting to read number of leaf images from {}...'.format(path))
+    logging.info('Attempting to read number of leaf images from %s...', path)
     if tf.gfile.Exists(path):
       with tf.io.gfile.GFile(path, 'r') as f:
         num_synset_2012_images = json.load(f)
-        tf.logging.info('Successful.')
+        logging.info('Successful.')
         return num_synset_2012_images
 
-  tf.logging.info('Unsuccessful. Deriving number of leaf images...')
+  logging.info('Unsuccessful. Deriving number of leaf images...')
   if files_to_skip is None:
     files_to_skip = set()
   num_synset_2012_images = {}

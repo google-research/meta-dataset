@@ -41,6 +41,8 @@ import json
 import operator
 import os
 import traceback
+
+from absl import logging
 from meta_dataset.data import dataset_spec as ds_spec
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
@@ -117,14 +119,11 @@ tf.flags.DEFINE_string(
 
 # Output flags.
 tf.flags.DEFINE_string(
-    'records_root',
-    '',
+    'records_root', '',
     'The root directory storing all tf.Records of datasets.')
 
-tf.flags.DEFINE_string(
-    'splits_root',
-    '',
-    'The root directory storing the splits of datasets.')
+tf.flags.DEFINE_string('splits_root', '',
+                       'The root directory storing the splits of datasets.')
 
 FLAGS = tf.flags.FLAGS
 DEFAULT_FILE_PATTERN = '{}.tfrecords'
@@ -193,7 +192,7 @@ def gen_rand_split_inds(num_train_classes, num_valid_classes, num_test_classes):
   train_inds = np.random.choice(trainval_inds, num_train_classes, replace=False)
   valid_inds = np.setdiff1d(trainval_inds, train_inds)
 
-  tf.logging.info(
+  logging.info(
       'Created splits with %d train, %d validation and %d test classes.',
       len(train_inds), len(valid_inds), len(test_inds))
   return train_inds, valid_inds, test_inds
@@ -304,7 +303,7 @@ def write_tfrecord_from_image_files(class_files,
     try:
       img = Image.open(io.BytesIO(image_bytes))
     except:
-      tf.logging.warn('Failed to open image: {}'.format(path))
+      logging.warn('Failed to open image: %s', path)
       raise
 
     img_needs_encoding = False
@@ -337,7 +336,7 @@ def write_tfrecord_from_image_files(class_files,
       img = load_and_process_image(path, bbox)
     except (IOError, tf.errors.PermissionDeniedError) as e:
       if skip_on_error:
-        tf.logging.warn('While trying to load file %s, got error: %s', path, e)
+        logging.warn('While trying to load file %s, got error: %s', path, e)
       else:
         raise
     else:
@@ -378,7 +377,7 @@ def write_tfrecord_from_directory(class_directory,
   filenames = sorted(tf.gfile.ListDirectory(class_directory))
   for filename in filenames:
     if filename in files_to_skip:
-      tf.logging.info('skipping file %s', filename)
+      logging.info('skipping file %s', filename)
       continue
     filepath = os.path.join(class_directory, filename)
     if tf.gfile.IsDirectory(filepath):
@@ -586,19 +585,19 @@ class DatasetConverter(object):
       A splits dictionary mapping each split to a list of class names belonging
       to it, or False upon failure (e.g. the splits do not exist).
     """
-    tf.logging.info('Attempting to read splits from %s...', self.split_file)
+    logging.info('Attempting to read splits from %s...', self.split_file)
     if tf.gfile.Exists(self.split_file):
       with tf.io.gfile.GFile(self.split_file, 'r') as f:
         try:
           splits = json.load(f)
         except json.decoder.JSONDecodeError:
-          tf.logging.info('Unsuccessful: file exists, but loading failed. %s',
-                          traceback.format_exc())
+          logging.info('Unsuccessful: file exists, but loading failed. %s',
+                       traceback.format_exc())
           return False
-        tf.logging.info('Successful.')
+        logging.info('Successful.')
         return splits
     else:
-      tf.logging.info('Unsuccessful.')
+      logging.info('Unsuccessful.')
       return False
 
   def write_data_spec(self):
@@ -638,11 +637,11 @@ class DatasetConverter(object):
     splits = self.create_splits()
 
     # Finally, write the splits in the designated location.
-    tf.logging.info('Saving new splits for dataset %s at %s...', self.name,
-                    self.split_file)
+    logging.info('Saving new splits for dataset %s at %s...', self.name,
+                 self.split_file)
     with tf.io.gfile.GFile(self.split_file, 'w') as f:
       json.dump(splits, f, indent=2)
-    tf.logging.info('Done.')
+    logging.info('Done.')
 
     return splits
 
@@ -903,8 +902,8 @@ class CUBirdsConverter(DatasetConverter):
     all_classes = list(
         itertools.chain(train_classes, valid_classes, test_classes))
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
-                      class_label)
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_label)
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_label
@@ -976,8 +975,8 @@ class VGGFlowerConverter(DatasetConverter):
     #   - test class IDs lie in
     #     [num_train_classes + num_validation_classes, num_classes).
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
-                      class_label)
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_label)
       class_paths = filepaths[class_label]
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
@@ -1037,8 +1036,8 @@ class DTDConverter(DatasetConverter):
         itertools.chain(train_classes, valid_classes, test_classes))
 
     for class_id, class_name in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
-                      class_name)
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_name)
       class_directory = os.path.join(self.data_root, 'images', class_name)
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
@@ -1155,8 +1154,8 @@ class AircraftConverter(DatasetConverter):
     assert set(variants_to_names.keys()) == set(all_classes)
 
     for class_id, class_name in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
-                      class_name)
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_name)
       class_files = [
           os.path.join(self.data_root, 'data', 'images',
                        '{}.jpg'.format(filename))
@@ -1215,7 +1214,7 @@ class TrafficSignConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
     for class_id in test_classes:
-      tf.logging.info('Creating record for class ID %d...', class_id)
+      logging.info('Creating record for class ID %d...', class_id)
       # The raw dataset file uncompresses to `GTSRB/Final_Training/Images/`.
       # The `Images` subdirectory contains 43 subdirectories (one for each
       # class) whose names are zero-padded, 5-digit strings representing the
@@ -1368,14 +1367,14 @@ class MSCOCOConverter(DatasetConverter):
       try:
         image_crop, class_id = get_image_crop_and_class_id(annotation)
       except IOError:
-        tf.logging.warning('Image can not be opened and will be skipped.')
+        logging.warning('Image can not be opened and will be skipped.')
         continue
       except ValueError:
-        tf.logging.warning('Image can not be cropped and will be skipped.')
+        logging.warning('Image can not be cropped and will be skipped.')
         continue
 
-      tf.logging.info('writing image %d/%d', i,
-                      len(self.coco_instance_annotations))
+      logging.info('writing image %d/%d', i,
+                   len(self.coco_instance_annotations))
 
       # TODO(manzagop): refactor this, e.g. use write_tfrecord_from_image_files.
       image_crop_bytes = io.BytesIO()
@@ -1596,8 +1595,8 @@ class FungiConverter(DatasetConverter):
     all_classes = list(
         itertools.chain(train_classes, valid_classes, test_classes))
     for class_id, class_label in enumerate(all_classes):
-      tf.logging.info('Creating record for class ID %d (%s)...', class_id,
-                      class_label)
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_label)
       # Extract the "category_id" information from the class label
       category_id = int(class_label[:4])
       # Check that the key is actually in `class_filepaths`, so that an empty
@@ -1669,7 +1668,7 @@ class MiniImageNetConverter(DatasetConverter):
       # We sort class names to make the dataset creation deterministic
       names = sorted(data['class_dict'].keys())
       for class_id, class_name in zip(classes, names):
-        tf.logging.info('Creating record class %d', class_id)
+        logging.info('Creating record class %d', class_id)
         class_records_path = os.path.join(self.records_path,
                                           self.file_pattern.format(class_id))
         self.class_names[class_id] = class_name

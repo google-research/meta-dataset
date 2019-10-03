@@ -25,6 +25,8 @@ from __future__ import print_function
 
 import collections
 import os
+
+from absl import logging
 import gin.tf
 from meta_dataset import learner
 from meta_dataset.data import dataset_spec as dataset_spec_lib
@@ -359,10 +361,10 @@ class Trainer(object):
 
     if eval_finegrainedness or eval_imbalance_dataset:
       # We restrict this analysis to the binary classification setting.
-      tf.logging.info(
-          'Forcing the number of {} classes to be 2, since '
+      logging.info(
+          'Forcing the number of %s classes to be 2, since '
           'the finegrainedness analysis is applied on binary '
-          'classification tasks only.'.format(eval_finegrainedness_split))
+          'classification tasks only.', eval_finegrainedness_split)
       if eval_finegrainedness and eval_finegrainedness_split == 'train':
         train_episode_config.num_ways = 2
       else:
@@ -381,7 +383,7 @@ class Trainer(object):
     self.eval_episode_config = eval_episode_config
 
     if self.learn_config.transductive_batch_norm:
-      tf.logging.warn('Using transductive batch norm!')
+      logging.warn('Using transductive batch norm!')
 
     # Only applicable for non-transudctive batch norm. The correct
     # implementation here involves computing the mean and variance based on the
@@ -473,16 +475,17 @@ class Trainer(object):
     # Omit from reloading any variables that contains as a substring anything in
     # the following list. For example, those that track iterator state, as
     # iterator state is not saved.
-    tf.logging.info('Omitting from saving / reloading any variable that '
-                    'contains any of the following substrings: %s' %
-                    omit_from_saving_and_reloading)
+    logging.info(
+        'Omitting from saving / reloading any variable that '
+        'contains any of the following substrings: %s',
+        omit_from_saving_and_reloading)
     for var in tf.global_variables():
       if not any([
           substring in var.name for substring in omit_from_saving_and_reloading
       ]):
         vars_to_restore.append(var)
       else:
-        tf.logging.info('Omitting variable %s' % var.name)
+        logging.info('Omitting variable %s', var.name)
     self.saver = tf.train.Saver(var_list=vars_to_restore, max_to_keep=500)
 
     if self.checkpoint_dir is not None:
@@ -655,7 +658,7 @@ class Trainer(object):
           splits.add('valid')
 
       # Add this dataset to the benchmark.
-      tf.logging.info('Adding dataset {}'.format(data_spec.name))
+      logging.info('Adding dataset %s', data_spec.name)
       data_spec_list.append(data_spec)
       has_dag_ontology.append(has_dag)
       has_bilevel_ontology.append(is_bilevel)
@@ -680,8 +683,8 @@ class Trainer(object):
       for split in splits_to_contribute:
         splits_to_datasets[split].append(dataset_spec.name)
     for split, datasets in splits_to_datasets.items():
-      tf.logging.info('Episodes for split {} will be created from {}'.format(
-          split, datasets))
+      logging.info('Episodes for split %s will be created from %s', split,
+                   datasets)
 
     return benchmark_spec
 
@@ -711,8 +714,8 @@ class Trainer(object):
     if self.learner_config.checkpoint_for_eval:
       # Requested a specific checkpoint.
       self.saver.restore(self.sess, self.learner_config.checkpoint_for_eval)
-      tf.logging.info('Restored checkpoint: %s' %
-                      self.learner_config.checkpoint_for_eval)
+      logging.info('Restored checkpoint: %s',
+                   self.learner_config.checkpoint_for_eval)
     else:
       # Continue from the latest checkpoint if one exists.
       # This handles fault-tolerance.
@@ -721,9 +724,9 @@ class Trainer(object):
         latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
       if latest_checkpoint:
         self.saver.restore(self.sess, latest_checkpoint)
-        tf.logging.info('Restored checkpoint: %s' % latest_checkpoint)
+        logging.info('Restored checkpoint: %s', latest_checkpoint)
       else:
-        tf.logging.info('No previous checkpoint.')
+        logging.info('No previous checkpoint.')
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(tf.local_variables_initializer())
 
@@ -733,8 +736,8 @@ class Trainer(object):
     if self.learner_config.pretrained_checkpoint and not self.sess.run(
         tf.train.get_global_step()):
       self.saver.restore(self.sess, self.learner_config.pretrained_checkpoint)
-      tf.logging.info('Restored checkpoint: %s' %
-                      self.learner_config.pretrained_checkpoint)
+      logging.info('Restored checkpoint: %s',
+                   self.learner_config.pretrained_checkpoint)
       # We only want the embedding weights of the checkpoint we just restored.
       # So we re-initialize everything that's not an embedding weight. Also,
       # since this episodic finetuning procedure is a different optimization
@@ -749,10 +752,10 @@ class Trainer(object):
           continue
         vars_to_reinit.append(var)
         vars_to_reinit_names.append(var.name)
-      tf.logging.info('Initializing all variables except for %s.' %
-                      embedding_var_names)
+      logging.info('Initializing all variables except for %s.',
+                   embedding_var_names)
       self.sess.run(tf.variables_initializer(vars_to_reinit))
-      tf.logging.info('Re-initialized vars %s.' % vars_to_reinit_names)
+      logging.info('Re-initialized vars %s.', vars_to_reinit_names)
 
   def _create_held_out_specification(self, split='test'):
     """Create an EpisodeSpecification for either validation or testing.
@@ -995,7 +998,7 @@ class Trainer(object):
   def train(self):
     """The training loop."""
     global_step = self.sess.run(tf.train.get_global_step())
-    tf.logging.info('Starting training from global_step: %d', global_step)
+    logging.info('Starting training from global_step: %d', global_step)
     updated_global_step = self.get_updated_global_step()
 
     # Dummy variables so that logging works even if called before evaluation.
@@ -1021,7 +1024,7 @@ class Trainer(object):
             'Update %d. Train loss: %f, Train accuracy: %f, '
             'Valid accuracy %f +/- %f.\n' %
             (global_step, train_loss, train_acc, self.valid_acc, self.valid_ci))
-        tf.logging.info(message)
+        logging.info(message)
 
         # Update summaries.
         summaries = self.sess.run(self.standard_summaries)
@@ -1033,7 +1036,7 @@ class Trainer(object):
         save_path = self.saver.save(
             self.sess,
             os.path.join(self.checkpoint_dir, 'model_%d.ckpt' % global_step))
-        tf.logging.info('Model checkpoint saved: %s' % save_path)
+        logging.info('Model checkpoint saved: %s', save_path)
 
   def maybe_evaluate(self, global_step):
     """Maybe perform evaluation, depending on the value of global_step."""
@@ -1053,9 +1056,8 @@ class Trainer(object):
   def evaluate(self, split):
     """Returns performance metrics across num_eval_trials episodes / batches."""
     num_eval_trials = self.learn_config.num_eval_episodes
-    tf.logging.info(
-        'Performing evaluation of the %s split using %d episodes...' %
-        (split, num_eval_trials))
+    logging.info('Performing evaluation of the %s split using %d episodes...',
+                 split, num_eval_trials)
     accuracies = []
     for eval_trial_num in range(num_eval_trials):
       acc, summaries = self.sess.run(
@@ -1064,13 +1066,13 @@ class Trainer(object):
       # Write evaluation summaries.
       if split == self.eval_split and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
-    tf.logging.info('Done.')
+    logging.info('Done.')
 
     mean_acc = np.mean(accuracies)
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
 
     if split == 'test':
-      tf.logging.info('Test accuracy: %f, +/- %f.\n' % (mean_acc, ci_acc))
+      logging.info('Test accuracy: %f, +/- %f.\n', mean_acc, ci_acc)
 
     mean_acc_summary = tf.Summary()
     mean_acc_summary.value.add(tag='mean %s acc' % split, simple_value=mean_acc)

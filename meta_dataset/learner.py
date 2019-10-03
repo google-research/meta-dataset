@@ -21,6 +21,8 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+
+from absl import logging
 import gin.tf
 import six
 from six.moves import range
@@ -472,7 +474,7 @@ def _four_layer_convnet(inputs,
       else:
         layer = tf.nn.relu(layer)
       layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
-      tf.logging.info('Output of block %d: %s' % (i, layer.shape))
+      logging.info('Output of block %d: %s', i, layer.shape)
 
     model_params = collections.OrderedDict(
         zip(model_params_keys, model_params_vars))
@@ -784,7 +786,7 @@ class PrototypicalNetworkLearner(Learner):
 
     # Hyperparameters.
     self.weight_decay = weight_decay
-    tf.logging.info('PrototypicalLearner: weight_decay {}'.format(weight_decay))
+    logging.info('PrototypicalLearner: weight_decay %s', weight_decay)
 
     # Parameters for embedding function depending on meta-training or not.
     self.forward_pass()
@@ -871,8 +873,7 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
 
     self.exact_cosine_distance = exact_cosine_distance
     self.weight_decay = weight_decay
-    tf.logging.info(
-        'MatchingNetworkLearner: weight_decay {}'.format(weight_decay))
+    logging.info('MatchingNetworkLearner: weight_decay %s', weight_decay)
 
   def compute_logits(self):
     """Computes the class logits.
@@ -1124,9 +1125,9 @@ class BaselineLearner(Learner):
     # Hyperparameters.
     self.weight_decay = weight_decay
     self.distance = knn_distance
-    tf.logging.info(
-        'BaselineLearner: distance {}, weight_decay {}, cosine_classifier: {}'
-        .format(knn_distance, weight_decay, cosine_classifier))
+    logging.info(
+        'BaselineLearner: distance %s, weight_decay %s, cosine_classifier: %s',
+        knn_distance, weight_decay, cosine_classifier)
 
     self.forward_pass()
 
@@ -1135,7 +1136,7 @@ class BaselineLearner(Learner):
       self.test_targets = self.data.test_labels
       self.way = compute_way(self.data)
       self.knn_in_fc = knn_in_fc
-      tf.logging.info('BaselineLearner: knn_in_fc {}'.format(knn_in_fc))
+      logging.info('BaselineLearner: knn_in_fc %s', knn_in_fc)
 
   def forward_pass(self):
     if self.is_training:
@@ -1348,8 +1349,7 @@ class BaselineFinetuneLearner(BaselineLearner):
       if self.finetune_all_layers:
         vars_to_finetune.extend(self.embedding_vars)
       self.vars_to_finetune = vars_to_finetune
-      tf.logging.info(
-          'Finetuning will optimize variables: {}'.format(vars_to_finetune))
+      logging.info('Finetuning will optimize variables: %s', vars_to_finetune)
 
       for i in range(self.num_finetune_steps):
         if i == 0:
@@ -1556,8 +1556,8 @@ class MAMLLearner(Learner):
     self.zero_fc_layer = zero_fc_layer
     self.proto_maml_fc_layer_init = proto_maml_fc_layer_init
 
-    tf.logging.info('alpha: {}, num_update_steps: {}'.format(
-        self.alpha, self.num_update_steps))
+    logging.info('alpha: %s, num_update_steps: %d', self.alpha,
+                 self.num_update_steps)
     self.forward_pass()
 
   def proto_maml_fc_weights(self, prototypes, zero_pad_to_max_way=False):

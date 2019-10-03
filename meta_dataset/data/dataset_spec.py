@@ -23,6 +23,8 @@ from __future__ import print_function
 import collections
 import json
 import os
+
+from absl import logging
 from meta_dataset import data
 from meta_dataset.data import imagenet_specification
 from meta_dataset.data import learning_spec
@@ -776,7 +778,7 @@ def load_dataset_spec(dataset_records_path, convert_from_pkl=False):
       data_spec = json.load(f, object_hook=as_dataset_spec)
   elif tf.io.gfile.exists(pkl_path):
     if convert_from_pkl:
-      tf.logging.info('Loading older dataset_spec.pkl to convert it.')
+      logging.info('Loading older dataset_spec.pkl to convert it.')
       with tf.io.gfile.GFile(pkl_path, 'rb') as f:
         data_spec = pkl.load(f)
       with tf.io.gfile.GFile(json_path, 'w') as f:

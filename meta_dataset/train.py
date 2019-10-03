@@ -40,6 +40,7 @@ from __future__ import print_function
 import json
 import os
 
+from absl import logging
 import gin.tf
 from meta_dataset import data
 from meta_dataset import learner
@@ -104,8 +105,8 @@ EPISODIC_LEARNERS = ['MatchingNet', 'PrototypicalNet', 'MAML']
 
 
 def main(unused_argv):
-  tf.logging.info('FLAGS.gin_config: %s', FLAGS.gin_config)
-  tf.logging.info('FLAGS.gin_bindings: %s', FLAGS.gin_bindings)
+  logging.info('FLAGS.gin_config: %s', FLAGS.gin_config)
+  logging.info('FLAGS.gin_bindings: %s', FLAGS.gin_bindings)
   gin.parse_config_files_and_bindings(FLAGS.gin_config, FLAGS.gin_bindings)
 
   learner_config = trainer.LearnerConfig()
@@ -165,12 +166,12 @@ def main(unused_argv):
 
   mode = 'training' if FLAGS.is_training else 'evaluation'
   datasets = train_datasets if FLAGS.is_training else eval_datasets
-  tf.logging.info('Starting %s for dataset(s) %s...' % (mode, datasets))
+  logging.info('Starting %s for dataset(s) %s...', mode, datasets)
 
   # Record gin operative config string after the setup, both in the logs and in
   # the checkpoint directory.
   gin_operative_config = gin.operative_config_str()
-  tf.logging.info('gin configuration:\n%s', gin_operative_config)
+  logging.info('gin configuration:\n%s', gin_operative_config)
   if FLAGS.train_checkpoint_dir:
     gin_log_file = os.path.join(FLAGS.train_checkpoint_dir,
                                 'operative_config.gin')
@@ -204,5 +205,5 @@ def main(unused_argv):
 
 
 if __name__ == '__main__':
-  tf.logging.set_verbosity(tf.logging.INFO)
+  logging.set_verbosity(logging.INFO)
   tf.app.run(main)

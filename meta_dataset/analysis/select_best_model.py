@@ -53,6 +53,7 @@ from __future__ import print_function
 
 import os
 
+from absl import logging
 import numpy as np
 from six.moves import range
 from six.moves import zip
@@ -115,13 +116,13 @@ def get_value_from_pkl(pickle_file, param_name):
     with tf.gfile.Open(pickle_file, 'rb') as f:
       params = pkl.load(f)
       if param_name not in params:
-        tf.logging.info('The dict in {} does not have the key {}'.format(
-            pickle_file, param_name))
+        logging.info('The dict in %s does not have the key %s', pickle_file,
+                     param_name)
         return None
       else:
         return params[param_name]
   else:
-    tf.logging.info('The file {} does not exist'.format(pickle_file))
+    logging.info('The file %s does not exist', pickle_file)
     return None
 
 
@@ -216,18 +217,18 @@ def get_paths_to_events(root_dir,
     ]
 
     if len(event_filenames) < 1:
-      tf.logging.warn('Skipping empty variant {}.'.format(variant_path))
-      tf.logging.info('Was expecting at least one event file '
-                      'in directory {}. Instead, found {}.'.format(
-                          variant_path, len(event_filenames)))
+      logging.warn('Skipping empty variant %s.', variant_path)
+      logging.info(
+          'Was expecting at least one event file '
+          'in directory %s. Instead, found %d.', variant_path,
+          len(event_filenames))
       continue
     event_paths[variant_name] = [
         os.path.join(variant_path, event_filename)
         for event_filename in event_filenames
     ]
 
-  tf.logging.info('Found event files for variants: {}'.format(
-      list(event_paths.keys())))
+  logging.info('Found event files for variants: %s', list(event_paths.keys()))
   return event_paths
 
 
@@ -282,8 +283,8 @@ def main(argv):
     if FLAGS.restrict_to_architectures:
       architecture_string = ' out of the {} variants'.format(
           FLAGS.restrict_to_architectures)
-    tf.logging.info('{}Selecting the best variant for: {}{}.{}'.format(
-        stars_string, root_experiment_dir, architecture_string, stars_string))
+    logging.info('%sSelecting the best variant for: %s%s.%s', stars_string,
+                 root_experiment_dir, architecture_string, stars_string)
 
     if FLAGS.restrict_to_variants_by_range and FLAGS.restrict_to_variants:
       raise ValueError('Please provide only one of '
@@ -350,13 +351,12 @@ def main(argv):
       f.write(
           'best_variant: {}\nbest_valid_acc: {}\nbest_update_num: {}\n'.format(
               best_variant, best_valid_acc, best_step))
-    tf.logging.info(
-        'Best variant: {}. Best valid acc: {}. Best update num: {}. '
-        'Just wrote this info to {} and {}'.format(best_variant, best_valid_acc,
-                                                   best_step, output_path_pklz,
-                                                   output_path_txt))
+    logging.info(
+        'Best variant: %s. Best valid acc: %s. Best update num: %d. '
+        'Just wrote this info to %s and %s', best_variant, best_valid_acc,
+        best_step, output_path_pklz, output_path_txt)
 
 
 if __name__ == '__main__':
-  tf.logging.set_verbosity(tf.logging.INFO)
+  logging.set_verbosity(logging.INFO)
   tf.app.run(main)

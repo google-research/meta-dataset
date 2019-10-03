@@ -50,6 +50,7 @@ from __future__ import print_function
 import collections
 import os
 
+from absl import logging
 from meta_dataset.data import dataset_spec
 from meta_dataset.data import imagenet_specification as imagenet_spec
 from meta_dataset.data import learning_spec
@@ -398,8 +399,8 @@ def read_data(input_path, do_finegrainedness_analysis, do_imbalance_analysis):
   split = (
       FLAGS.eval_finegrainedness_split
       if FLAGS.eval_finegrainedness else 'test')
-  tf.logging.info(
-      'Reading event file %s for summaries of split %s.' % (input_path, split))
+  logging.info('Reading event file %s for summaries of split %s.', input_path,
+               split)
   (ways, shots, class_props, class_ids, test_logits,
    test_targets) = [], [], [], [], [], []
   tags = set()
@@ -433,8 +434,8 @@ def write_pkl(output_data, output_path):
   """Save output_data to the pickle at output_path."""
   with tf.gfile.Open(output_path, 'wb') as f:
     pkl.dump(output_data, f, protocol=pkl.HIGHEST_PROTOCOL)
-  tf.logging.info('Dumped data with keys: %s to location %s' %
-                  (list(output_data.keys()), output_path))
+  logging.info('Dumped data with keys: %s to location %s',
+               list(output_data.keys()), output_path)
 
 
 def read_pkl(output_path):
@@ -442,7 +443,7 @@ def read_pkl(output_path):
   if tf.gfile.Exists(output_path):
     with tf.gfile.Open(output_path, 'rb') as f:
       data = pkl.load(f)
-      tf.logging.info('Read data with keys: %s' % list(data.keys()))
+      logging.info('Read data with keys: %s', list(data.keys()))
       return data
   else:
     return False
@@ -469,12 +470,12 @@ def get_event_files(root_dir):
         os.path.join(summaries_dir, f)
         for f in tf.gfile.ListDirectory(summaries_dir)
     ]
-  tf.logging.info('Looking for events in dirs: %s' % child_dirs)
+  logging.info('Looking for events in dirs: %s', child_dirs)
   for child_dir in child_dirs:
     for file_name in tf.gfile.ListDirectory(child_dir):
       if 'event' in file_name:
         paths_to_events.append(os.path.join(child_dir, file_name))
-  tf.logging.info('Found events: %s' % paths_to_events)
+  logging.info('Found events: %s', paths_to_events)
   return paths_to_events
 
 
@@ -527,7 +528,7 @@ def analyze_events(paths_to_event_files, experiment_root_dir,
     # First check if the required data is already computed and written.
     maybe_data = False if force_recompute else read_pkl(output_pickle)
     if maybe_data:
-      tf.logging.info('Output %s already exists. Skipping it.' % output_pickle)
+      logging.info('Output %s already exists. Skipping it.', output_pickle)
       shot_to_precision = maybe_data['shot_to_precision']
       way_to_accuracy = maybe_data['way_to_accuracy']
       height_to_accuracy = maybe_data['height_to_accuracy']
@@ -624,7 +625,7 @@ def main(argv):
   del argv
   paths_to_event_files = get_event_files(FLAGS.root_dir)
   if not paths_to_event_files:
-    tf.logging.info('No event files found.')
+    logging.info('No event files found.')
     return
   analyze_events(paths_to_event_files, FLAGS.root_dir,
                  FLAGS.eval_finegrainedness, FLAGS.eval_imbalance,
@@ -632,5 +633,5 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  tf.logging.set_verbosity(tf.logging.INFO)
+  logging.set_verbosity(logging.INFO)
   tf.app.run(main)

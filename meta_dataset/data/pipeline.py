@@ -31,6 +31,7 @@ from __future__ import print_function
 
 import functools
 
+from absl import logging
 import gin.tf
 from meta_dataset import data
 from meta_dataset.data import learning_spec
@@ -60,15 +61,14 @@ def filter_dummy_examples(example_strings, class_ids):
 def _log_data_augmentation(data_augmentation, name):
   """Logs the given data augmentation parameters for diagnostic purposes."""
   if not data_augmentation:
-    tf.logging.info('No data augmentation provided for %s', name)
+    logging.info('No data augmentation provided for %s', name)
   else:
-    tf.logging.info('%s augmentations:', name)
-    tf.logging.info('enable_jitter: %s', data_augmentation.enable_jitter)
-    tf.logging.info('jitter_amount: %d', data_augmentation.jitter_amount)
-    tf.logging.info('enable_gaussian_noise: %s',
-                    data_augmentation.enable_gaussian_noise)
-    tf.logging.info('gaussian_noise_std: %s',
-                    data_augmentation.gaussian_noise_std)
+    logging.info('%s augmentations:', name)
+    logging.info('enable_jitter: %s', data_augmentation.enable_jitter)
+    logging.info('jitter_amount: %d', data_augmentation.jitter_amount)
+    logging.info('enable_gaussian_noise: %s',
+                 data_augmentation.enable_gaussian_noise)
+    logging.info('gaussian_noise_std: %s', data_augmentation.gaussian_noise_std)
 
 
 @gin.configurable(
@@ -255,8 +255,8 @@ def make_one_source_episode_pipeline(dataset_spec,
     image_size: int, desired image size used during decoding.
     num_to_take: Optional, an int specifying a number of elements to pick from
       each class' tfrecord. If specified, the available images of each class
-      will be restricted to that int. By default no restriction is applied
-      and all data is used.
+      will be restricted to that int. By default no restriction is applied and
+      all data is used.
 
   Returns:
     A Dataset instance that outputs fully-assembled and decoded episodes.
