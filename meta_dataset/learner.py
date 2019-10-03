@@ -309,8 +309,8 @@ def _resnet(x,
     # References:
     # 1. ResNet https://arxiv.org/abs/1512.03385
     # 2. DeepLab https://arxiv.org/abs/1606.00915
-    size = tf.to_float(tf.shape(x)[1])
-    aligned_size = tf.to_int32(tf.ceil(size / 32.0)) * 32 + 1
+    size = tf.cast(tf.shape(x)[1], tf.float32)
+    aligned_size = tf.cast(tf.ceil(size / 32.0), tf.int32) * 32 + 1
     x = tf.image.resize_bilinear(
         x, size=[aligned_size, aligned_size], align_corners=True)
 
@@ -1230,7 +1230,7 @@ class BaselineLearner(Learner):
     """Computes the loss."""
     if self.is_training:
       self.train_logits = self.compute_logits()
-      labels = tf.to_int64(self.data.labels)
+      labels = tf.cast(self.data.labels, tf.int64)
       onehot_labels = tf.one_hot(labels, self.num_train_classes)
       with tf.name_scope('loss'):
         cross_entropy = tf.losses.softmax_cross_entropy(
@@ -1483,7 +1483,7 @@ class BaselineFinetuneLearner(BaselineLearner):
 
   def _classification_loss(self, logits, labels, num_classes):
     """Computes softmax cross entropy loss."""
-    labels = tf.to_int64(labels)
+    labels = tf.cast(labels, tf.int64)
     onehot_labels = tf.one_hot(labels, num_classes)
     with tf.name_scope('finetuning_loss'):
       cross_entropy = tf.losses.softmax_cross_entropy(
