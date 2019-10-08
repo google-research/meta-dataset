@@ -60,6 +60,18 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
 
+NAME_TO_LEARNER = {
+    'Baseline': learner.BaselineLearner,
+    'BaselineFinetune': learner.BaselineFinetuneLearner,
+    'MatchingNet': learner.MatchingNetworkLearner,
+    'PrototypicalNet': learner.PrototypicalNetworkLearner,
+    'MAML': learner.MAMLLearner,
+}
+BATCH_LEARNER_NAMES = ['Baseline', 'BaselineFinetune']
+EPISODIC_LEARNER_NAMES = ['MatchingNet', 'PrototypicalNet', 'MAML']
+BATCH_LEARNERS = [NAME_TO_LEARNER[name] for name in BATCH_LEARNER_NAMES]
+EPISODIC_LEARNERS = [NAME_TO_LEARNER[name] for name in EPISODIC_LEARNER_NAMES]
+
 
 @gin.configurable('benchmark')
 def get_datasets_and_restrictions(train_datasets='',
@@ -649,7 +661,7 @@ class Trainer(object):
       # The meta-splits that this dataset will contribute data to.
       if not self.is_training:
         # If we're meta-testing, all datasets contribute only to meta-test.
-        splits = {'test'}
+        splits = {self.eval_split}
       else:
         splits = set()
         if dataset_name in self.train_dataset_list:
@@ -1206,8 +1218,22 @@ class BatchTrainer(Trainer):
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""
-    num_total_classes = self._get_num_total_classes()
-    return eval_learner_class(False, self.learn_config.transductive_batch_norm,
-                              self.backprop_through_moments, self.ema_object,
-                              self.embedding_fn, episode, num_total_classes,
-                              self.num_test_classes)
+    # The eval_learner_class is typically a batch learner, but in the case of
+    # the inference-only baselines, it will be an episodic learner. This allows
+    # to combine the inference algorithm of Prototypical Networks, etc, as the
+    # validation (and test) procedure of a baseline-trained model.
+    if eval_learner_class in BATCH_LEARNERS:
+      num_total_classes = self._get_num_total_classes()
+      return eval_learner_class(False,
+                                self.learn_config.transductive_batch_norm,
+                                self.backprop_through_moments, self.ema_object,
+                                self.embedding_fn, episode, num_total_classes,
+                                self.num_test_classes)
+    elif eval_learner_class in EPISODIC_LEARNERS:
+      return eval_learner_class(False,
+                                self.learn_config.transductive_batch_norm,
+                                self.backprop_through_moments, self.ema_object,
+                                self.embedding_fn, episode)
+    else:
+      raise ValueError('The specified eval_learner_class should belong to '
+                       'BATCH_LEARNERS or EPISODIC_LEARNERS.')

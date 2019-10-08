@@ -43,7 +43,6 @@ import os
 from absl import logging
 import gin.tf
 from meta_dataset import data
-from meta_dataset import learner
 from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
 import tensorflow as tf
@@ -85,23 +84,14 @@ tf.flags.DEFINE_enum(
 
 tf.flags.DEFINE_multi_enum(
     'omit_from_saving_and_reloading',
-    ['num_left_in_epoch', 'finetune', 'linear_classifier'],
-    ['num_left_in_epoch', 'finetune', 'linear_classifier'],
+    ['num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc'], [
+        'num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc',
+        'weight_copy'
+    ],
     'A comma-separated list of substrings such that all variables containing '
     'them should not be saved and reloaded.')
 
 FLAGS = tf.flags.FLAGS
-
-NAME_TO_LEARNER = {
-    'Baseline': learner.BaselineLearner,
-    'BaselineFinetune': learner.BaselineFinetuneLearner,
-    'MatchingNet': learner.MatchingNetworkLearner,
-    'PrototypicalNet': learner.PrototypicalNetworkLearner,
-    'MAML': learner.MAMLLearner,
-}
-
-BATCH_LEARNERS = ['Baseline', 'BaselineFinetune']
-EPISODIC_LEARNERS = ['MatchingNet', 'PrototypicalNet', 'MAML']
 
 
 def main(unused_argv):
@@ -132,8 +122,8 @@ def main(unused_argv):
     # If eval_finegrainedness is True, even in pure evaluation mode we still
     # require a train learner, since we may perform this analysis on the
     # training sub-graph of ImageNet too.
-    train_learner = NAME_TO_LEARNER[learner_config.train_learner]
-  eval_learner = NAME_TO_LEARNER[learner_config.eval_learner]
+    train_learner = trainer.NAME_TO_LEARNER[learner_config.train_learner]
+  eval_learner = trainer.NAME_TO_LEARNER[learner_config.eval_learner]
 
   # Get a trainer or evaluator.
   trainer_kwargs = {
@@ -153,16 +143,16 @@ def main(unused_argv):
   }
   if learner_config.episodic:
     trainer_instance = trainer.EpisodicTrainer(**trainer_kwargs)
-    if learner_config.train_learner not in EPISODIC_LEARNERS:
+    if learner_config.train_learner not in trainer.EPISODIC_LEARNER_NAMES:
       raise ValueError(
           'When "episodic" is True, "train_learner" should be an episodic one, '
-          'among {}.'.format(EPISODIC_LEARNERS))
+          'among {}.'.format(trainer.EPISODIC_LEARNER_NAMES))
   else:
     trainer_instance = trainer.BatchTrainer(**trainer_kwargs)
-    if learner_config.train_learner not in BATCH_LEARNERS:
+    if learner_config.train_learner not in trainer.BATCH_LEARNER_NAMES:
       raise ValueError(
           'When "episodic" is False, "train_learner" should be a batch one, '
-          'among {}.'.format(BATCH_LEARNERS))
+          'among {}.'.format(trainer.BATCH_LEARNER_NAMES))
 
   mode = 'training' if FLAGS.is_training else 'evaluation'
   datasets = train_datasets if FLAGS.is_training else eval_datasets

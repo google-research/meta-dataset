@@ -1,0 +1,11 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+BatchSplitReaderGetReader.add_dataset_offset = True
+LearnerConfig.episodic = False
+LearnerConfig.train_learner = 'Baseline'
+LearnerConfig.eval_learner = 'MatchingNet'
+weight_decay = 1e-4
+BaselineLearner.knn_in_fc = False
+BaselineLearner.weight_decay = %weight_decay
+MatchingNetworkLearner.weight_decay = %weight_decay
+MatchingNetworkLearner.exact_cosine_distance = False

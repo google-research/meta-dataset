@@ -1,0 +1,12 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+LearnerConfig.episodic = False
+LearnerConfig.train_learner = 'Baseline'
+LearnerConfig.eval_learner = 'MAML'
+# The following line is what makes this proto-MAML.
+MAMLLearner.proto_maml_fc_layer_init = True
+weight_decay = 1e-4
+BaselineLearner.knn_in_fc = False
+BaselineLearner.weight_decay = %weight_decay
+MAMLLearner.weight_decay = %weight_decay
+MAMLLearner.debug = False
