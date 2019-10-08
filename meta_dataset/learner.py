@@ -21,7 +21,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-
+import functools
 from absl import logging
 import gin.tf
 import six
@@ -32,9 +32,9 @@ import tensorflow as tf
 MAX_WAY = 50  # The maximum number of classes we will see in any batch.
 
 
-def conv2d(x, w, stride=1, b=None):
+def conv2d(x, w, stride=1, b=None, padding='SAME'):
   """conv2d returns a 2d convolution layer with full stride."""
-  h = tf.nn.conv2d(x, w, strides=[1, stride, stride, 1], padding='SAME')
+  h = tf.nn.conv2d(x, w, strides=[1, stride, stride, 1], padding=padding)
   if b is not None:
     h += b
   return h
@@ -47,7 +47,7 @@ def relu(x, use_bounded_activation=False):
     return tf.nn.relu(x)
 
 
-def compute_prototypes(embeddings, labels):
+def _compute_prototypes(embeddings, labels):
   """Computes class prototypes over the last dimension of embeddings.
 
   Args:
@@ -71,6 +71,34 @@ def compute_prototypes(embeddings, labels):
   # The prototype of each class is the averaged embedding of its examples.
   class_num_images = tf.reduce_sum(labels, 0)  # [way].
   prototypes = class_sums / class_num_images
+
+  return prototypes
+
+
+def compute_prototypes(embeddings, labels):
+  """Computes class prototypes over features.
+
+  Flattens and reshapes the features if they are not already flattened.
+  Args:
+    embeddings: Tensor of examples of shape [num_examples, embedding_size] or
+      [num_examples, spatial_dim, spatial_dim n_features].
+    labels: Tensor of one-hot encoded labels of shape [num_examples,
+      num_classes].
+
+  Returns:
+    prototypes: Tensor of class prototypes of shape [num_classes,
+      embedding_size].
+  """
+  if len(embeddings.shape) > 2:
+    feature_shape = embeddings.shape.as_list()[1:]
+    n_images = tf.shape(embeddings)[0]
+    n_classes = tf.shape(labels)[-1]
+
+    vectorized_embedding = tf.reshape(embeddings, [n_images, -1])
+    vectorized_prototypes = _compute_prototypes(vectorized_embedding, labels)
+    prototypes = tf.reshape(vectorized_prototypes, [n_classes] + feature_shape)
+  else:
+    prototypes = _compute_prototypes(embeddings, labels)
 
   return prototypes
 
@@ -159,7 +187,49 @@ def bias_variable(shape):
   return tf.get_variable('bias', shape=shape, initializer=initial)
 
 
-def conv(x, conv_size, depth, stride, params=None, maml_arch=False):
+def dense(x, output_size, activation_fn=tf.nn.relu, params=None):
+  """Fully connected layer implementation.
+
+  Args:
+    x: tf.Tensor, input.
+    output_size: int, number features in  the fully connected layer.
+    activation_fn: function, to process pre-activations, namely x*w+b.
+    params: None or a dict containing the values of the wieght and bias params.
+      If None, default variables are used.
+
+  Returns:
+    output: The result of applying batch normalization to the input.
+    params: dict, that includes parameters used during the calculation.
+  """
+  with tf.variable_scope('dense'):
+    scope_name = tf.get_variable_scope().name
+
+    if len(x.shape) > 2:
+      x = tf.layers.flatten(x),
+    input_size = x.get_shape().as_list()[-1]
+
+    w_name = scope_name + '/kernel'
+    b_name = scope_name + '/bias'
+    if params is None:
+      w = weight_variable([input_size, output_size])
+      b = bias_variable([output_size])
+    else:
+      w = params[w_name]
+      b = params[b_name]
+
+  x = tf.nn.xw_plus_b(x, w, b)
+  params = collections.OrderedDict(zip([w_name, b_name], [w, b]))
+  x = activation_fn(x)
+  return x, params
+
+
+def conv(x,
+         conv_size,
+         depth,
+         stride,
+         padding='SAME',
+         params=None,
+         maml_arch=False):
   """A block that performs convolution."""
   params_keys, params_vars = [], []
   scope_name = tf.get_variable_scope().name
@@ -177,7 +247,7 @@ def conv(x, conv_size, depth, stride, params=None, maml_arch=False):
     params_keys += [scope_name + '/bias']
     params_vars += [b_conv]
 
-  x = conv2d(x, w_conv, stride=stride, b=b_conv)
+  x = conv2d(x, w_conv, stride=stride, b=b_conv, padding=padding)
   params = collections.OrderedDict(zip(params_keys, params_vars))
 
   return x, params
@@ -187,6 +257,7 @@ def conv_bn(x,
             conv_size,
             depth,
             stride,
+            padding='SAME',
             params=None,
             moments=None,
             maml_arch=False,
@@ -195,7 +266,13 @@ def conv_bn(x,
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []
   x, conv_params = conv(
-      x, conv_size, depth, stride, params=params, maml_arch=maml_arch)
+      x,
+      conv_size,
+      depth,
+      stride,
+      padding=padding,
+      params=params,
+      maml_arch=maml_arch)
   params_keys.extend(conv_params.keys())
   params_vars.extend(conv_params.values())
 
@@ -290,7 +367,8 @@ def _resnet(x,
             moments=None,
             maml_arch=False,
             backprop_through_moments=True,
-            use_bounded_activation=False):
+            use_bounded_activation=False,
+            keep_spatial_dims=False):
   """A ResNet18 network."""
   # `is_training` will be used when start to use moving {var, mean} in batch
   # normalization. This refers to 'meta-training'.
@@ -385,9 +463,10 @@ def _resnet(x,
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
           moments_vars.extend(bottleneck_moments.values())
-
-    x = tf.reduce_mean(x, axis=[1, 2])
-    x = tf.reshape(x, [-1, 512])
+    x = tf.reduce_mean(x, axis=[1, 2], keepdims=True)
+    # x.shape: [?, 1, 1, 512]
+    if not keep_spatial_dims:
+      x = tf.reshape(x, [-1, 512])
     params = collections.OrderedDict(zip(params_keys, params_vars))
     moments = collections.OrderedDict(zip(moments_keys, moments_vars))
 
@@ -402,7 +481,8 @@ def resnet(x,
            reuse=tf.AUTO_REUSE,
            scope='resnet18',
            backprop_through_moments=True,
-           use_bounded_activation=False):
+           use_bounded_activation=False,
+           keep_spatial_dims=False):
   return _resnet(
       x,
       is_training,
@@ -412,7 +492,8 @@ def resnet(x,
       moments=moments,
       maml_arch=False,
       backprop_through_moments=backprop_through_moments,
-      use_bounded_activation=use_bounded_activation)
+      use_bounded_activation=use_bounded_activation,
+      keep_spatial_dims=keep_spatial_dims)
 
 
 def resnet_maml(x,
@@ -423,7 +504,8 @@ def resnet_maml(x,
                 reuse=tf.AUTO_REUSE,
                 scope='resnet_maml',
                 backprop_through_moments=True,
-                use_bounded_activation=False):
+                use_bounded_activation=False,
+                keep_spatial_dims=False):
   """A MAML-specific variant of resnet."""
   del depth_multiplier
   return _resnet(
@@ -435,7 +517,8 @@ def resnet_maml(x,
       moments=moments,
       maml_arch=True,
       backprop_through_moments=backprop_through_moments,
-      use_bounded_activation=use_bounded_activation)
+      use_bounded_activation=use_bounded_activation,
+      keep_spatial_dims=keep_spatial_dims)
 
 
 def _four_layer_convnet(inputs,
@@ -446,7 +529,8 @@ def _four_layer_convnet(inputs,
                         maml_arch=False,
                         depth_multiplier=1.0,
                         backprop_through_moments=True,
-                        use_bounded_activation=False):
+                        use_bounded_activation=False,
+                        keep_spatial_dims=False):
   """A four-layer-convnet architecture."""
   layer = tf.stop_gradient(inputs)
   model_params_keys, model_params_vars = [], []
@@ -479,8 +563,156 @@ def _four_layer_convnet(inputs,
     model_params = collections.OrderedDict(
         zip(model_params_keys, model_params_vars))
     moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+    if not keep_spatial_dims:
+      layer = tf.layers.flatten(layer)
     return_dict = {
-        'embeddings': tf.layers.flatten(layer),
+        'embeddings': layer,
+        'params': model_params,
+        'moments': moments
+    }
+
+    return return_dict
+
+
+def _relation_net(inputs,
+                  scope,
+                  reuse=tf.AUTO_REUSE,
+                  params=None,
+                  moments=None,
+                  maml_arch=False,
+                  depth_multiplier=1.0,
+                  backprop_through_moments=True,
+                  use_bounded_activation=False):
+  """A 2-layer-convnet architecture with fully connected layers."""
+  model_params_keys, model_params_vars = [], []
+  moments_keys, moments_vars = [], []
+  layer = inputs
+  with tf.variable_scope(scope, reuse=reuse):
+    for i in range(2):
+      with tf.variable_scope('layer_{}'.format(i), reuse=reuse):
+        depth = int(64 * depth_multiplier)
+        # Note that original has `valid` padding where we use `same`.
+        layer, conv_bn_params, conv_bn_moments = conv_bn(
+            layer, [3, 3],
+            depth,
+            stride=1,
+            params=params,
+            moments=moments,
+            maml_arch=maml_arch,
+            backprop_through_moments=backprop_through_moments)
+        model_params_keys.extend(conv_bn_params.keys())
+        model_params_vars.extend(conv_bn_params.values())
+        moments_keys.extend(conv_bn_moments.keys())
+        moments_vars.extend(conv_bn_moments.values())
+
+      layer = relu(layer, use_bounded_activation=use_bounded_activation)
+      # This is a hacky way preventing max pooling if the spatial dimensions
+      # are already reduced.
+      if layer.shape[1] > 1:
+        layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
+      tf.logging.info('Output of block %d: %s' % (i, layer.shape))
+
+    layer = tf.layers.flatten(layer)
+    relu_activation_fn = functools.partial(
+        relu, use_bounded_activation=use_bounded_activation)
+    with tf.variable_scope('layer_2_fc', reuse=reuse):
+      layer, dense_params = dense(layer, 8, activation_fn=relu_activation_fn)
+      tf.logging.info('Output layer_2_fc: %s' % layer.shape)
+      model_params_keys.extend(dense_params.keys())
+      model_params_vars.extend(dense_params.values())
+    with tf.variable_scope('layer_3_fc', reuse=reuse):
+      output, dense_params = dense(layer, 1, activation_fn=tf.nn.sigmoid)
+      tf.logging.info('Output layer_3_fc: %s' % output.shape)
+      model_params_keys.extend(dense_params.keys())
+      model_params_vars.extend(dense_params.values())
+
+    model_params = collections.OrderedDict(
+        zip(model_params_keys, model_params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+    return_dict = {'output': output, 'params': model_params, 'moments': moments}
+
+    return return_dict
+
+
+def relationnet_embedding(inputs,
+                          is_training,
+                          params=None,
+                          moments=None,
+                          depth_multiplier=1.0,
+                          reuse=tf.AUTO_REUSE,
+                          scope='relationnet_convnet',
+                          backprop_through_moments=True,
+                          use_bounded_activation=False,
+                          keep_spatial_dims=False):
+  """A 4-layer-convnet architecture for relationnet embedding.
+
+  This is almost like the `learner.four_layer_convnet` embedding function.
+  2 differences are: (1) no padding for last 2 layers (2) no flatten.
+
+  Paper: https://arxiv.org/abs/1711.06025
+  Code:
+  https://github.com/floodsung/LearningToCompare_FSL/blob/master/miniimagenet/miniimagenet_train_few_shot.py
+
+  Args:
+    inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
+    is_training: Whether we are in the training phase.
+    params: None will create new params (or reuse from scope), otherwise an
+      ordered dict of convolutional kernels and biases such that
+      params['kernel_0'] stores the kernel of the first convolutional layer,
+      etc.
+    moments: A dict of the means and vars of the different layers to use for
+      batch normalization. If not provided, the mean and var are computed based
+      on the given inputs.
+    depth_multiplier: The depth multiplier for the convnet channels.
+    reuse: Whether to reuse the network's weights.
+    scope: An optional scope for the tf operations.
+    backprop_through_moments: Whether to allow gradients to flow through the
+      given support set moments. Only applies to non-transductive batch norm.
+    use_bounded_activation: Whether to enable bounded activation. This is useful
+      for post-training quantization.
+    keep_spatial_dims: bool, if True the spatial dimensions are kept.
+
+  Returns:
+    A 2D Tensor, where each row is the embedding of an input in inputs.
+  """
+  del is_training
+
+  layer = tf.stop_gradient(inputs)
+  model_params_keys, model_params_vars = [], []
+  moments_keys, moments_vars = [], []
+
+  with tf.variable_scope(scope, reuse=reuse):
+    for i in range(4):
+      with tf.variable_scope('layer_{}'.format(i), reuse=reuse):
+        depth = int(64 * depth_multiplier)
+        # Original implementation have VALID padding for layers that are
+        # followed by pooling. The rest (last two) have `SAME` padding.
+        layer, conv_bn_params, conv_bn_moments = conv_bn(
+            layer, [3, 3],
+            depth,
+            stride=1,
+            padding='VALID' if i < 2 else 'SAME',
+            params=params,
+            moments=moments,
+            maml_arch=False,
+            backprop_through_moments=backprop_through_moments)
+        model_params_keys.extend(conv_bn_params.keys())
+        model_params_vars.extend(conv_bn_params.values())
+        moments_keys.extend(conv_bn_moments.keys())
+        moments_vars.extend(conv_bn_moments.values())
+
+      layer = relu(layer, use_bounded_activation=use_bounded_activation)
+      if i < 2:
+        layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
+      tf.logging.info('Output of block %d: %s' % (i, layer.shape))
+
+    model_params = collections.OrderedDict(
+        zip(model_params_keys, model_params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+    if not keep_spatial_dims:
+      layer = tf.layers.flatten(layer)
+    return_dict = {
+        'embeddings': layer,
         'params': model_params,
         'moments': moments
     }
@@ -496,7 +728,8 @@ def four_layer_convnet(inputs,
                        reuse=tf.AUTO_REUSE,
                        scope='four_layer_convnet',
                        backprop_through_moments=True,
-                       use_bounded_activation=False):
+                       use_bounded_activation=False,
+                       keep_spatial_dims=False):
   """Embeds inputs using a standard four-layer convnet.
 
   Args:
@@ -516,6 +749,7 @@ def four_layer_convnet(inputs,
       given support set moments. Only applies to non-transductive batch norm.
     use_bounded_activation: Whether to enable bounded activation. This is useful
       for post-training quantization.
+    keep_spatial_dims: bool, if True the spatial dimensions are kept.
 
   Returns:
     A 2D Tensor, where each row is the embedding of an input in inputs.
@@ -530,7 +764,8 @@ def four_layer_convnet(inputs,
       maml_arch=False,
       depth_multiplier=depth_multiplier,
       backprop_through_moments=backprop_through_moments,
-      use_bounded_activation=use_bounded_activation)
+      use_bounded_activation=use_bounded_activation,
+      keep_spatial_dims=keep_spatial_dims)
 
 
 def four_layer_convnet_maml(inputs,
@@ -582,6 +817,7 @@ def four_layer_convnet_maml(inputs,
 NAME_TO_EMBEDDING_NETWORK = {
     'resnet': resnet,
     'resnet_maml': resnet_maml,
+    'relationnet_embedding': relationnet_embedding,
     'four_layer_convnet': four_layer_convnet,
     'four_layer_convnet_maml': four_layer_convnet_maml,
 }
@@ -751,6 +987,108 @@ class Learner(object):
 
   def forward_pass(self):
     """Returns the features of the given batch or episode."""
+
+
+@gin.configurable
+class RelationNetworkLearner(Learner):
+  """A Relation Network."""
+
+  def __init__(self, is_training, transductive_batch_norm,
+               backprop_through_moments, ema_object, embedding_fn, reader,
+               weight_decay):
+    """Initializes a RelationNetworkLearner.
+
+    Args:
+      is_training: Whether the learning is in training mode.
+      transductive_batch_norm: Whether to batch normalize in the transductive
+        setting where the mean and variance for normalization are computed from
+        both the support and query sets.
+      backprop_through_moments: Whether to allow gradients to flow through the
+        given support set moments. Only applies to non-transductive batch norm.
+      ema_object: An Exponential Moving Average (EMA).
+      embedding_fn: A callable for embedding images.
+      reader: A SplitReader that reads episodes or batches.
+      weight_decay: coefficient for L2 regularization.
+    """
+    super(RelationNetworkLearner,
+          self).__init__(is_training, transductive_batch_norm,
+                         backprop_through_moments, ema_object, embedding_fn,
+                         reader)
+
+    # The data for the next episode.
+    self.episode = self.data
+    self.test_targets = self.episode.test_labels
+    self.way = compute_way(self.data)
+
+    # Hyperparameters.
+    self.weight_decay = weight_decay
+    tf.logging.info(
+        'RelationNetworkLearner: weight_decay {}'.format(weight_decay))
+
+    # Parameters for embedding function depending on meta-training or not.
+    self.forward_pass()
+
+  def forward_pass(self):
+    """Embeds all (training and testing) images of the episode."""
+    # Compute the support set's mean and var and use these as the moments for
+    # batch norm on the query set.
+    train_embeddings = self.embedding_fn(
+        self.episode.train_images, self.is_training, keep_spatial_dims=True)
+    self.train_embeddings = train_embeddings['embeddings']
+    support_set_moments = None
+    if not self.transductive_batch_norm:
+      support_set_moments = train_embeddings['moments']
+    test_embeddings = self.embedding_fn(
+        self.episode.test_images,
+        self.is_training,
+        moments=support_set_moments,
+        backprop_through_moments=self.backprop_through_moments,
+        keep_spatial_dims=True)
+    self.test_embeddings = test_embeddings['embeddings']
+
+  def compute_relations(self):
+    """Computes the relation score of each test example to each prototype."""
+    # [n_test, 21, 21, n_features].
+    test_embed_shape = self.test_embeddings.shape.as_list()
+    n_feature = test_embed_shape[3]
+    out_shape = test_embed_shape[1:3]
+    n_test = tf.shape(self.test_embeddings)[0]
+
+    # [n_test, num_clases, 21, 21, n_feature].
+    # It is okay one of the elements in the list to be tensor.
+    prototype_extended = tf.tile(
+        tf.expand_dims(self.prototypes, 0), [n_test, 1, 1, 1, 1])
+    # [num_clases, n_test, 21, 21, n_feature].
+    test_f_extended = tf.tile(
+        tf.expand_dims(self.test_embeddings, 1), [1, self.way, 1, 1, 1])
+    relation_pairs = tf.concat((prototype_extended, test_f_extended), 4)
+    # relation_pairs.shape.as_list()[-3:] == [-1] + out_shape + [n_feature*2]
+    relation_pairs = tf.reshape(relation_pairs,
+                                [-1] + out_shape + [n_feature * 2])
+    self.relationnet_dict = _relation_net(relation_pairs, 'relationnet')
+    relations = tf.reshape(self.relationnet_dict['output'], [-1, self.way])
+    return relations
+
+  def compute_loss(self):
+    """Returns the loss of the Prototypical Network."""
+
+    onehot_train_labels = tf.one_hot(self.episode.train_labels, self.way)
+    self.prototypes = compute_prototypes(self.train_embeddings,
+                                         onehot_train_labels)
+    self.test_logits = self.compute_relations()
+    onehot_test_labels = tf.one_hot(self.episode.test_labels, self.way)
+    mse_loss = tf.losses.mean_squared_error(onehot_test_labels,
+                                            self.test_logits)
+    regularization = tf.reduce_sum(
+        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+    loss = mse_loss + self.weight_decay * regularization
+    return loss
+
+  def compute_accuracy(self):
+    """Computes the accuracy on the given episode."""
+    self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
+    correct = tf.equal(self.episode.test_labels, self.test_predictions)
+    return tf.reduce_mean(tf.cast(correct, tf.float32))
 
 
 @gin.configurable

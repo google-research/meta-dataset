@@ -1,0 +1,8 @@
+include 'meta_dataset/learn/gin/models/learner_config.gin'
+LearnerConfig.episodic = True
+LearnerConfig.train_learner = 'RelationNet'
+LearnerConfig.eval_learner = 'RelationNet'
+LearnerConfig.embedding_network = 'relationnet_embedding'
+LearnConfig.transductive_batch_norm = True
+weight_decay = 1e-6
+RelationNetworkLearner.weight_decay = %weight_decay

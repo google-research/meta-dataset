@@ -66,9 +66,12 @@ NAME_TO_LEARNER = {
     'MatchingNet': learner.MatchingNetworkLearner,
     'PrototypicalNet': learner.PrototypicalNetworkLearner,
     'MAML': learner.MAMLLearner,
+    'RelationNet': learner.RelationNetworkLearner,
 }
 BATCH_LEARNER_NAMES = ['Baseline', 'BaselineFinetune']
-EPISODIC_LEARNER_NAMES = ['MatchingNet', 'PrototypicalNet', 'MAML']
+EPISODIC_LEARNER_NAMES = [
+    'MatchingNet', 'PrototypicalNet', 'MAML', 'RelationNet'
+]
 BATCH_LEARNERS = [NAME_TO_LEARNER[name] for name in BATCH_LEARNER_NAMES]
 EPISODIC_LEARNERS = [NAME_TO_LEARNER[name] for name in EPISODIC_LEARNER_NAMES]
 
