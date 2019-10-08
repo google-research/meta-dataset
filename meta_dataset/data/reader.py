@@ -59,7 +59,7 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   possible in some cases that no padding is needed). The size of each part is
   prescribed by the `compute_chunk_sizes` function.
 
-  This generator is meant to be used with `tf.contrib.data.choose_from_datasets`
+  This generator is meant to be used with `tf.data.experimental.choose_from_datasets`
   and assumes that the list of tf.data.Dataset objects corresponding to each
   class in the dataset (there are `num_classes` of them, which is determined by
   inspecting the `dataset_spec` argument using the `split` argument) is appended
