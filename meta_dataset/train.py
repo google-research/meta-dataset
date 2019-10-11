@@ -113,7 +113,7 @@ def main(unused_argv):
                      'episodic models and restores only the embedding weights.')
 
 
-  (train_datasets, eval_datasets,
+  (train_datasets, eval_datasets, restrict_classes,
    restrict_num_per_class) = trainer.get_datasets_and_restrictions()
 
   train_learner = None
@@ -132,6 +132,7 @@ def main(unused_argv):
       'is_training': FLAGS.is_training,
       'train_dataset_list': train_datasets,
       'eval_dataset_list': eval_datasets,
+      'restrict_classes': restrict_classes,
       'restrict_num_per_class': restrict_num_per_class,
       'checkpoint_dir': FLAGS.train_checkpoint_dir,
       'summary_dir': FLAGS.summary_dir,

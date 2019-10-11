@@ -246,6 +246,15 @@ class EpisodeDescriptionSampler(object):
     self.class_set = dataset_spec.get_classes(self.split)
     self.num_classes = len(self.class_set)
 
+    if self.num_classes < self.min_ways:
+      raise ValueError('"min_ways" is set to {}, but split {} of dataset {} '
+                       'only has {} classes, so it is not possible to create '
+                       'an episode for it. This may have resulted from '
+                       'applying a restriction on this split of this dataset '
+                       'by specifying benchmark.restrict_classes.'.format(
+                           self.min_ways, split, dataset_spec.name,
+                           self.num_classes))
+
     if self.use_all_classes:
       self.num_ways = self.num_classes
 

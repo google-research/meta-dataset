@@ -57,6 +57,8 @@ def get_classes(split, classes_per_split):
     ValueError: An invalid split was specified.
   """
   num_classes = classes_per_split[split]
+
+  # Find the starting index of classes for the given split.
   if split == learning_spec.Split.TRAIN:
     offset = 0
   elif split == learning_spec.Split.VALID:
@@ -68,7 +70,39 @@ def get_classes(split, classes_per_split):
   else:
     raise ValueError('Invalid dataset split.')
 
+  # Get a contiguous range of classes from split.
   return range(offset, offset + num_classes)
+
+
+def _check_validity_of_restricted_classes_per_split(
+    restricted_classes_per_split, classes_per_split):
+  """Check the validity of the given restricted_classes_per_split.
+
+  Args:
+    restricted_classes_per_split: A dict mapping Split enums to the number of
+      classes to restrict to for that split.
+    classes_per_split: A dict mapping Split enums to the total available number
+      of classes for that split.
+
+  Raises:
+    ValueError: if restricted_classes_per_split is invalid.
+  """
+  for split_enum, num_classes in restricted_classes_per_split.items():
+    if split_enum not in [
+        learning_spec.Split.TRAIN, learning_spec.Split.VALID,
+        learning_spec.Split.TEST
+    ]:
+      raise ValueError('Invalid key {} in restricted_classes_per_split.'
+                       'Valid keys are: learning_spec.Split.TRAIN, '
+                       'learning_spec.Split.VALID, and '
+                       'learning_spec.Split.TEST'.format(split_enum))
+    if num_classes > classes_per_split[split_enum]:
+      raise ValueError('restricted_classes_per_split can not specify a '
+                       'number of classes greater than the total available '
+                       'for that split. Specified {} for split {} but have '
+                       'only {} available for that split.'.format(
+                           num_classes, split_enum,
+                           classes_per_split[split_enum]))
 
 
 def get_total_images_per_class(data_spec, class_id=None, pool=None):
@@ -237,16 +271,28 @@ class DatasetSpecification(
         examples of an episode.
   """
 
-  def initialize(self):
+  def initialize(self, restricted_classes_per_split=None):
     """Initializes a DatasetSpecification.
 
+    Args:
+      restricted_classes_per_split: A dict that specifies for each split, a
+        number to restrict its classes to. This number must be no greater than
+        the total number of classes of that split. By default this is None and
+        no restrictions are applied (all classes are used).
+
     Raises:
-      ValueError: Invalid file_pattern provided
+      ValueError: Invalid file_pattern provided.
     """
     # Check that the file_pattern adheres to one of the allowable forms
     if self.file_pattern not in ['{}.tfrecords', '{}_{}.tfrecords']:
       raise ValueError('file_pattern must be either "{}.tfrecords" or '
                        '"{}_{}.tfrecords" to support shards or splits.')
+    if restricted_classes_per_split is not None:
+      _check_validity_of_restricted_classes_per_split(
+          restricted_classes_per_split, self.classes_per_split)
+      # Apply the restriction.
+      for split, restricted_num_classes in restricted_classes_per_split.items():
+        self.classes_per_split[split] = restricted_num_classes
 
   def get_total_images_per_class(self, class_id=None, pool=None):
     """Returns the total number of images for the specified class.
@@ -340,8 +386,14 @@ class BiLevelDatasetSpecification(
         examples of an episode.
   """
 
-  def initialize(self):
+  def initialize(self, restricted_classes_per_split=None):
     """Initializes a DatasetSpecification.
+
+    Args:
+      restricted_classes_per_split: A dict that specifies for each split, a
+        number to restrict its classes to. This number must be no greater than
+        the total number of classes of that split. By default this is None and
+        no restrictions are applied (all classes are used).
 
     Raises:
       ValueError: Invalid file_pattern provided
@@ -350,6 +402,18 @@ class BiLevelDatasetSpecification(
     if self.file_pattern not in ['{}.tfrecords', '{}_{}.tfrecords']:
       raise ValueError('file_pattern must be either "{}.tfrecords" or '
                        '"{}_{}.tfrecords" to support shards or splits.')
+    if restricted_classes_per_split is not None:
+      # Create a dict like classes_per_split of DatasetSpecification.
+      classes_per_split = {}
+      for split in self.superclasses_per_split.keys():
+        num_split_classes = self._count_classes_in_superclasses(
+            self.get_superclasses(split))
+        classes_per_split[split] = num_split_classes
+
+      _check_validity_of_restricted_classes_per_split(
+          restricted_classes_per_split, classes_per_split)
+    # The restriction in this case is applied in get_classes() below.
+    self.restricted_classes_per_split = restricted_classes_per_split
 
   def get_total_images_per_class(self, class_id=None, pool=None):
     """Returns the total number of images for the specified class.
@@ -427,13 +491,16 @@ class BiLevelDatasetSpecification(
 
     Returns:
       The sequence of classes for the split.
-
-    Raises:
-      ValueError: An invalid split was specified.
     """
     offset = self._get_split_offset(split)
-    num_split_classes = self._count_classes_in_superclasses(
-        self.get_superclasses(split))
+    if (self.restricted_classes_per_split is not None and
+        split in self.restricted_classes_per_split):
+      num_split_classes = self.restricted_classes_per_split[split]
+    else:
+      # No restriction, so include all classes of the given split.
+      num_split_classes = self._count_classes_in_superclasses(
+          self.get_superclasses(split))
+
     return range(offset, offset + num_split_classes)
 
   def get_class_ids_from_superclass_subclass_inds(self, split, superclass_id,
@@ -512,14 +579,28 @@ class HierarchicalDatasetSpecification(
 
   # TODO(etriantafillou): Make this class inherit from object instead
   # TODO(etriantafillou): Move this method to the __init__ of that revised class
-  def initialize(self):
-    """Initializes a HierarchicalDatasetSpecification."""
+  def initialize(self, restricted_classes_per_split=None):
+    """Initializes a HierarchicalDatasetSpecification.
+
+    Args:
+      restricted_classes_per_split: A dict that specifies for each split, a
+        number to restrict its classes to. This number must be no greater than
+        the total number of classes of that split. By default this is None and
+        no restrictions are applied (all classes are used).
+    """
     # Set self.class_names_to_ids to the inverse dict of self.class_names.
     self.class_names_to_ids = dict(
         zip(self.class_names.values(), self.class_names.keys()))
 
     # Maps each Split enum to the number of its classes.
     self.classes_per_split = self.get_classes_per_split()
+
+    if restricted_classes_per_split is not None:
+      _check_validity_of_restricted_classes_per_split(
+          restricted_classes_per_split, self.classes_per_split)
+      # Apply the restriction.
+      for split, restricted_num_classes in restricted_classes_per_split.items():
+        self.classes_per_split[split] = restricted_num_classes
 
   def get_classes_per_split(self):
     """Returns a dict mapping each split enum to the number of its classes."""
@@ -551,8 +632,10 @@ class HierarchicalDatasetSpecification(
     Args:
       split: A Split, the split for which to get classes.
     """
-    # Computes self.classes_per_split.
-    self.initialize()
+    # The call to initialize computes self.classes_per_split. Do it only if it
+    # hasn't already been done.
+    if not hasattr(self, 'classes_per_split'):
+      self.initialize()
     return get_classes(split, self.classes_per_split)
 
   def get_all_classes_same_example_count(self):

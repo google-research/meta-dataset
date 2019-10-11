@@ -79,27 +79,34 @@ EPISODIC_LEARNERS = [NAME_TO_LEARNER[name] for name in EPISODIC_LEARNER_NAMES]
 @gin.configurable('benchmark')
 def get_datasets_and_restrictions(train_datasets='',
                                   eval_datasets='',
+                                  restrict_classes=None,
                                   restrict_num_per_class=None):
   """Gets the list of dataset names and possible restrictions on their classes.
 
   Args:
     train_datasets: A string of comma-separated dataset names for training.
     eval_datasets: A string of comma-separated dataset names for evaluation.
+    restrict_classes: If provided, a dict that maps dataset names to a dict that
+      specifies for each of 'train', 'valid' and 'test' the number of classes to
+      restrict to. This can lead to some classes of a particular split of a
+      particular dataset never participating in episode creation.
     restrict_num_per_class: If provided, a dict that maps dataset names to a
       dict that specifies for each of 'train', 'valid' and 'test' the number of
       examples per class to restrict to. For datasets / splits that are not
       specified, no restriction is applied.
 
   Returns:
-    Two lists of dataset names and a possibly empty dictionary.
+    Two lists of dataset names and two possibly empty dictionaries.
   """
+  if restrict_classes is None:
+    restrict_classes = {}
   if restrict_num_per_class is None:
     restrict_num_per_class = {}
 
   train_datasets = [d.strip() for d in train_datasets.split(',')]
   eval_datasets = [d.strip() for d in eval_datasets.split(',')]
 
-  return train_datasets, eval_datasets, restrict_num_per_class
+  return train_datasets, eval_datasets, restrict_classes, restrict_num_per_class
 
 
 def apply_dataset_options(dataset):
@@ -300,6 +307,7 @@ class Trainer(object):
       is_training,
       train_dataset_list,
       eval_dataset_list,
+      restrict_classes,
       restrict_num_per_class,
       checkpoint_dir,
       summary_dir,
@@ -325,6 +333,10 @@ class Trainer(object):
       eval_dataset_list: A list of names of datasets to evaluate on either for
         validation during train or for final test evaluation, depending on the
         nature of the experiment, as dictated by `is_training'.
+      restrict_classes: A dict that maps dataset names to a dict that specifies
+        for each of 'train', 'valid' and 'test' the number of classes to
+        restrict to. This can lead to some classes of a particular split of a
+        particular dataset never participating in episode creation.
       restrict_num_per_class: A dict that maps dataset names to a dict that
         specifies for each of 'train', 'valid' and 'test' the number of examples
         per class to restrict to. For datasets / splits that are not mentioned,
@@ -360,6 +372,7 @@ class Trainer(object):
     self.is_training = is_training
     self.train_dataset_list = train_dataset_list
     self.eval_dataset_list = eval_dataset_list
+    self.restrict_classes = restrict_classes
     self.restrict_num_per_class = restrict_num_per_class
     self.checkpoint_dir = checkpoint_dir
     self.summary_dir = summary_dir
@@ -671,6 +684,38 @@ class Trainer(object):
           splits.add('train')
         if dataset_name in self.eval_dataset_list:
           splits.add('valid')
+
+      # By default, all classes of each split will eventually be used for
+      # episode creation. But it might be that for some datasets, it is
+      # requested to restrict the available number of classes of some splits.
+      restricted_classes_per_split = {}
+      if dataset_name in self.restrict_classes:
+        classes_per_split = self.restrict_classes[dataset_name]
+        for split, num_classes in classes_per_split.items():
+          # The option to restrict classes is not supported in conjuction with
+          # non-uniform (bilevel or hierarhical) class sampling.
+          episode_descr_config = (
+              self.train_episode_config
+              if split == 'train' else self.eval_episode_config)
+          if has_dag and not episode_descr_config.ignore_dag_ontology:
+            raise ValueError('Restrictions on the class set of a dataset with '
+                             'a DAG ontology are not supported when '
+                             'ignore_dag_ontology is False.')
+          if is_bilevel and not episode_descr_config.ignore_bilevel_ontology:
+            raise ValueError('Restrictions on the class set of a dataset with '
+                             'a bilevel ontology are not supported when '
+                             'ignore_bilevel_ontology is False.')
+
+          restricted_classes_per_split[get_split_enum(split)] = num_classes
+        # Initialize the DatasetSpecificaton to account for this restriction.
+        data_spec.initialize(restricted_classes_per_split)
+
+        # Log the applied restrictions.
+        tf.logging.info('Restrictions for dataset {}:'.format(dataset_name))
+        for split in list(splits):
+          num_classes = data_spec.get_classes(get_split_enum(split))
+          tf.logging.info('\t split {} is restricted to {} classes'.format(
+              split, num_classes))
 
       # Add this dataset to the benchmark.
       logging.info('Adding dataset %s', data_spec.name)
