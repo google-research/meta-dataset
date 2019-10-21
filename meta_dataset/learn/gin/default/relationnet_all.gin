@@ -1,0 +1,14 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+
+include 'meta_dataset/learn/gin/models/relationnet_config.gin'
+
+# There are more parameters than usual, so allow more updates.
+LearnConfig.num_updates = 100000
+
+# Allow transductive batch norm to be faithul with the original Relation Net
+# implementation, even though this gives it an advantage over the rest of the
+# models we used on Meta-Dataset.
+LearnConfig.transductive_batch_norm = True
+
+LearnerConfig.learning_rate = 1e-3
+LearnerConfig.decay_learning_rate = True

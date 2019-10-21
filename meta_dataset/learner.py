@@ -646,8 +646,9 @@ def relationnet_embedding(inputs,
                           keep_spatial_dims=False):
   """A 4-layer-convnet architecture for relationnet embedding.
 
-  This is almost like the `learner.four_layer_convnet` embedding function.
-  2 differences are: (1) no padding for last 2 layers (2) no flatten.
+  This is almost like the `learner.four_layer_convnet` embedding function except
+  for the following differences: (1) no padding for the first 3 layers, (2) no
+  maxpool on the last (4th) layer, and (3) no flatten.
 
   Paper: https://arxiv.org/abs/1711.06025
   Code:
@@ -685,13 +686,15 @@ def relationnet_embedding(inputs,
     for i in range(4):
       with tf.variable_scope('layer_{}'.format(i), reuse=reuse):
         depth = int(64 * depth_multiplier)
-        # Original implementation have VALID padding for layers that are
-        # followed by pooling. The rest (last two) have `SAME` padding.
+        # The original implementation had VALID padding for the first two layers
+        # that are followed by pooling. The rest (last two) had `SAME` padding.
+        # In our setting, to avoid OOM, we pool (and apply VALID padding) to
+        # the first three layers, and use SAME padding only in the last one.
         layer, conv_bn_params, conv_bn_moments = conv_bn(
             layer, [3, 3],
             depth,
             stride=1,
-            padding='VALID' if i < 2 else 'SAME',
+            padding='VALID' if i < 3 else 'SAME',
             params=params,
             moments=moments,
             maml_arch=False,
@@ -702,7 +705,7 @@ def relationnet_embedding(inputs,
         moments_vars.extend(conv_bn_moments.values())
 
       layer = relu(layer, use_bounded_activation=use_bounded_activation)
-      if i < 2:
+      if i < 3:
         layer = tf.layers.max_pooling2d(layer, [2, 2], 2)
       tf.logging.info('Output of block %d: %s' % (i, layer.shape))
 

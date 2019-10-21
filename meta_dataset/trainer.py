@@ -795,7 +795,20 @@ class Trainer(object):
     # taking care to not restore the Adam parameters.
     if self.learner_config.pretrained_checkpoint and not self.sess.run(
         tf.train.get_global_step()):
-      self.saver.restore(self.sess, self.learner_config.pretrained_checkpoint)
+
+      # Load the embedding variables from the pre-trained checkpoint. Since the
+      # pre-trained checkpoint comes from a BaselineLearner, we need a Saver
+      # that only considers Variables from a BaselineLearner. In particular, we
+      # exclude 'relationnet*' Variables as they are not present in the
+      # checkpoint.
+      not_relationnet_vars = []
+      for var in tf.global_variables():
+        if not var.name.startswith('relationnet'):
+          not_relationnet_vars.append(var)
+      backbone_saver = tf.train.Saver(
+          var_list=not_relationnet_vars, max_to_keep=1)
+      backbone_saver.restore(self.sess,
+                             self.learner_config.pretrained_checkpoint)
       logging.info('Restored checkpoint: %s',
                    self.learner_config.pretrained_checkpoint)
       # We only want the embedding weights of the checkpoint we just restored.
@@ -804,6 +817,10 @@ class Trainer(object):
       # problem than the original training of the baseline whose embedding
       # weights are re-used, we do not reload ADAM's variables and instead learn
       # them from scratch.
+      # TODO(etriantafillou): modify backbone_saver's set of variables in order
+      # to exclude *all* non-embedding variables. Then we won't need the
+      # following block of code which explicitly re-initializes those, as they
+      # won't have been reloaded in the first place.
       vars_to_reinit, embedding_var_names, vars_to_reinit_names = [], [], []
       for var in tf.global_variables():
         if (any(keyword in var.name for keyword in EMBEDDING_KEYWORDS) and
