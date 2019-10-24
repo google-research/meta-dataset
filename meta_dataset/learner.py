@@ -1721,14 +1721,15 @@ class BaselineFinetuneLearner(BaselineLearner):
               # (The logits and loss are returned just for printing).
               logits, finetune_loss, finetune_op = self._get_finetune_op()
 
-              # Test logits are computed only for printing logs.
-              test_embeddings = self.embedding_fn(
-                  self.data.test_images,
-                  self.is_training,
-                  params=collections.OrderedDict(
-                      zip(self.embedding_vars_keys, self.embedding_vars)),
-                  reuse=True)['embeddings']
-              test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
+              if self.debug_log:
+                # Test logits are computed only for printing logs.
+                test_embeddings = self.embedding_fn(
+                    self.data.test_images,
+                    self.is_training,
+                    params=collections.OrderedDict(
+                        zip(self.embedding_vars_keys, self.embedding_vars)),
+                    reuse=True)['embeddings']
+                test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
 
         else:
           with tf.control_dependencies([finetune_op, finetune_loss] +
@@ -1748,14 +1749,15 @@ class BaselineFinetuneLearner(BaselineLearner):
               # (The logits and loss are returned just for printing).
               logits, finetune_loss, finetune_op = self._get_finetune_op()
 
-              # Test logits are computed only for printing logs.
-              test_embeddings = self.embedding_fn(
-                  self.data.test_images,
-                  self.is_training,
-                  params=collections.OrderedDict(
-                      zip(self.embedding_vars_keys, self.embedding_vars)),
-                  reuse=True)['embeddings']
-              test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
+              if self.debug_log:
+                # Test logits are computed only for printing logs.
+                test_embeddings = self.embedding_fn(
+                    self.data.test_images,
+                    self.is_training,
+                    params=collections.OrderedDict(
+                        zip(self.embedding_vars_keys, self.embedding_vars)),
+                    reuse=True)['embeddings']
+                test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
 
       # Finetuning is now over, compute the test performance using the updated
       # fc layer, and possibly the updated embedding network.
@@ -1768,14 +1770,15 @@ class BaselineFinetuneLearner(BaselineLearner):
             reuse=True)['embeddings']
         test_logits = self._fc_layer(test_embeddings)[:, 0:self.way]
 
-        # The train logits are computed only for printing.
-        train_embeddings = self.embedding_fn(
-            self.data.train_images,
-            self.is_training,
-            params=collections.OrderedDict(
-                zip(self.embedding_vars_keys, self.embedding_vars)),
-            reuse=True)['embeddings']
-        logits = self._fc_layer(train_embeddings)[:, 0:self.way]
+        if self.debug_log:
+          # The train logits are computed only for printing.
+          train_embeddings = self.embedding_fn(
+              self.data.train_images,
+              self.is_training,
+              params=collections.OrderedDict(
+                  zip(self.embedding_vars_keys, self.embedding_vars)),
+              reuse=True)['embeddings']
+          logits = self._fc_layer(train_embeddings)[:, 0:self.way]
 
         print_op = tf.no_op()
         if self.debug_log:
@@ -1792,12 +1795,16 @@ class BaselineFinetuneLearner(BaselineLearner):
 
   def _get_finetune_op(self):
     """Returns the operation for performing a finetuning step."""
-    train_embeddings = self.embedding_fn(
-        self.data.train_images,
-        self.is_training,
-        params=collections.OrderedDict(
-            zip(self.embedding_vars_keys, self.embedding_vars)),
-        reuse=True)['embeddings']
+    if self.finetune_all_layers:
+      # Must re-do the forward pass because the embedding has changed.
+      train_embeddings = self.embedding_fn(
+          self.data.train_images,
+          self.is_training,
+          params=collections.OrderedDict(
+              zip(self.embedding_vars_keys, self.embedding_vars)),
+          reuse=True)['embeddings']
+    else:
+      train_embeddings = self.train_embeddings
     logits = self._fc_layer(train_embeddings)[:, 0:self.way]
     finetune_loss = self._classification_loss(logits, self.data.train_labels,
                                               self.way)
