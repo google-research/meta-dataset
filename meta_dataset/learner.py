@@ -223,31 +223,20 @@ def dense(x, output_size, activation_fn=tf.nn.relu, params=None):
   return x, params
 
 
-def conv(x,
-         conv_size,
-         depth,
-         stride,
-         padding='SAME',
-         params=None,
-         maml_arch=False):
+def conv(x, conv_size, depth, stride, padding='SAME', params=None):
   """A block that performs convolution."""
   params_keys, params_vars = [], []
   scope_name = tf.get_variable_scope().name
   input_depth = x.get_shape().as_list()[-1]
   if params is None:
     w_conv = weight_variable([conv_size[0], conv_size[1], input_depth, depth])
-    b_conv = bias_variable([depth]) if maml_arch else None
   else:
     w_conv = params[scope_name + '/kernel']
-    b_conv = params[scope_name + '/bias'] if maml_arch else None
 
   params_keys += [scope_name + '/kernel']
   params_vars += [w_conv]
-  if maml_arch:
-    params_keys += [scope_name + '/bias']
-    params_vars += [b_conv]
 
-  x = conv2d(x, w_conv, stride=stride, b=b_conv, padding=padding)
+  x = conv2d(x, w_conv, stride=stride, padding=padding)
   params = collections.OrderedDict(zip(params_keys, params_vars))
 
   return x, params
@@ -260,19 +249,12 @@ def conv_bn(x,
             padding='SAME',
             params=None,
             moments=None,
-            maml_arch=False,
             backprop_through_moments=True):
   """A block that performs convolution, followed by batch-norm."""
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []
   x, conv_params = conv(
-      x,
-      conv_size,
-      depth,
-      stride,
-      padding=padding,
-      params=params,
-      maml_arch=maml_arch)
+      x, conv_size, depth, stride, padding=padding, params=params)
   params_keys.extend(conv_params.keys())
   params_vars.extend(conv_params.values())
 
@@ -297,7 +279,6 @@ def bottleneck(x,
                stride=1,
                params=None,
                moments=None,
-               maml_arch=False,
                use_project=False,
                backprop_through_moments=True,
                use_bounded_activation=False):
@@ -311,7 +292,6 @@ def bottleneck(x,
         stride,
         params=params,
         moments=moments,
-        maml_arch=maml_arch,
         backprop_through_moments=backprop_through_moments)
     params_keys.extend(conv_bn_params.keys())
     params_vars.extend(conv_bn_params.values())
@@ -327,7 +307,6 @@ def bottleneck(x,
         stride=1,
         params=params,
         moments=moments,
-        maml_arch=maml_arch,
         backprop_through_moments=backprop_through_moments)
     if use_bounded_activation:
       h = tf.clip_by_value(h, -6.0, 6.0)
@@ -346,7 +325,6 @@ def bottleneck(x,
             stride,
             params=params,
             moments=moments,
-            maml_arch=maml_arch,
             backprop_through_moments=backprop_through_moments)
         params_keys.extend(conv_bn_params.keys())
         params_vars.extend(conv_bn_params.values())
@@ -365,7 +343,6 @@ def _resnet(x,
             reuse=tf.AUTO_REUSE,
             params=None,
             moments=None,
-            maml_arch=False,
             backprop_through_moments=True,
             use_bounded_activation=False,
             keep_spatial_dims=False):
@@ -399,7 +376,6 @@ def _resnet(x,
           2,
           params=params,
           moments=moments,
-          maml_arch=maml_arch,
           backprop_through_moments=backprop_through_moments)
       params_keys.extend(conv_bn_params.keys())
       params_vars.extend(conv_bn_params.values())
@@ -417,7 +393,6 @@ def _resnet(x,
           output_stride,
           params=params,
           moments=moments,
-          maml_arch=maml_arch,
           use_project=use_project,
           backprop_through_moments=backprop_through_moments)
       return x, bottleneck_params, bottleneck_moments
@@ -490,32 +465,205 @@ def resnet(x,
       reuse=reuse,
       params=params,
       moments=moments,
-      maml_arch=False,
       backprop_through_moments=backprop_through_moments,
       use_bounded_activation=use_bounded_activation,
       keep_spatial_dims=keep_spatial_dims)
 
 
-def resnet_maml(x,
+def wide_resnet_block(x,
+                      depth,
+                      stride=1,
+                      params=None,
+                      moments=None,
+                      use_project=False,
+                      backprop_through_moments=True,
+                      use_bounded_activation=False):
+  """Wide ResNet residual block."""
+  params_keys, params_vars = [], []
+  moments_keys, moments_vars = [], []
+  with tf.variable_scope('conv1'):
+    bn_1, bn_params, bn_moments = bn(
+        x,
+        params=params,
+        moments=moments,
+        backprop_through_moments=backprop_through_moments)
+    params_keys.extend(bn_params.keys())
+    params_vars.extend(bn_params.values())
+    moments_keys.extend(bn_moments.keys())
+    moments_vars.extend(bn_moments.values())
+
+    out_1 = relu(bn_1, use_bounded_activation=use_bounded_activation)
+
+    h_1, conv_params = conv(out_1, [3, 3], depth, stride, params=params)
+    params_keys.extend(conv_params.keys())
+    params_vars.extend(conv_params.values())
+  with tf.variable_scope('conv2'):
+    bn_2, bn_params, bn_moments = bn(
+        h_1,
+        params=params,
+        moments=moments,
+        backprop_through_moments=backprop_through_moments)
+    params_keys.extend(bn_params.keys())
+    params_vars.extend(bn_params.values())
+    moments_keys.extend(bn_moments.keys())
+    moments_vars.extend(bn_moments.values())
+
+    out_2 = relu(bn_2, use_bounded_activation=use_bounded_activation)
+
+    h_2, conv_params = conv(out_2, [3, 3], depth, stride=1, params=params)
+    params_keys.extend(conv_params.keys())
+    params_vars.extend(conv_params.values())
+
+  h = h_2
+  if use_bounded_activation:
+    h = tf.clip_by_value(h, -6, 6)
+
+  with tf.variable_scope('identity'):
+    if use_project:
+      with tf.variable_scope('projection_conv'):
+        x, conv_params = conv(out_1, [1, 1], depth, stride, params=params)
+        params_keys.extend(conv_params.keys())
+        params_vars.extend(conv_params.values())
+
+  params = collections.OrderedDict(zip(params_keys, params_vars))
+  moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+
+  if use_bounded_activation:
+    out = tf.clip_by_value(x + h, -6, 6)
+  else:
+    out = x + h
+  return out, params, moments
+
+
+def _wide_resnet(x,
+                 is_training,
+                 scope,
+                 n,
+                 k,
+                 reuse=tf.AUTO_REUSE,
+                 params=None,
+                 moments=None,
+                 backprop_through_moments=True,
+                 use_bounded_activation=False,
+                 keep_spatial_dims=False):
+  """A wide ResNet."""
+  # `is_training` will be used when start to use moving {var, mean} in batch
+  # normalization.
+  del is_training
+  widths = [i * k for i in (16, 32, 64)]
+  params_keys, params_vars = [], []
+  moments_keys, moments_vars = [], []
+
+  def _update_params_lists(params_dict, params_keys, params_vars):
+    params_keys.extend(params_dict.keys())
+    params_vars.extend(params_dict.values())
+
+  def _update_moments_lists(moments_dict, moments_keys, moments_vars):
+    moments_keys.extend(moments_dict.keys())
+    moments_vars.extend(moments_dict.values())
+
+  with tf.variable_scope(scope, reuse=reuse):
+    with tf.variable_scope('conv1'):
+      x, conv_params = conv(x, [3, 3], 16, 1, params=params)
+      _update_params_lists(conv_params, params_keys, params_vars)
+
+    def _wide_resnet_block(x, depths, stride, use_project, moments):
+      """Wrapper for a wide resnet block."""
+      x, block_params, block_moments = wide_resnet_block(
+          x,
+          depths,
+          stride=stride,
+          params=params,
+          moments=moments,
+          use_project=use_project,
+          backprop_through_moments=backprop_through_moments,
+          use_bounded_activation=use_bounded_activation)
+      return x, block_params, block_moments
+
+    with tf.variable_scope('conv2_x'):
+      with tf.variable_scope('wide_block_0'):
+        if widths[0] == 16:
+          use_project = False
+        else:
+          use_project = True
+        x, block_params, block_moments = _wide_resnet_block(
+            x, widths[0], 1, use_project, moments=moments)
+        _update_params_lists(block_params, params_keys, params_vars)
+        _update_moments_lists(block_moments, moments_keys, moments_vars)
+      for i in range(1, n):
+        with tf.variable_scope('wide_block_%d' % i):
+          x, block_params, block_moments = _wide_resnet_block(
+              x, widths[0], 1, use_project, moments=moments)
+          _update_params_lists(block_params, params_keys, params_vars)
+          _update_moments_lists(block_moments, moments_keys, moments_vars)
+
+    with tf.variable_scope('conv3_x'):
+      with tf.variable_scope('wide_block_0'):
+        x, block_params, block_moments = _wide_resnet_block(
+            x, widths[1], 2, True, moments=moments)
+        _update_params_lists(block_params, params_keys, params_vars)
+        _update_moments_lists(block_moments, moments_keys, moments_vars)
+      for i in range(1, n):
+        with tf.variable_scope('wide_block_%d' % i):
+          x, block_params, block_moments = _wide_resnet_block(
+              x, widths[1], 1, use_project, moments=moments)
+          _update_params_lists(block_params, params_keys, params_vars)
+          _update_moments_lists(block_moments, moments_keys, moments_vars)
+
+    with tf.variable_scope('conv4_x'):
+      with tf.variable_scope('wide_block_0'):
+        x, block_params, block_moments = _wide_resnet_block(
+            x, widths[2], 2, True, moments=moments)
+        _update_params_lists(block_params, params_keys, params_vars)
+        _update_moments_lists(block_moments, moments_keys, moments_vars)
+      for i in range(1, n):
+        with tf.variable_scope('wide_block_%d' % i):
+          x, block_params, block_moments = _wide_resnet_block(
+              x, widths[2], 1, use_project, moments=moments)
+          _update_params_lists(block_params, params_keys, params_vars)
+          _update_moments_lists(block_moments, moments_keys, moments_vars)
+
+    with tf.variable_scope('embedding_layer'):
+      x, bn_params, bn_moments = bn(
+          x,
+          params=params,
+          moments=moments,
+          backprop_through_moments=backprop_through_moments)
+      _update_params_lists(bn_params, params_keys, params_vars)
+      _update_moments_lists(bn_moments, moments_keys, moments_vars)
+
+      x = relu(x, use_bounded_activation=use_bounded_activation)
+    img_w, img_h = x.get_shape().as_list()[1:3]
+    x = tf.nn.avg_pool(
+        x, ksize=[1, img_w, img_h, 1], strides=[1, 1, 1, 1], padding='VALID')
+    # x.shape: [X, 1, 1, 128]
+    if not keep_spatial_dims:
+      x = tf.reshape(x, [-1, widths[2]])
+    params = collections.OrderedDict(zip(params_keys, params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+
+    return_dict = {'embeddings': x, 'params': params, 'moments': moments}
+    return return_dict
+
+
+def wide_resnet(x,
                 is_training,
                 params=None,
                 moments=None,
-                depth_multiplier=1.0,
                 reuse=tf.AUTO_REUSE,
-                scope='resnet_maml',
+                scope='wide_resnet',
                 backprop_through_moments=True,
                 use_bounded_activation=False,
                 keep_spatial_dims=False):
-  """A MAML-specific variant of resnet."""
-  del depth_multiplier
-  return _resnet(
+  return _wide_resnet(
       x,
       is_training,
       scope,
+      2,
+      2,
       reuse=reuse,
       params=params,
       moments=moments,
-      maml_arch=True,
       backprop_through_moments=backprop_through_moments,
       use_bounded_activation=use_bounded_activation,
       keep_spatial_dims=keep_spatial_dims)
@@ -526,7 +674,6 @@ def _four_layer_convnet(inputs,
                         reuse=tf.AUTO_REUSE,
                         params=None,
                         moments=None,
-                        maml_arch=False,
                         depth_multiplier=1.0,
                         backprop_through_moments=True,
                         use_bounded_activation=False,
@@ -546,7 +693,6 @@ def _four_layer_convnet(inputs,
             stride=1,
             params=params,
             moments=moments,
-            maml_arch=maml_arch,
             backprop_through_moments=backprop_through_moments)
         model_params_keys.extend(conv_bn_params.keys())
         model_params_vars.extend(conv_bn_params.values())
@@ -579,7 +725,6 @@ def _relation_net(inputs,
                   reuse=tf.AUTO_REUSE,
                   params=None,
                   moments=None,
-                  maml_arch=False,
                   depth_multiplier=1.0,
                   backprop_through_moments=True,
                   use_bounded_activation=False):
@@ -598,7 +743,6 @@ def _relation_net(inputs,
             stride=1,
             params=params,
             moments=moments,
-            maml_arch=maml_arch,
             backprop_through_moments=backprop_through_moments)
         model_params_keys.extend(conv_bn_params.keys())
         model_params_vars.extend(conv_bn_params.values())
@@ -697,7 +841,6 @@ def relationnet_embedding(inputs,
             padding='VALID' if i < 3 else 'SAME',
             params=params,
             moments=moments,
-            maml_arch=False,
             backprop_through_moments=backprop_through_moments)
         model_params_keys.extend(conv_bn_params.keys())
         model_params_vars.extend(conv_bn_params.values())
@@ -764,65 +907,17 @@ def four_layer_convnet(inputs,
       reuse=reuse,
       params=params,
       moments=moments,
-      maml_arch=False,
       depth_multiplier=depth_multiplier,
       backprop_through_moments=backprop_through_moments,
       use_bounded_activation=use_bounded_activation,
       keep_spatial_dims=keep_spatial_dims)
 
 
-def four_layer_convnet_maml(inputs,
-                            is_training,
-                            params=None,
-                            moments=None,
-                            depth_multiplier=1.0,
-                            reuse=tf.AUTO_REUSE,
-                            scope='four_layer_convnet_maml',
-                            backprop_through_moments=True,
-                            use_bounded_activation=False):
-  """Embeds inputs using a standard four-layer convnet for the MAML model.
-
-  Args:
-    inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
-    is_training: Whether we are in the training phase.
-    params: None will create new params (or reuse from scope), otherwise an
-      ordered dict of convolutional kernels and biases such that
-      params['kernel_0'] stores the kernel of the first convolutional layer,
-      etc.
-    moments: A dict of the means and vars of the different layers to use for
-      batch normalization. If not provided, the mean and var are computed based
-      on the given inputs.
-    depth_multiplier: The depth multiplier for the convnet channels.
-    reuse: Whether to reuse the network's weights.
-    scope: An optional scope for the tf operations.
-    backprop_through_moments: Whether to allow gradients to flow through the
-      given support set moments. Only applies to non-transductive batch norm.
-    use_bounded_activation: Whether to enable bounded activation. This is useful
-      for post-training quantization.
-
-  Returns:
-    A 2D Tensor, where each row is the embedding of an input in inputs.
-    A dictionary that maps model parameter name to the TF variable.
-  """
-  del is_training
-  return _four_layer_convnet(
-      inputs,
-      scope,
-      reuse=reuse,
-      params=params,
-      moments=moments,
-      maml_arch=True,
-      depth_multiplier=depth_multiplier,
-      backprop_through_moments=backprop_through_moments,
-      use_bounded_activation=use_bounded_activation)
-
-
 NAME_TO_EMBEDDING_NETWORK = {
     'resnet': resnet,
-    'resnet_maml': resnet_maml,
     'relationnet_embedding': relationnet_embedding,
     'four_layer_convnet': four_layer_convnet,
-    'four_layer_convnet_maml': four_layer_convnet_maml,
+    'wide_resnet': wide_resnet,
 }
 
 
@@ -1424,41 +1519,6 @@ class BaselineLearner(Learner):
     super(BaselineLearner, self).__init__(is_training, transductive_batch_norm,
                                           backprop_through_moments, ema_object,
                                           embedding_fn, reader)
-    if self.embedding_fn is four_layer_convnet_maml:
-
-      def wrapped_four_layer_convnet_maml(inputs,
-                                          is_training,
-                                          moments=None,
-                                          backprop_through_moments=True,
-                                          reuse=tf.AUTO_REUSE,
-                                          scope='four_layer_convnet_maml'):
-        return four_layer_convnet_maml(
-            inputs,
-            is_training,
-            moments=moments,
-            reuse=reuse,
-            scope=scope,
-            backprop_through_moments=backprop_through_moments)
-
-      self.embedding_fn = wrapped_four_layer_convnet_maml
-
-    if self.embedding_fn is resnet_maml:
-
-      def wrapped_resnet_maml(inputs,
-                              is_training,
-                              moments=None,
-                              backprop_through_moments=True,
-                              reuse=tf.AUTO_REUSE,
-                              scope='resnet_maml'):
-        return resnet_maml(
-            inputs,
-            is_training,
-            moments=moments,
-            reuse=reuse,
-            scope=scope,
-            backprop_through_moments=backprop_through_moments)
-
-      self.embedding_fn = wrapped_resnet_maml
 
     self.num_train_classes = num_train_classes
     self.num_test_classes = num_test_classes
