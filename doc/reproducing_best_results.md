@@ -1,3 +1,13 @@
+In order to run the experiments described in the first version of the arXiv
+article, [arxiv.org/abs/1903.03096v1](https://arxiv.org/abs/1903.03096v1),
+please use the instructions, code, and configuration files at version
+[arxiv_v1](https://github.com/google-research/meta-dataset/tree/arxiv_v1) of
+this repository.
+
+We are currently working on updating the instructions, code, and configuration
+files to reproduce the results in the second version of the article,
+[arxiv.org/abs/1903.03096v2](https://arxiv.org/abs/1903.03096v2).
+
 # Reproducing best results
 
 This section shows how to launch the training experiments with the

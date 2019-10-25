@@ -1,41 +1,51 @@
 This repository contains accompanying code for the article introducing
 Meta-Dataset,
-[https://arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
+[arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
 
 This code is provided here in order to give more details on the implementation
 of the data-providing pipeline, our back-bones and models, as well as the
 experimental setting.
 
-See below for [user instructions](#user-instructions), including how to [install](#installation) the software, [download and convert](#downloading-and-converting-datasets) the data, and [train](#training) implemented models.
+See below for [user instructions](#user-instructions), including how to:
+
+1.  [install](#installation) the software,
+2.  [download and convert](#downloading-and-converting-datasets) the data, and
+3.  [train](#training) implemented models.
 
 See this [introduction notebook](https://github.com/google-research/meta-dataset/blob/master/Intro_to_Metadataset.ipynb) for a demonstration of how to sample data from the pipeline (episodes or batches).
 
-We are currently working on updating the code and improving the instructions to
-facilitate designing and running new experiments.
+In order to run the experiments described in the first version of the arXiv
+article, [arxiv.org/abs/1903.03096v1](https://arxiv.org/abs/1903.03096v1),
+please use the instructions, code, and configuration files at version
+[arxiv_v1](https://github.com/google-research/meta-dataset/tree/arxiv_v1) of
+this repository.
+
+We are currently working on updating the instructions, code, and configuration
+files to reproduce the results in the second version of the article,
+[arxiv.org/abs/1903.03096v2](https://arxiv.org/abs/1903.03096v2).
 
 This is not an officially supported Google product.
 
 ## Meta-Dataset: A Dataset of Datasets for Learning to Learn from Few Examples
 
-_Eleni Triantafillou, Tyler Zhu, Vincent Dumoulin, Pascal Lamblin, Kelvin Xu,
-Ross Goroshin, Carles Gelada, Kevin Swersky, Pierre-Antoine Manzagol, Hugo
-Larochelle_
+_Eleni Triantafillou, Tyler Zhu, Vincent Dumoulin, Pascal Lamblin, Utku Evci,
+Kelvin Xu, Ross Goroshin, Carles Gelada, Kevin Swersky, Pierre-Antoine Manzagol,
+Hugo Larochelle_
 
 Few-shot classification refers to learning a classifier for new classes given
-only a few examples. While a plethora of models have emerged to tackle this
-recently, we find the current procedure and datasets that are used to
-systematically assess progress in this setting lacking. To address this, we
-propose Meta-Dataset: a new benchmark for training and evaluating few-shot
-classifiers that is large-scale, consists of multiple datasets, and presents
-more natural and realistic tasks. The aim is to measure the ability of
-state-of-the-art models to leverage diverse sources of data to achieve higher
-generalization, and to evaluate that generalization ability in a more
-challenging and realistic setting. We additionally measure robustness to
-variations in the number of available examples and the number of classes.
-Finally our extensive empirical evaluation leads us to identify weaknesses in
-Prototypical Networks and MAML, two popular few-shot classification methods, and
-to propose a new method, Proto-MAML, which achieves improved performance on our
-benchmark.
+only a few examples. While a plethora of models have emerged to tackle it, we
+find the procedure and datasets that are used to assess their progress lacking.
+To address this limitation, we propose Meta-Dataset: a new benchmark for
+training and evaluating models that is large-scale, consists of diverse
+datasets, and presents more realistic tasks. We experiment with popular
+baselines and meta-learners on Meta-Dataset, along with a competitive method
+that we propose. We analyze performance as a function of various characteristics
+of test tasks and examine the models' ability to leverage diverse training
+sources for improving their generalization. We also propose a new set of
+baselines for quantifying the benefit of meta-learning in Meta-Dataset. Our
+extensive experimentation has uncovered important research challenges and we
+hope to inspire work in these directions.
+
 
 # User instructions
 ## Installation
