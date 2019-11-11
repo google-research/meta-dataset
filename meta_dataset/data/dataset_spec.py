@@ -492,6 +492,8 @@ class BiLevelDatasetSpecification(
     Returns:
       The sequence of classes for the split.
     """
+    if not hasattr(self, 'restricted_classes_per_split'):
+      self.initialize()
     offset = self._get_split_offset(split)
     if (self.restricted_classes_per_split is not None and
         split in self.restricted_classes_per_split):
