@@ -446,8 +446,7 @@ class DatasetConverter(object):
 
     if records_path is None:
       records_path = os.path.join(FLAGS.records_root, name)
-    if not tf.io.gfile.isdir(records_path):
-      tf.io.gfile.makedirs(records_path)
+    tf.io.gfile.makedirs(records_path)
     self.records_path = records_path
 
     # Where to write the DatasetSpecification instance.
@@ -458,8 +457,7 @@ class DatasetConverter(object):
     if self.split_file is None:
       self.split_file = os.path.join(FLAGS.splits_root,
                                      '{}_splits.json'.format(self.name))
-      if not tf.io.gfile.isdir(FLAGS.splits_root):
-        tf.io.gfile.makedirs(FLAGS.splits_root)
+      tf.io.gfile.makedirs(FLAGS.splits_root)
 
     # Sets self.dataset_spec to an initial DatasetSpecification or
     # BiLevelDatasetSpecification.

@@ -51,6 +51,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
 import os
 
 from absl import logging
@@ -110,19 +111,30 @@ tf.flags.DEFINE_enum(
     'restrict to for model selection.')
 
 
-def get_value_from_pkl(pickle_file, param_name):
-  """Gets the value associated with param_name in the given pickle file."""
-  if tf.io.gfile.exists(pickle_file):
-    with tf.io.gfile.GFile(pickle_file, 'rb') as f:
-      params = pkl.load(f)
-      if param_name not in params:
-        logging.info('The dict in %s does not have the key %s', pickle_file,
-                     param_name)
-        return None
-      else:
-        return params[param_name]
-  else:
-    logging.info('The file %s does not exist', pickle_file)
+def get_value_from_params_dir(params_dir, param_name):
+  """Gets the value for param_name in the params file in params_dir."""
+
+  def _load_params(params_file, loader, mode):
+    with tf.io.gfile.GFile(params_file, mode) as f:
+      params = loader(f)
+    logging.info('Found params file %s', params_file)
+    return params[param_name]
+
+  try:
+    try:
+      return _load_params(
+          os.path.join(params_dir, 'params.json'), json.load, 'r')
+    except tf.errors.NotFoundError:
+      logging.info('%s does not exist in %s', 'params.json', params_dir)
+
+    try:
+      return _load_params(
+          os.path.join(params_dir, 'params.pkl'), pkl.load, 'rb')
+    except tf.errors.NotFoundError:
+      logging.info('%s does not exist in %s', 'params.pkl', params_dir)
+
+  except KeyError:
+    logging.info('The params file does not have the key %s', param_name)
     return None
 
 
@@ -155,15 +167,13 @@ def get_paths_to_events(root_dir,
   def get_variant_architecture(name):
     """Get the architecture of the given variant if it's recorded, o/w None."""
     variant_params_dir = os.path.join(params_dir, name)
-    variant_params_file = os.path.join(variant_params_dir, 'params.pkl')
-    return get_value_from_pkl(variant_params_file,
-                              '_gin.LearnerConfig.embedding_network')
+    return get_value_from_params_dir(variant_params_dir,
+                                     '_gin.LearnerConfig.embedding_network')
 
   def get_variant_pretrained_source(name):
     variant_params_dir = os.path.join(params_dir, name)
-    variant_params_file = os.path.join(variant_params_dir, 'params.pkl')
-    return get_value_from_pkl(variant_params_file,
-                              '_gin.LearnerConfig.pretrained_source')
+    return get_value_from_params_dir(variant_params_dir,
+                                     '_gin.LearnerConfig.pretrained_source')
 
   def keep_variant(name):
     """Determine if the variant in directory name should be considered."""

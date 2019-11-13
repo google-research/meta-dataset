@@ -47,10 +47,13 @@ from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
 import tensorflow as tf
 
-tf.flags.DEFINE_string('train_checkpoint_dir', '/tmp/metadataset',
-                       'The directory to save checkpoints.')
+DEFAULT_SAVING_DIRECTORY = '/tmp/metadataset'
 
-tf.flags.DEFINE_string('summary_dir', '/tmp/metadataset',
+tf.flags.DEFINE_string('train_checkpoint_dir',
+                       os.path.join(DEFAULT_SAVING_DIRECTORY, 'checkpoints'),
+                       'The directory to save checkpoints.')
+tf.flags.DEFINE_string('summary_dir',
+                       os.path.join(DEFAULT_SAVING_DIRECTORY, 'summaries'),
                        'The directory for writing summaries.')
 
 tf.flags.DEFINE_bool(
@@ -95,6 +98,7 @@ FLAGS = tf.flags.FLAGS
 
 
 def main(unused_argv):
+
   logging.info('FLAGS.gin_config: %s', FLAGS.gin_config)
   logging.info('FLAGS.gin_bindings: %s', FLAGS.gin_bindings)
   gin.parse_config_files_and_bindings(FLAGS.gin_config, FLAGS.gin_bindings)
