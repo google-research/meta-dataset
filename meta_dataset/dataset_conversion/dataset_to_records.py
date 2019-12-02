@@ -131,7 +131,45 @@ TRAIN_TEST_FILE_PATTERN = '{}_{}.tfrecords'
 ILSCRC_DUPLICATES_PATH = os.path.dirname(os.path.realpath(__file__))
 
 
-def write_example(img_bytes, class_label, writer):
+def make_example(img_bytes, class_label, input_key, label_key):
+  """Create an Example protocol buffer for the given image.
+
+  Create a protocol buffer with an integer feature for the class label, and a
+  bytes feature for the input (image or feature)
+
+  Args:
+    img_bytes: bytes, an encoded image representation, can be JPEG (or other
+      image format) or a feature vector corresponding to the image.
+    class_label: the integer class label of the image.
+    input_key: String used as key for the input (image of feature).
+    label_key: String used as key for the label.
+
+  Returns:
+    example_serial: A string correponding to the serialized example.
+
+  """
+  def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+  def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+  feature = {
+      input_key: _bytes_feature(img_bytes),
+      label_key: _int64_feature(class_label)
+  }
+
+  # Create an example protocol buffer.
+  example = tf.train.Example(features=tf.train.Features(feature=feature))
+  example_serial = example.SerializeToString()
+  return example_serial
+
+
+def write_example(img_bytes,
+                  class_label,
+                  writer,
+                  input_key='image',
+                  label_key='label'):
   """Create and write an Example protocol buffer for the given image.
 
   Create a protocol buffer with an integer feature for the class label, and a
@@ -143,22 +181,11 @@ def write_example(img_bytes, class_label, writer):
       accepts it.
     class_label: the integer class label of the image.
     writer: a TFRecordWriter
+    input_key: String used as key for the input (image of feature).
+    label_key: String used as key for the label.
   """
-
-  def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-  def _bytes_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-  feature = {
-      'label': _int64_feature(class_label),
-      'image': _bytes_feature(img_bytes)
-  }
-
-  # Create an example protocol buffer.
-  example = tf.train.Example(features=tf.train.Features(feature=feature))
-  writer.write(example.SerializeToString())
+  example = make_example(img_bytes, class_label, input_key, label_key)
+  writer.write(example)
 
 
 def gen_rand_split_inds(num_train_classes, num_valid_classes, num_test_classes):
@@ -396,6 +423,25 @@ def write_tfrecord_from_directory(class_directory,
   return written_images_count
 
 
+# TODO(goroshin): Make sure to use this function where appropriate.
+def encode_image(img, image_format):
+  """Get image encoded bytes from numpy array.
+
+     Note: use lossless PNG compression to test perfect reconstruction.
+  Args:
+    img: A numpy array of uint8 with shape [image_size, image_size, 3].
+    image_format: A string describing the image compression format.
+
+  Returns:
+    contents: The compressed image serialized to a string of bytes.
+  """
+  img = Image.fromarray(img)
+  buf = io.BytesIO()
+  img.save(buf, image_format)
+  buf.seek(0)
+  img_bytes = buf.getvalue()
+  buf.close()
+  return img_bytes
 class DatasetConverter(object):
   """Converts a dataset to the format required to integrate it in the benchmark.
 
