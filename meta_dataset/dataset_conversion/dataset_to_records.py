@@ -131,6 +131,7 @@ TRAIN_TEST_FILE_PATTERN = '{}_{}.tfrecords'
 AUX_DATA_PATH = os.path.dirname(os.path.realpath(__file__))
 VGGFLOWER_LABELS_PATH = os.path.join(AUX_DATA_PATH,
                                      'VggFlower_labels.txt')
+TRAFFICSIGN_LABELS_PATH = os.path.join(AUX_DATA_PATH, 'TrafficSign_labels.txt')
 
 
 def make_example(img_bytes, class_label, input_key, label_key):
@@ -1239,6 +1240,7 @@ class TrafficSignConverter(DatasetConverter):
   NUM_TRAIN_CLASSES = 0
   NUM_VALID_CLASSES = 0
   NUM_TEST_CLASSES = 43
+  NUM_TOTAL_CLASSES = NUM_TRAIN_CLASSES + NUM_VALID_CLASSES + NUM_TEST_CLASSES
 
   def create_splits(self):
     """Create splits for Traffic Sign and store them in the default path.
@@ -1252,11 +1254,25 @@ class TrafficSignConverter(DatasetConverter):
       The splits for this dataset, represented as a dictionary mapping each of
       'train', 'valid', and 'test' to a list of class names.
     """
-    return {
+    # Load class names from the text file
+    file_path = TRAFFICSIGN_LABELS_PATH
+    with tf.io.gfile.GFile(file_path) as fd:
+      all_lines = fd.read()
+    # First line is expected to be a comment.
+    class_names = all_lines.splitlines()[1:]
+
+    err_msg = 'number of classes in dataset does not match split specification'
+    assert len(class_names) == self.NUM_TOTAL_CLASSES, err_msg
+
+    splits = {
         'train': [],
         'valid': [],
-        'test': list(range(self.NUM_TEST_CLASSES))
+        'test': [
+            '%02d.%s' % (i, class_names[i])
+            for i in range(self.NUM_TEST_CLASSES)
+        ]
     }
+    return splits
 
   def create_dataset_specification_and_records(self):
     """Implements DatasetConverter.create_dataset_specification_and_records."""
@@ -1271,8 +1287,11 @@ class TrafficSignConverter(DatasetConverter):
     self.classes_per_split[learning_spec.Split.VALID] = len(valid_classes)
     self.classes_per_split[learning_spec.Split.TEST] = len(test_classes)
 
-    for class_id in test_classes:
-      logging.info('Creating record for class ID %d...', class_id)
+    all_classes = list(
+        itertools.chain(train_classes, valid_classes, test_classes))
+    for class_id, class_label in enumerate(all_classes):
+      logging.info('Creating record for class ID %d (%s)...', class_id,
+                   class_label)
       # The raw dataset file uncompresses to `GTSRB/Final_Training/Images/`.
       # The `Images` subdirectory contains 43 subdirectories (one for each
       # class) whose names are zero-padded, 5-digit strings representing the
@@ -1281,7 +1300,7 @@ class TrafficSignConverter(DatasetConverter):
                                      '{:05d}'.format(class_id))
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
-      self.class_names[class_id] = class_id
+      self.class_names[class_id] = class_label
       # We skip `GT-?????.csv` files, which contain addditional annotations.
       self.images_per_class[class_id] = write_tfrecord_from_directory(
           class_directory,
