@@ -1,0 +1,16 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+include 'meta_dataset/learn/gin/models/prototypical_config.gin'
+
+# Backbone hypers.
+LearnerConfig.embedding_network = 'resnet'
+LearnerConfig.pretrained_source = 'scratch'
+LearnerConfig.pretrained_checkpoint = ''
+
+# Data hypers.
+DataConfig.image_height = 126
+
+# Training hypers (not needed for eval).
+LearnerConfig.decay_every = 2500
+LearnerConfig.decay_rate = 0.8333411536286996
+LearnerConfig.learning_rate = 0.0006229660387662655
+weight_decay = 0.00018036259587809225

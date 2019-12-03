@@ -1,0 +1,14 @@
+include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
+EpisodeDescriptionConfig.num_support = 1  # Change 5-shot to 1-shot.
+include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
+
+LearnerConfig.embedding_network = 'wide_resnet'
+DataConfig.image_height = 84
+LearnerConfig.pretrained_source = 'scratch'
+weight_decay = 0
+
+BaselineFinetuneLearner.num_finetune_steps = 200
+BaselineFinetuneLearner.finetune_lr = 0.01
+BaselineFinetuneLearner.finetune_with_adam = False
+BaselineLearner.use_weight_norm = False
+BaselineFinetuneLearner.finetune_all_layers = False

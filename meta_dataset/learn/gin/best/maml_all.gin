@@ -1,0 +1,23 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+include 'meta_dataset/learn/gin/models/maml_config.gin'
+
+# Backbone hypers.
+LearnerConfig.embedding_network = 'four_layer_convnet'
+LearnerConfig.pretrained_source = 'imagenet'
+LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_convnet_best/model_42500.ckpt'
+
+
+# Model hypers.
+MAMLLearner.first_order = True
+MAMLLearner.alpha = 0.01
+MAMLLearner.additional_test_update_steps = 0
+MAMLLearner.num_update_steps = 10
+
+# Data hypers.
+DataConfig.image_height = 84
+
+# Training hypers (not needed for eval).
+LearnerConfig.decay_every = 100
+LearnerConfig.decay_rate = 0.7391196845071122
+LearnerConfig.learning_rate = 0.0033100944028230375
+weight_decay = 0.0003592684468298601

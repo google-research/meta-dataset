@@ -1,13 +1,16 @@
 include 'meta_dataset/learn/gin/setups/imagenet.gin'
-
 include 'meta_dataset/learn/gin/models/matching_config.gin'
+
+# Backbone hypers.
 LearnerConfig.embedding_network = 'resnet'
+LearnerConfig.pretrained_source = 'imagenet'
+LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_27500.ckpt'
+
+# Data hypers.
 DataConfig.image_height = 126
 
-## Hyperparameters used to train the best model
+# Training hypers (not needed for eval).
 LearnerConfig.decay_every = 500
 LearnerConfig.decay_rate = 0.915193802145601
-LearnerConfig.learning_rate = 0.000004006744265427231
-LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_29000.ckpt'
-LearnerConfig.pretrained_source = 'imagenet'
+LearnerConfig.learning_rate = 0.0012064626897259694
 weight_decay = 0.0000885787420909229

@@ -61,7 +61,7 @@ do
 done
 ```
 
-Each of the jobs took between 8 and 12 hours to reach 50k steps (episodes).
+Each of the jobs took between 12 and 18 hours to reach 75k steps (episodes).
 
 ## Training on ImageNet
 

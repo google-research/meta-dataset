@@ -49,7 +49,7 @@ hope to inspire work in these directions.
 
 # User instructions
 ## Installation
-Meta-Dataset is now compatible with Python 2 and Python 3, but has mostly been used with Python 2 up to now, so glitches with Python 3 are still possible.
+Meta-Dataset is now compatible with Python 2 and Python 3, please report any glitch with Python 3.
 The code has not been tested with TensorFlow 2 yet.
 
 - We recommend you follow [these instructions](https://www.tensorflow.org/install/pip) to install TensorFlow.
@@ -95,7 +95,8 @@ Experiments are defined via [gin](google/gin-config) configuration files, that a
 - `default/` contains files that each correspond to one experiment, mostly defining a setup and a model, with default values for training hyperparameters.
 - `best/` contains files with values for training hyperparameters that achieved the best performance during hyperparameter search.
 
-There are two main architectures, or "backbones": `four_layer_convnet` (sometimes `convnet` for short) and `resnet`, that can be used in the baselines ("k-NN" and "Finetune"), ProtoNet, and MatchingNet. Their layers do not have a trainable bias since it would be negated by the use of batch normalization. For fo-MAML and ProtoMAML, each of the backbones have a version with trainable biases (due to the way batch normalization is handled), resp. `four_layer_convnet_maml` (or `mamlconvnet`) and `resnet_maml` (sometimes `mamlresnet`); these can also be used by the baseline for pre-training of the MAML models.
+There are three main architectures, also called "backbones" (or "embedding networks"): `four_layer_convnet` (sometimes `convnet` for short), `resnet`, and `wide_resnet`. These architectures can be used by all baselines and episodic models.
+Another backbone, `relationnet_embedding` (similar to `four_layer_convnet` but without pooling on the last layer), is only used by RelationNet (and baseline, for pre-training purposes).
 
 ### Reproducing results
 

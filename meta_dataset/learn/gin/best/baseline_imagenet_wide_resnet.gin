@@ -1,0 +1,22 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+include 'meta_dataset/learn/gin/models/baseline_config.gin'
+
+# Backbone hypers.
+LearnerConfig.embedding_network = 'wide_resnet'
+LearnerConfig.pretrained_checkpoint = ''
+LearnerConfig.pretrained_source = 'scratch'
+
+# Model hypers.
+BaselineLearner.knn_distance = 'cosine'
+BaselineLearner.cosine_classifier = True
+BaselineLearner.cosine_logits_multiplier = 1
+BaselineLearner.use_weight_norm = True
+
+# Data hypers.
+DataConfig.image_height = 126
+
+# Training hypers (not needed for eval).
+LearnerConfig.decay_every = 100
+LearnerConfig.decay_rate = 0.5082121576573064
+LearnerConfig.learning_rate = 0.007084776688116927
+weight_decay = 0.000005078192976503067
