@@ -128,7 +128,9 @@ tf.flags.DEFINE_string('splits_root', '',
 FLAGS = tf.flags.FLAGS
 DEFAULT_FILE_PATTERN = '{}.tfrecords'
 TRAIN_TEST_FILE_PATTERN = '{}_{}.tfrecords'
-ILSCRC_DUPLICATES_PATH = os.path.dirname(os.path.realpath(__file__))
+AUX_DATA_PATH = os.path.dirname(os.path.realpath(__file__))
+VGGFLOWER_LABELS_PATH = os.path.join(AUX_DATA_PATH,
+                                     'VggFlower_labels.txt')
 
 
 def make_example(img_bytes, class_label, input_key, label_key):
@@ -489,7 +491,6 @@ class DatasetConverter(object):
     self.data_root = data_root
     self.has_superclasses = has_superclasses
     self.seed = random_seed
-
     if records_path is None:
       records_path = os.path.join(FLAGS.records_root, name)
     tf.io.gfile.makedirs(records_path)
@@ -967,6 +968,8 @@ class VGGFlowerConverter(DatasetConverter):
   NUM_TRAIN_CLASSES = 71
   NUM_VALID_CLASSES = 15
   NUM_TEST_CLASSES = 16
+  NUM_TOTAL_CLASSES = NUM_TRAIN_CLASSES + NUM_VALID_CLASSES + NUM_TEST_CLASSES
+  ID_LEN = 3
 
   def create_splits(self):
     """Create splits for VGG Flower and store them in the default path.
@@ -980,19 +983,28 @@ class VGGFlowerConverter(DatasetConverter):
       The splits for this dataset, represented as a dictionary mapping each of
       'train', 'valid', and 'test' to a list of class integers.
     """
+    # Load class names from the text file
+    file_path = VGGFLOWER_LABELS_PATH
+    with tf.io.gfile.GFile(file_path) as fd:
+      all_lines = fd.read()
+    # First line is expected to be a comment.
+    class_names = all_lines.splitlines()[1:]
+    err_msg = 'number of classes in dataset does not match split specification'
+    assert len(class_names) == self.NUM_TOTAL_CLASSES, err_msg
+
     # Provided class labels are numbers started at 1.
     train_inds, valid_inds, test_inds = gen_rand_split_inds(
         self.NUM_TRAIN_CLASSES, self.NUM_VALID_CLASSES, self.NUM_TEST_CLASSES)
+    format_str = '%%0%dd.%%s' % self.ID_LEN
     splits = {
-        'train': [int(i + 1) for i in train_inds],
-        'valid': [int(i + 1) for i in valid_inds],
-        'test': [int(i + 1) for i in test_inds]
+        'train': [format_str % (i + 1, class_names[i]) for i in train_inds],
+        'valid': [format_str % (i + 1, class_names[i]) for i in valid_inds],
+        'test': [format_str % (i + 1, class_names[i]) for i in test_inds]
     }
     return splits
 
   def create_dataset_specification_and_records(self):
     """Implements DatasetConverter.create_dataset_specification_and_records."""
-
     splits = self.get_splits()
     # Get the names of the classes assigned to each split.
     train_classes = splits['train']
@@ -1022,12 +1034,13 @@ class VGGFlowerConverter(DatasetConverter):
     for class_id, class_label in enumerate(all_classes):
       logging.info('Creating record for class ID %d (%s)...', class_id,
                    class_label)
-      class_paths = filepaths[class_label]
+      # We encode the original ID's in the label.
+      original_id = int(class_label[:self.ID_LEN])
+      class_paths = filepaths[original_id]
       class_records_path = os.path.join(
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_label
       self.images_per_class[class_id] = len(class_paths)
-
       # Create and write the tf.Record of the examples of this class.
       write_tfrecord_from_image_files(class_paths, class_id, class_records_path)
 
@@ -1458,7 +1471,7 @@ class ImageNetConverter(DatasetConverter):
     self.files_to_skip = set()
     for other_dataset in ('Caltech101', 'Caltech256', 'CUBirds'):
       duplicates_file = os.path.join(
-          ILSCRC_DUPLICATES_PATH,
+          AUX_DATA_PATH,
           'ImageNet_{}_duplicates.txt'.format(other_dataset))
 
       with tf.io.gfile.GFile(duplicates_file) as fd:
@@ -1476,7 +1489,6 @@ class ImageNetConverter(DatasetConverter):
         file_path = l.split('#')[0].strip()
         file_name = os.path.basename(file_path)
         self.files_to_skip.add(file_name)
-
     ilsvrc_2012_num_leaf_images_path = FLAGS.ilsvrc_2012_num_leaf_images_path
     if not ilsvrc_2012_num_leaf_images_path:
       ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
