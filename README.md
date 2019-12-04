@@ -23,6 +23,9 @@ this repository.
 We are currently working on updating the instructions, code, and configuration
 files to reproduce the results in the second version of the article,
 [arxiv.org/abs/1903.03096v2](https://arxiv.org/abs/1903.03096v2).
+You can follow the progess in branch
+[arxiv_v2_dev](https://github.com/google-research/meta-dataset/tree/arxiv_v2_dev)
+of this repository.
 
 This is not an officially supported Google product.
 

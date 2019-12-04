@@ -14,12 +14,11 @@
 # limitations under the License.
 
 # Lint as: python3
-"""Tests for meta_dataset.data.decoder."""
+"""Tests for meta_dataset.decoder."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
 
 from meta_dataset.data import decoder
 from meta_dataset.dataset_conversion import dataset_to_records
