@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Lint as: python3
-"""Tests for meta_dataset.decoder."""
+"""Tests for meta_dataset.data.decoder."""
 
 from __future__ import absolute_import
 from __future__ import division
