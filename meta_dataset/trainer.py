@@ -282,6 +282,16 @@ class LearnerConfig(object):
       pretrained_source: A string, the pretraining setup to use.
     """
     # pyformat: enable
+    if checkpoint_for_eval and pretrained_checkpoint:
+      raise ValueError(
+          'Cannot define both `checkpoint_for_eval` and '
+          '`pretrained_checkpoint`. The difference between them is that for '
+          'the former, all variables are restored (including the global step), '
+          'while the latter is only applicable to the start of training for '
+          'initializing the model from pre-trained weights. It is also only '
+          'applicable to episodic models and restores only the embedding '
+          'weights.')
+
     self.episodic = episodic
     self.train_learner = train_learner
     self.eval_learner = eval_learner
