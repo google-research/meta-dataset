@@ -39,7 +39,7 @@ they could be dispatched to run in parallel with any infrastructure you have
 access to.
 
 Time reported are approximate, and were measured on GCP instances with one P100
-GPU, 16vCPU cores (although the CPU usage was far from full), 155 GB memory, and
+GPU, 16vCPU cores (although the CPU usage was far from full), 104 GB memory, and
 local SSD storage for records, summaries, and checkpoints.
 
 ## Baseline and pre-training on ImageNet
@@ -52,7 +52,7 @@ all backbone variants are needed for the best models, we will only need to train
 
 ```bash
 export EXPNAME=baseline_imagenet
-for BACKBONE in resnet mamlconvnet mamlresnet
+for BACKBONE in convnet resnet wide_resnet
 do
   export JOBNAME=${EXPNAME}_${BACKBONE}
   python -m meta_dataset.train \
@@ -64,7 +64,11 @@ do
 done
 ```
 
-Each of the jobs took between 12 and 18 hours to reach 75k steps (episodes).
+Time to reach 75k steps (episodes):
+
+- `convnet`: 12 hours
+- `resnet`: 16 hours
+- `wide_resnet`: 36 hours
 
 ## Training on ImageNet
 
