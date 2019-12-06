@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/models/learner_config.gin'
 LearnerConfig.episodic = True
 LearnerConfig.train_learner = 'MAML'
 LearnerConfig.eval_learner = 'MAML'
-LearnerConfig.embedding_network = 'four_layer_convnet_maml'
+LearnerConfig.embedding_network = 'four_layer_convnet'
 weight_decay = 1e-4
 MAMLLearner.weight_decay = %weight_decay
 MAMLLearner.num_update_steps = 5
