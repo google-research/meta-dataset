@@ -75,6 +75,23 @@ EPISODIC_LEARNER_NAMES = [
 BATCH_LEARNERS = [NAME_TO_LEARNER[name] for name in BATCH_LEARNER_NAMES]
 EPISODIC_LEARNERS = [NAME_TO_LEARNER[name] for name in EPISODIC_LEARNER_NAMES]
 
+# TODO(eringrant): Use `learning_spec.Split.TRAIN`, `learning_spec.Split.VALID`,
+# and `learning_spec.Split.TEST` instead of string constants, and replace all
+# remaining string redefinitions.
+TRAIN_SPLIT = 'train'
+VALID_SPLIT = 'valid'
+TEST_SPLIT = 'test'
+
+
+class UnexpectedSplitError(ValueError):
+
+  def __init__(self,
+               unexpected_split,
+               expected_splits=(TRAIN_SPLIT, TEST_SPLIT, VALID_SPLIT)):
+    super(UnexpectedSplitError,
+          self).__init__('Split must be one of {}, but received `{}`. '.format(
+              expected_splits, unexpected_split))
+
 
 @gin.configurable('benchmark')
 def get_datasets_and_restrictions(train_datasets='',
@@ -87,13 +104,16 @@ def get_datasets_and_restrictions(train_datasets='',
     train_datasets: A string of comma-separated dataset names for training.
     eval_datasets: A string of comma-separated dataset names for evaluation.
     restrict_classes: If provided, a dict that maps dataset names to a dict that
-      specifies for each of 'train', 'valid' and 'test' the number of classes to
-      restrict to. This can lead to some classes of a particular split of a
-      particular dataset never participating in episode creation.
+      specifies for each of `meta_dataset.trainer.TRAIN_SPLIT`,
+      `meta_dataset.trainer.VALID_SPLIT` and `meta_dataset.trainer.TEST_SPLIT`
+      the number of classes to restrict to. This can lead to some classes of a
+      particular split of a particular dataset never participating in episode
+      creation.
     restrict_num_per_class: If provided, a dict that maps dataset names to a
-      dict that specifies for each of 'train', 'valid' and 'test' the number of
-      examples per class to restrict to. For datasets / splits that are not
-      specified, no restriction is applied.
+      dict that specifies for each of `meta_dataset.trainer.TRAIN_SPLIT`,
+      `meta_dataset.trainer.VALID_SPLIT` and `meta_dataset.trainer.TEST_SPLIT`
+      the number of examples per class to restrict to. For datasets / splits
+      that are not specified, no restriction is applied.
 
   Returns:
     Two lists of dataset names and two possibly empty dictionaries.
@@ -167,17 +187,17 @@ def get_split_enum(split):
     split: A String.
 
   Raises:
-    ValueError: Split must be one of 'train', 'valid' or 'test'.
+    UnexpectedSplitError: split not TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
   """
   # Get the int representing the chosen split.
-  if split == 'train':
+  if split == TRAIN_SPLIT:
     split_enum = learning_spec.Split.TRAIN
-  elif split == 'valid':
+  elif split == VALID_SPLIT:
     split_enum = learning_spec.Split.VALID
-  elif split == 'test':
+  elif split == TEST_SPLIT:
     split_enum = learning_spec.Split.TEST
   else:
-    raise ValueError('Split must be one of "train", "valid" or "test".')
+    raise UnexpectedSplitError(split)
   return split_enum
 
 
@@ -344,14 +364,14 @@ class Trainer(object):
         validation during train or for final test evaluation, depending on the
         nature of the experiment, as dictated by `is_training'.
       restrict_classes: A dict that maps dataset names to a dict that specifies
-        for each of 'train', 'valid' and 'test' the number of classes to
-        restrict to. This can lead to some classes of a particular split of a
-        particular dataset never participating in episode creation.
+        for each of TRAIN_SPLIT, VALID_SPLIT and TEST_SPLIT the number of
+        classes to restrict to. This can lead to some classes of a particular
+        split of a particular dataset never participating in episode creation.
       restrict_num_per_class: A dict that maps dataset names to a dict that
-        specifies for each of 'train', 'valid' and 'test' the number of examples
-        per class to restrict to. For datasets / splits that are not mentioned,
-        no restriction is applied. If restrict_num_per_class is the empty dict,
-        no restriction is applied to any split of any dataset.
+        specifies for each of TRAIN_SPLIT, VALID_SPLIT and TEST_SPLIT the number
+        of examples per class to restrict to. For datasets / splits that are not
+        mentioned, no restriction is applied. If restrict_num_per_class is the
+        empty dict, no restriction is applied to any split of any dataset.
       checkpoint_dir: A string, the path to the checkpoint directory, or None if
         no checkpointing should occur.
       summary_dir: A string, the path to the checkpoint directory, or None if no
@@ -360,7 +380,7 @@ class Trainer(object):
       eval_finegrainedness: Whether to perform binary ImageNet evaluation for
         assessing the performance on fine- vs coarse- grained tasks.
       eval_finegrainedness_split: The subgraph of ImageNet to perform the
-        aforementioned analysis on. Notably, if this is 'train', we need to
+        aforementioned analysis on. Notably, if this is TRAIN_SPLIT, we need to
         ensure that an training data is used episodically, even if the given
         model is the baseline model which usually uses batches for training.
       eval_imbalance_dataset: A dataset on which to perform evaluation for
@@ -376,6 +396,9 @@ class Trainer(object):
       learn_config: A LearnConfig, the learning configuration.
       learner_config: A LearnerConfig, the learner configuration.
       data_config: A DataConfig, the data configuration.
+
+    Raises:
+      UnexpectedSplitError: If split not as expected for Trainer.
     """
     self.train_learner_class = train_learner
     self.eval_learner_class = eval_learner
@@ -391,7 +414,7 @@ class Trainer(object):
     self.eval_finegrainedness_split = eval_finegrainedness_split
     self.eval_imbalance_dataset = eval_imbalance_dataset
 
-    self.eval_split = 'test'
+    self.eval_split = VALID_SPLIT if is_training else TEST_SPLIT
     if eval_finegrainedness:
       # The fine- vs coarse- grained evaluation may potentially be performed on
       # the training graph as it exhibits greater variety in this aspect.
@@ -403,7 +426,7 @@ class Trainer(object):
           'Forcing the number of %s classes to be 2, since '
           'the finegrainedness analysis is applied on binary '
           'classification tasks only.', eval_finegrainedness_split)
-      if eval_finegrainedness and eval_finegrainedness_split == 'train':
+      if eval_finegrainedness and eval_finegrainedness_split == TRAIN_SPLIT:
         train_episode_config.num_ways = 2
       else:
         eval_episode_config.num_ways = 2
@@ -439,43 +462,38 @@ class Trainer(object):
     # Which splits to support depends on whether we are in the meta-training
     # phase or not. If we are, we need the train split, and the valid one for
     # early-stopping. If not, we only need the test split.
-    if self.is_training:
-      self.required_splits = ['train', 'valid']
-    else:
-      self.required_splits = [self.eval_split]
+    self.required_splits = [TRAIN_SPLIT] if self.is_training else []
+    self.required_splits += [self.eval_split]
 
     # Get the training, validation and testing specifications.
     # Each is either an EpisodeSpecification or a BatchSpecification.
-    split_episode_or_batch_specs = {}
-    if 'train' in self.required_splits:
-      split_episode_or_batch_specs['train'] = self._create_train_specification()
-    for split in ['valid', 'test']:
-      if split not in self.required_splits:
-        continue
-      split_episode_or_batch_specs[split] = self._create_held_out_specification(
-          split)
-    self.split_episode_or_batch_specs = split_episode_or_batch_specs
-
-    # Get the next data (episode or batch) for the different splits.
+    self.split_episode_or_batch_specs = {}
     self.next_data = {}
-    for split in self.required_splits:
-      self.next_data[split] = self.build_data(split)
-
-    # Initialize the learners.
     self.ema_object = None  # Using dummy EMA object for now.
     self.learners = {}
-    self.embedding_fn = learner.NAME_TO_EMBEDDING_NETWORK[
-        self.learner_config.embedding_network]
-    if 'train' in self.required_splits:
-      self.learners['train'] = (
-          self.create_train_learner(self.train_learner_class,
-                                    self.get_next('train')))
-    if self.eval_learner_class is not None:
-      for split in ['valid', 'test']:
-        if split not in self.required_splits:
-          continue
+    self.embedding_fn = (
+        learner.NAME_TO_EMBEDDING_NETWORK[self.learner_config.embedding_network]
+    )
+    for split in self.required_splits:
+      # Get the next data (episode or batch) for the different splits.
+      if split == TRAIN_SPLIT:
+        self.split_episode_or_batch_specs[split] = (
+            self._create_train_specification())
+        # TODO(eringrant): Refactor to expose or avoid dependence of
+        # `build_data` on `split_episode_or_batch_specs`.
+        self.next_data[split] = self.build_data(split)
+        self.learners[split] = self.create_train_learner(
+            self.train_learner_class, self.get_next(split))
+      elif split in [VALID_SPLIT, TEST_SPLIT]:
+        self.split_episode_or_batch_specs[split] = (
+            self._create_held_out_specification(split))
+        # TODO(eringrant): Refactor to expose or avoid dependence of
+        # `build_data` on `split_episode_or_batch_specs`.
+        self.next_data[split] = self.build_data(split)
         self.learners[split] = self.create_eval_learner(self.eval_learner_class,
                                                         self.get_next(split))
+      else:
+        raise UnexpectedSplitError(split)
 
     # Get the Tensors for the losses / accuracies of the different learners.
     self.losses = dict(
@@ -556,7 +574,8 @@ class Trainer(object):
     (way, shots, class_props, class_ids, test_logits,
      test_targets) = [], [], [], [], [], []
     for split in self.required_splits:
-      if split == 'train' and skip_train:
+
+      if split == TRAIN_SPLIT and skip_train:
         (way_, shots_, class_props_, class_ids_, test_logits_,
          test_targets_) = [None] * 6
       else:
@@ -691,9 +710,9 @@ class Trainer(object):
       else:
         splits = set()
         if dataset_name in self.train_dataset_list:
-          splits.add('train')
+          splits.add(TRAIN_SPLIT)
         if dataset_name in self.eval_dataset_list:
-          splits.add('valid')
+          splits.add(VALID_SPLIT)
 
       # By default, all classes of each split will eventually be used for
       # episode creation. But it might be that for some datasets, it is
@@ -706,7 +725,7 @@ class Trainer(object):
           # non-uniform (bilevel or hierarhical) class sampling.
           episode_descr_config = (
               self.train_episode_config
-              if split == 'train' else self.eval_episode_config)
+              if split == TRAIN_SPLIT else self.eval_episode_config)
           if has_dag and not episode_descr_config.ignore_dag_ontology:
             raise ValueError('Restrictions on the class set of a dataset with '
                              'a DAG ontology are not supported when '
@@ -844,14 +863,14 @@ class Trainer(object):
       self.sess.run(tf.variables_initializer(vars_to_reinit))
       logging.info('Re-initialized vars %s.', vars_to_reinit_names)
 
-  def _create_held_out_specification(self, split='test'):
+  def _create_held_out_specification(self, split=TEST_SPLIT):
     """Create an EpisodeSpecification for either validation or testing.
 
     Note that testing is done episodically whether or not training was episodic.
     This is why the different subclasses should not override this method.
 
     Args:
-      split: one of 'valid' or 'test'
+      split: one of VALID_SPLIT or TEST_SPLIT
 
     Returns:
       an EpisodeSpecification.
@@ -880,7 +899,7 @@ class Trainer(object):
     """Returns the restricted dataset_list for the given split.
 
     Args:
-      split: A string, either 'train', 'valid' or 'test'.
+      split: A string, either TRAIN_SPLIT, VALID_SPLIT or TEST_SPLIT.
       splits_to_contribute: A list whose length is the number of datasets in the
         benchmark. Each element is a set of strings corresponding to the splits
         that the respective dataset will contribute to.
@@ -908,10 +927,13 @@ class Trainer(object):
     """Builds an EpisodeDataset containing the next data for "split".
 
     Args:
-      split: A string, either 'train', 'valid', or 'test'.
+      split: A string, either TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
 
     Returns:
       An EpisodeDataset.
+
+    Raises:
+      UnexpectedSplitError: If split not as expected for this episode build.
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
@@ -936,13 +958,12 @@ class Trainer(object):
       raise ValueError(
           'Expected a square image shape, not {}'.format(image_shape))
 
-    if split == 'train':
+    if split == TRAIN_SPLIT:
       episode_descr_config = self.train_episode_config
-    elif split == 'valid' or split == 'test':
+    elif split in (VALID_SPLIT, TEST_SPLIT):
       episode_descr_config = self.eval_episode_config
     else:
-      raise ValueError('Unexpected split: {}. Was expecting "train", "valid" '
-                       'or "test".'.format(split))
+      raise UnexpectedSplitError(split)
 
     # Decide how many examples per class to restrict to for each dataset for the
     # given split (by default there is no restriction).
@@ -998,7 +1019,7 @@ class Trainer(object):
     """Builds a Batch object containing the next data for "split".
 
     Args:
-      split: A string, either 'train', 'valid', or 'test'.
+      split: A string, either TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
 
     Returns:
       An EpisodeDataset.
@@ -1058,12 +1079,12 @@ class Trainer(object):
     """Returns the next batch or episode.
 
     Args:
-      split: A str, one of 'train', 'valid', or 'test'.
+      split: A str, one of TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
 
     Raises:
       ValueError: Invalid split.
     """
-    if split not in ['train', 'valid', 'test']:
+    if split not in [TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT]:
       raise ValueError('Invalid split. Expected one of "train", "valid", or '
                        '"test".')
     return self.next_data[split]
@@ -1074,7 +1095,7 @@ class Trainer(object):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
       train_op = self.optimizer.minimize(
-          self.losses['train'], global_step=global_step)
+          self.losses[TRAIN_SPLIT], global_step=global_step)
     return train_op
 
   def get_updated_global_step(self):
@@ -1098,7 +1119,7 @@ class Trainer(object):
     while global_step < self.learn_config.num_updates:
       # Perform the next update.
       (_, train_loss, train_acc, global_step) = self.sess.run([
-          self.train_op, self.losses['train'], self.accs['train'],
+          self.train_op, self.losses[TRAIN_SPLIT], self.accs[TRAIN_SPLIT],
           updated_global_step
       ])
 
@@ -1130,7 +1151,7 @@ class Trainer(object):
     if not global_step % self.learn_config.validate_every:
       # Get the validation accuracy and confidence interval.
       (valid_acc, valid_ci, valid_acc_summary,
-       valid_ci_summary) = self.evaluate('valid')
+       valid_ci_summary) = self.evaluate(VALID_SPLIT)
       # Validation summaries are updated every time validation happens which is
       # every validate_every steps instead of log_every steps.
       if self.summary_writer:
@@ -1158,7 +1179,7 @@ class Trainer(object):
     mean_acc = np.mean(accuracies)
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
 
-    if split == 'test':
+    if split == TEST_SPLIT:
       logging.info('Test accuracy: %f, +/- %f.\n', mean_acc, ci_acc)
 
     mean_acc_summary = tf.Summary()
@@ -1234,13 +1255,14 @@ class BatchTrainer(Trainer):
   """A Trainer that trains a learner through a series of batches."""
 
   def build_data(self, split):
-    # The 'train' split is read as batches, 'valid' and 'test' as episodes.
-    if split == 'train' and self.eval_split != 'train':
+    # The TRAIN_SPLIT split is read as batches, VALID_SPLIT and TEST_SPLIT as
+    # episodes.
+    if split == TRAIN_SPLIT and self.eval_split != TRAIN_SPLIT:
       return self.build_batch(split)
-    elif split in ('train', 'valid', 'test'):
+    elif split in (TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT):
       return self.build_episode(split)
     else:
-      raise ValueError('Unexpected value for split: {}'.format(split))
+      raise UnexpectedSplitError(split)
 
   def _get_num_total_classes(self):
     """Returns total number of classes in the benchmark."""
@@ -1255,7 +1277,7 @@ class BatchTrainer(Trainer):
 
   def _create_train_specification(self):
     """Returns an EpisodeSpecification or BatchSpecification for training."""
-    if self.eval_split == 'train':
+    if self.eval_split == TRAIN_SPLIT:
       return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
                                                 self.num_train_classes,
                                                 self.num_support_train,
@@ -1267,7 +1289,7 @@ class BatchTrainer(Trainer):
   def set_way_shots_classes_logits_targets(self):
     """Sets the Tensors for the above info of the learner's next episode."""
     skip_train = True
-    if self.eval_split == 'train':
+    if self.eval_split == TRAIN_SPLIT:
       skip_train = False
     self.maybe_set_way_shots_classes_logits_targets(skip_train=skip_train)
 
@@ -1276,7 +1298,7 @@ class BatchTrainer(Trainer):
     evaluation_summaries = []
     for split in self.required_splits:
       # In the Batch case, training is non-episodic but evaluation is episodic.
-      if split == 'train' and self.eval_split != 'train':
+      if split == TRAIN_SPLIT and self.eval_split != TRAIN_SPLIT:
         continue
       evaluation_summaries.extend(self.add_eval_summaries_split(split))
     return evaluation_summaries
@@ -1284,7 +1306,7 @@ class BatchTrainer(Trainer):
   def create_train_learner(self, train_learner_class, episode_or_batch):
     """Instantiates a train learner."""
     num_total_classes = self._get_num_total_classes()
-    is_training = False if self.eval_split == 'train' else True
+    is_training = False if self.eval_split == TRAIN_SPLIT else True
     return train_learner_class(is_training,
                                self.learn_config.transductive_batch_norm,
                                self.backprop_through_moments, self.ema_object,

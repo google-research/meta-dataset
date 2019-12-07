@@ -81,7 +81,8 @@ tf.flags.DEFINE_bool(
     'procedure used to get episodes, and therefore requires its own setting.')
 
 tf.flags.DEFINE_enum(
-    'eval_finegrainedness_split', 'train', ['train', 'valid', 'test'], 'The '
+    'eval_finegrainedness_split', trainer.TRAIN_SPLIT,
+    [trainer.TRAIN_SPLIT, trainer.VALID_SPLIT, trainer.TEST_SPLIT], 'The '
     'split whose results we want to use for the fine-grainedness analysis.'
     'Contrary to most analyses which are performed on the test split only, the '
     'fine-grainedness analysis may also be performed on the train or valid '
@@ -160,8 +161,9 @@ def main(unused_argv):
      restrict_num_per_class) = trainer.get_datasets_and_restrictions()
 
     train_learner = None
-    if FLAGS.is_training or (FLAGS.eval_finegrainedness and
-                             FLAGS.eval_finegrainedness_split == 'train'):
+    if FLAGS.is_training or (
+        FLAGS.eval_finegrainedness and
+        FLAGS.eval_finegrainedness_split == trainer.TRAIN_SPLIT):
       # If eval_finegrainedness is True, even in pure evaluation mode we still
       # require a train learner, since we may perform this analysis on the
       # training sub-graph of ImageNet too.
@@ -221,7 +223,7 @@ def main(unused_argv):
                        'should be performed on individual datasets '
                        'only.'.format(datasets))
 
-    eval_split = 'test'
+    eval_split = trainer.TEST_SPLIT
     if FLAGS.eval_finegrainedness:
       eval_split = FLAGS.eval_finegrainedness_split
 

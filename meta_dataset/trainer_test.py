@@ -102,14 +102,15 @@ class TrainerTest(tf.test.TestCase):
     )
 
     # Get the next train / valid / test episodes.
-    train_episode = episodic_trainer.get_next('train')
+    train_episode = episodic_trainer.get_next(trainer.TRAIN_SPLIT)
     self.assertIsInstance(train_episode, providers.EpisodeDataset)
 
     # This isn't really a test. It just checks that things don't crash...
     print(
         episodic_trainer.sess.run([
-            episodic_trainer.train_op, episodic_trainer.losses['train'],
-            episodic_trainer.accs['train']
+            episodic_trainer.train_op,
+            episodic_trainer.losses[trainer.TRAIN_SPLIT],
+            episodic_trainer.accs[trainer.TRAIN_SPLIT]
         ]))
 
 
