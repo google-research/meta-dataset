@@ -56,6 +56,7 @@ class DataConfig(object):
     self.num_prefetch = num_prefetch
 
 
+@gin.configurable
 class DataAugmentation(object):
   """Configurations for performing data augmentation."""
 
@@ -74,24 +75,6 @@ class DataAugmentation(object):
     self.jitter_amount = jitter_amount
     self.enable_gaussian_noise = enable_gaussian_noise
     self.gaussian_noise_std = gaussian_noise_std
-
-
-@gin.configurable
-class SupportSetDataAugmentation(DataAugmentation):
-  """Configurations for performing data augmentation on support set."""
-  pass
-
-
-@gin.configurable
-class QuerySetDataAugmentation(DataAugmentation):
-  """Configurations for performing data augmentation on query set."""
-  pass
-
-
-@gin.configurable
-class BatchDataAugmentation(DataAugmentation):
-  """Configurations for performing data augmentation for batch."""
-  pass
 
 
 @gin.configurable

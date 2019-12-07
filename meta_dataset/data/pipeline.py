@@ -34,6 +34,7 @@ import functools
 from absl import logging
 import gin.tf
 from meta_dataset import data
+from meta_dataset.data import decoder
 from meta_dataset.data import learning_spec
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
@@ -71,14 +72,13 @@ def _log_data_augmentation(data_augmentation, name):
     logging.info('gaussian_noise_std: %s', data_augmentation.gaussian_noise_std)
 
 
-@gin.configurable(
-    whitelist=['support_data_augmentation', 'query_data_augmentation'])
+@gin.configurable(whitelist=['support_decoder', 'query_decoder'])
 def process_episode(example_strings,
                     class_ids,
                     chunk_sizes,
                     image_size,
-                    support_data_augmentation=None,
-                    query_data_augmentation=None):
+                    support_decoder=None,
+                    query_decoder=None):
   """Processes an episode.
 
   This function:
@@ -98,29 +98,27 @@ def process_episode(example_strings,
     chunk_sizes: Tuple of 3 ints representing the sizes of (resp.) the flush,
       support, and query chunks.
     image_size: int, desired image size used during decoding.
-    support_data_augmentation: A DataAugmentation object with parameters for
-      perturbing the support set images.
-    query_data_augmentation: A DataAugmentation object with parameters for
-      perturbing the query set images.
+    support_decoder: Decoder class instance for support set.
+    query_decoder: Decoder class instance for query set.
 
   Returns:
     support_images, support_labels, support_class_ids, query_images,
       query_labels, query_class_ids: Tensors, batches of images, labels, and
       (absolute) class IDs, for the support and query sets (respectively).
   """
-  _log_data_augmentation(support_data_augmentation, 'support')
-  _log_data_augmentation(query_data_augmentation, 'query')
+  # TODO(goroshin): Replace with `support_decoder.log_summary(name='support')`.
+  # TODO(goroshin): Eventually remove setting the image size here and pass it
+  # to the ImageDecoder constructor instead.
+  if isinstance(support_decoder, decoder.ImageDecoder):
+    _log_data_augmentation(support_decoder.data_augmentation, 'support')
+    support_decoder.image_size = image_size
+  if isinstance(query_decoder, decoder.ImageDecoder):
+    _log_data_augmentation(query_decoder.data_augmentation, 'query')
+    query_decoder.image_size = image_size
+
   flush_chunk_size, support_chunk_size, _ = chunk_sizes
   support_start = flush_chunk_size
   query_start = support_start + support_chunk_size
-  support_map_fn = functools.partial(
-      process_example,
-      image_size=image_size,
-      data_augmentation=support_data_augmentation)
-  query_map_fn = functools.partial(
-      process_example,
-      image_size=image_size,
-      data_augmentation=query_data_augmentation)
 
   support_strings = example_strings[support_start:query_start]
   support_class_ids = class_ids[support_start:query_start]
@@ -128,14 +126,14 @@ def process_episode(example_strings,
    support_class_ids) = filter_dummy_examples(support_strings,
                                               support_class_ids)
   support_images = tf.map_fn(
-      support_map_fn, support_strings, dtype=tf.float32, back_prop=False)
+      support_decoder, support_strings, dtype=tf.float32, back_prop=False)
 
   query_strings = example_strings[query_start:]
   query_class_ids = class_ids[query_start:]
   (query_strings,
    query_class_ids) = filter_dummy_examples(query_strings, query_class_ids)
   query_images = tf.map_fn(
-      query_map_fn, query_strings, dtype=tf.float32, back_prop=False)
+      query_decoder, query_strings, dtype=tf.float32, back_prop=False)
 
   # Convert class IDs into labels in [0, num_ways).
   _, support_labels = tf.unique(support_class_ids)
@@ -145,11 +143,8 @@ def process_episode(example_strings,
           query_labels, query_class_ids)
 
 
-@gin.configurable(whitelist=['batch_data_augmentation'])
-def process_batch(example_strings,
-                  class_ids,
-                  image_size,
-                  batch_data_augmentation=None):
+@gin.configurable(whitelist=['batch_decoder'])
+def process_batch(example_strings, class_ids, image_size, batch_decoder=None):
   """Processes a batch.
 
   This function:
@@ -162,18 +157,17 @@ def process_batch(example_strings,
     class_ids: 1-D Tensor of dtype int, class IDs (absolute wrt the original
       dataset).
     image_size: int, desired image size used during decoding.
-    batch_data_augmentation: A DataAugmentation object with parameters for
-      perturbing the batch images.
+    batch_decoder: Decoder class instance for the batch.
 
   Returns:
     images, labels: Tensors, a batch of image and labels.
   """
-  _log_data_augmentation(batch_data_augmentation, 'batch')
-  map_fn = functools.partial(
-      process_example,
-      image_size=image_size,
-      data_augmentation=batch_data_augmentation)
-  images = tf.map_fn(map_fn, example_strings, dtype=tf.float32, back_prop=False)
+  # TODO(goroshin): Replace with `batch_decoder.log_summary(name='support')`.
+  if isinstance(batch_decoder, decoder.ImageDecoder):
+    _log_data_augmentation(batch_decoder.data_augmentation, 'batch')
+    batch_decoder.image_size = image_size
+  images = tf.map_fn(
+      batch_decoder, example_strings, dtype=tf.float32, back_prop=False)
   labels = class_ids
   return (images, labels)
 

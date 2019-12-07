@@ -168,7 +168,7 @@ def make_example(img_bytes, class_label, input_key, label_key):
   return example_serial
 
 
-def write_example(img_bytes,
+def write_example(data_bytes,
                   class_label,
                   writer,
                   input_key='image',
@@ -179,15 +179,15 @@ def write_example(img_bytes,
   bytes feature for the image.
 
   Args:
-    img_bytes: bytes, an encoded image representation. The usual encoding is
-      JPEG, but could be different as long as the DataProvider's record_decoder
-      accepts it.
+    data_bytes: bytes, an encoded image representation or serialized feature.
+      For images, the usual encoding is JPEG, but could be different
+      as long as the DataProvider's record_decoder accepts it.
     class_label: the integer class label of the image.
     writer: a TFRecordWriter
     input_key: String used as key for the input (image of feature).
     label_key: String used as key for the label.
   """
-  example = make_example(img_bytes, class_label, input_key, label_key)
+  example = make_example(data_bytes, class_label, input_key, label_key)
   writer.write(example)
 
 

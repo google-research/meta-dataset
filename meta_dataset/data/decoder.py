@@ -15,13 +15,15 @@
 
 # Lint as: python2, python3
 """Module responsible for decoding image/feature examples."""
+import gin.tf
 import tensorflow as tf
 
 
+@gin.configurable
 class ImageDecoder(object):
   """Image decoder."""
 
-  def __init__(self, image_size, data_augmentation=None):
+  def __init__(self, image_size=None, data_augmentation=None):
     """Class constructor.
 
     Args:
@@ -78,6 +80,7 @@ class ImageDecoder(object):
     return image
 
 
+@gin.configurable
 class FeatureDecoder(object):
   """Feature decoder."""
 
