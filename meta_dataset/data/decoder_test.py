@@ -23,7 +23,7 @@ from __future__ import print_function
 from meta_dataset.data import decoder
 from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 class DecoderTest(tf.test.TestCase):

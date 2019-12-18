@@ -26,7 +26,7 @@ from meta_dataset.data import pipeline
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 class PipelineTest(tf.test.TestCase):

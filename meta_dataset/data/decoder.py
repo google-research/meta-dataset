@@ -16,7 +16,7 @@
 # Lint as: python2, python3
 """Module responsible for decoding image/feature examples."""
 import gin.tf
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 @gin.configurable

@@ -27,7 +27,7 @@ import gin.tf
 import six
 from six.moves import range
 from six.moves import zip
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 MAX_WAY = 50  # The maximum number of classes we will see in any batch.
 

@@ -35,7 +35,7 @@ import os
 from meta_dataset import data
 import numpy as np
 from six.moves import range
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 # DUMMY_CLASS_ID will be used as the target of examples used for padding only.
 DUMMY_CLASS_ID = -1

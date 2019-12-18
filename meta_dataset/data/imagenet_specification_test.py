@@ -24,7 +24,7 @@ from meta_dataset.data import imagenet_specification as imagenet_spec
 from meta_dataset.data import learning_spec
 import numpy as np
 from six.moves import range
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 DESIRED_TOY_NUM_VALID_CLASSES = 2
 DESIRED_TOY_NUM_TEST_CLASSES = 1

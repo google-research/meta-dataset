@@ -25,7 +25,7 @@ from meta_dataset import learner
 from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import providers
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 class TrainerTest(tf.test.TestCase):

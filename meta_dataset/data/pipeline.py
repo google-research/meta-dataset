@@ -39,7 +39,7 @@ from meta_dataset.data import learning_spec
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
 from six.moves import zip
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 def filter_dummy_examples(example_strings, class_ids):
