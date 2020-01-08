@@ -1,0 +1,4 @@
+# Best pre-trained convnet. Update the path to the checkpoint.
+LearnerConfig.embedding_network = 'wide_resnet'
+LearnerConfig.pretrained_source = 'imagenet'
+LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/pretrain_imagenet_wide_resnet/model_46000.ckpt'

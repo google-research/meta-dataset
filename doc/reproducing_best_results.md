@@ -42,16 +42,16 @@ Time reported are approximate, and were measured on GCP instances with one P100
 GPU, 16vCPU cores (although the CPU usage was far from full), 104 GB memory, and
 local SSD storage for records, summaries, and checkpoints.
 
-## Baseline and pre-training on ImageNet
+## Pre-training the backbones on ImageNet
 
-Some of the best meta-learning models are initialized from the weights of a
-batch baseline (trained on ImageNet). For this reason, we will start with
-training the baseline with several backbones (not only the best one). Since not
-all backbone variants are needed for the best models, we will only need to train
-3 of them.
+The best meta-learning models are initialized from the weights of a batch
+baseline (trained on ImageNet). For this reason, we will start with training
+the baseline with several backbones (not only the best one). Since not all
+backbone variants are needed for the best models, we will only need to train 3
+of them.
 
 ```bash
-export EXPNAME=baseline_imagenet
+export EXPNAME=pretrain_imagenet
 for BACKBONE in convnet resnet wide_resnet
 do
   export JOBNAME=${EXPNAME}_${BACKBONE}
@@ -64,57 +64,39 @@ do
 done
 ```
 
-Time to reach 75k steps (episodes):
+Time to reach 50k steps (episodes):
 
-- `convnet`: 12 hours
-- `resnet`: 16 hours
-- `wide_resnet`: 36 hours
+- `convnet`: 8 hours
+- `resnet`: 12 hours
+- `wide_resnet`: 24 hours
 
-## Training on ImageNet
+### Update the training files
 
-### k-NN
+Once the pre-training is complete, edit the following files to replace
+`/path/to/checkpoints` with the value of `${EXPROOT}/checkpoints`:
 
-The `baseline` ("k-NN") model does not have to be trained again, the `resnet`
-variant performed the best. For consistency, we can simply add symbolic links:
+- `meta_dataset/learn/gin/best/pretrained_convnet.gin`
+- `meta_dataset/learn/gin/best/pretrained_resnet.gin`
+- `meta_dataset/learn/gin/best/pretrained_wide_resnet.gin`
 
-```bash
-ln -s ${EXPROOT}/checkpoints/baseline_imagenet_resnet ${EXPROOT}/checkpoints/baseline_imagenet
-ln -s ${EXPROOT}/summaries/baseline_imagenet_resnet ${EXPROOT}/summaries/baseline_imagenet
-```
-
-### Finetune, ProtoNet
-
-The best models for `baselinefinetune` ("Finetune") and `prototypical`
-("ProtoNet") on ILSVRC-2012 were not initialized from pre-trained model, so
-their respective gin config indicates:
-
-- `LearnerConfig.pretrained_source = 'scratch'`, and
-- `LearnerConfig.pretrained_checkpoint = ''`
-
-They can be launched right away (in parallel with the pre-training), and their
-configuration does not need to be changed.
-
-### Other models
-
-For the other models, the respective best pre-train model is:
-
-- `matching` ("MatchingNet"): `resnet`
-- `maml` ("fo-MAML"): `mamlconvnet` (`four_layer_convnet_maml`)
-- `maml_init_with_proto` ("Proto-MAML"): `mamlresnet` (`resnet_maml`)
-
-The corresponding `.gin` file indicates `LearnerConfig.pretrained_source =
-'imagenet'`, and has a placeholder for `LearnerConfig.pretrained_checkpoint`.
 The number of steps for the best checkpoint did not make a measurable difference
 in our experience, so you can simply update the base path and keep the number in
 "`model_?????.ckpt`". If you would like to perform the selection for the best
 number of steps, see [Get the best checkpoint](#get-the-best-checkpoint) section
-below, and update the gin files accordingly.
+below, and update these gin files accordingly.
 
-### Command line
+## Training on ImageNet
+
+### Episodic training
+
+The episodic models had the option to reload pre-trained weights as a starting
+point, or to start from scratch. All the best models started from pre-trained
+weights. Each of their `.gin` file includes the corresponding
+`best/pretrained_*net.gin` file, so the appropriate weights are reloaded.
 
 ```bash
 export SOURCE=imagenet
-for MODEL in baselinefinetune prototypical matching maml maml_init_with_proto
+for MODEL in matching prototypical maml relationnet maml_init_with_proto
 do
   export EXPNAME=${MODEL}_${SOURCE}
   python -m meta_dataset.train \
@@ -125,10 +107,15 @@ do
     --gin_bindings="LearnerConfig.experiment_name='$EXPNAME'"
 done
 ```
+### Re-training baselines
 
-Note: rather than editing the `.gin` file, it is also possible to specify the
-path to the pretrained checkpoint to load on the command-line, adding
-`--gin_bindings="LearnerConfig.pretrained_checkpoint='...'"`.
+(baseline, baselinefinetune)
+
+```
+
+
+### Command line
+
 
 Run time:
 
