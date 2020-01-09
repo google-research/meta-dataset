@@ -10,6 +10,7 @@ LearnerConfig.pretrained_checkpoint = ''
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
+LearnerConfig.decay_learning_rate = True
 LearnerConfig.decay_every = 2500
 LearnerConfig.decay_rate = 0.9197652570309498
 LearnerConfig.learning_rate = 0.002748105034397538

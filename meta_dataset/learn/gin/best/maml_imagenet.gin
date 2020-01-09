@@ -14,6 +14,7 @@ MAMLLearner.num_update_steps = 6
 DataConfig.image_height = 84
 
 # Training hypers (not needed for eval).
+LearnerConfig.decay_learning_rate = True
 LearnerConfig.decay_every = 500
 LearnerConfig.decay_rate = 0.9439449161014508
 LearnerConfig.learning_rate = 0.0003601303690709516
