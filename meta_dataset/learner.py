@@ -29,6 +29,8 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
+FLAGS = tf.flags.FLAGS
+
 MAX_WAY = 50  # The maximum number of classes we will see in any batch.
 
 
@@ -1945,7 +1947,21 @@ class MAMLLearner(Learner):
 
     Raises:
       ValueError: The embedding function must be MAML-compatible.
+      RuntimeError: Requested to meta-learn the initialization of the linear
+        layer weights but they are unexpectedly omitted from saving/restoring.
     """
+    if not zero_fc_layer and not proto_maml_fc_layer_init:
+      # So the linear classifier weights initialization is meta-learned.
+      if 'linear_classifier' in FLAGS.omit_from_saving_and_reloading:
+        raise RuntimeError('The linear layer is requested to be meta-learned '
+                           'since both zero_fc_layer and '
+                           'proto_maml_fc_layer_init are False, but the '
+                           'linear_classifier weights are found in '
+                           'FLAGS.omit_from_saving_and_reloading so they will '
+                           'not be properly restored. Please exclude these '
+                           'weights from omit_from_saving_and_reloading for '
+                           'this setting to work as expected.')
+
     super(MAMLLearner, self).__init__(is_training, transductive_batch_norm,
                                       backprop_through_moments, ema_object,
                                       embedding_fn, reader)

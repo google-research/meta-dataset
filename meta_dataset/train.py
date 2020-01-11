@@ -89,15 +89,40 @@ tf.flags.DEFINE_enum(
     'sub-graphs of ImageNet too, since the test sub-graph evidently does not '
     'exhibit enough variation in the fine-grainedness of its different tasks '
     'to allow for a meaningful analysis.')
-
+# The following flag specifies substrings of variable names that should not be
+# reloaded. `num_left_in_epoch' is a variable that influences the behavior of
+# the EpochTrackers. Since the state of those trackers is not reloaded, neither
+# should this variable. `fc_finetune' is a substring of the names of the
+# variables in the episode-specific linear layer of the finetune baseline (used
+# at meta-validation and meta-test times). Since this layer gets re-initialized
+# to random weights in each new episode, there is no need to ever restore these
+# weights. `linear_classifier' plays that role but for the MAML model: similarly
+# in each new episode it is re-initialized (e.g. set to zeros or to the
+# prototypes in the case of proto-MAML), so there is no need to restore these
+# weights. `adam_opt' captures the variables of the within-episode optimizer of
+# the finetune baseline when it is configured to perform that finetuning with
+# adam. `fc' captures the variable names of the fully-connected layer for the
+# all-way classification problem that the baselines solve at training time.
+# There are certain situations where we need to omit reloading these weights to
+# avoid getting an error. Consider for example the experiments where we train
+# a baseline model, starting from weights that were previously trained on
+# ImageNet. If this training now takes place on all datasets, the size of the
+# all-way classification layer is now different (equal to the number of
+# meta-training classes of all datasets not just of ImageNet). Thus when
+# training baselines from pre-trained weights, we only reload the backbone and
+# not the `fc' all-way classification layer (similarly for inference-only
+# experiments for the same reason).
 tf.flags.DEFINE_multi_enum(
-    'omit_from_saving_and_reloading',
-    ['num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc'], [
-        'num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc',
+    'omit_from_saving_and_reloading', [
+        'num_left_in_epoch', 'fc_finetune', 'linear_classifier', 'adam_opt',
         'weight_copy'
+    ], [
+        'num_left_in_epoch', 'fc_finetune', 'linear_classifier', 'adam_opt',
+        'weight_copy', 'fc'
     ],
     'A comma-separated list of substrings such that all variables containing '
     'them should not be saved and reloaded.')
+
 
 FLAGS = tf.flags.FLAGS
 

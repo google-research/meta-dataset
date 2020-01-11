@@ -413,6 +413,7 @@ class Trainer(object):
     self.eval_finegrainedness = eval_finegrainedness
     self.eval_finegrainedness_split = eval_finegrainedness_split
     self.eval_imbalance_dataset = eval_imbalance_dataset
+    self.omit_from_saving_and_reloading = omit_from_saving_and_reloading
 
     self.eval_split = VALID_SPLIT if is_training else TEST_SPLIT
     if eval_finegrainedness:
@@ -827,41 +828,38 @@ class Trainer(object):
 
       # Load the embedding variables from the pre-trained checkpoint. Since the
       # pre-trained checkpoint comes from a BaselineLearner, we need a Saver
-      # that only considers Variables from a BaselineLearner. In particular, we
-      # exclude 'relationnet*' Variables as they are not present in the
-      # checkpoint.
-      not_relationnet_vars = []
+      # that only considers embedding Variables from a BaselineLearner. In
+      # particular, we exclude 'relationnet*' Variables as they are not present
+      # in the checkpoint. We also exclude any variables that are not related
+      # to the embedding (e.g. `beta1_power:0') and any variables that are
+      # requested to be omitted. Notably, this leads to not reloading ADAM
+      # variables. We do not reload these since this episodic finetuning
+      # procedure is a different optimization problem than the original training
+      # of the baseline whose embedding weights are re-used.
+      baselinelearner_embed_vars_to_reload = []
       for var in tf.global_variables():
-        if not var.name.startswith('relationnet'):
-          not_relationnet_vars.append(var)
+        is_relationnet_var = var.name.startswith('relationnet')
+        requested_to_omit = any([
+            substring in var.name
+            for substring in self.omit_from_saving_and_reloading
+        ])
+        is_embedding_var = any(
+            keyword in var.name for keyword in EMBEDDING_KEYWORDS)
+        is_adam_var = 'adam' in var.name.lower()
+        if (not is_relationnet_var and not requested_to_omit and
+            is_embedding_var):
+          if is_adam_var:
+            raise RuntimeError('Variable name unexpectedly indicates it is '
+                               'both related to an embedding, and to ADAM: %s' %
+                               var.name)
+          baselinelearner_embed_vars_to_reload.append(var)
       backbone_saver = tf.train.Saver(
-          var_list=not_relationnet_vars, max_to_keep=1)
+          var_list=baselinelearner_embed_vars_to_reload, max_to_keep=1)
       backbone_saver.restore(self.sess,
                              self.learner_config.pretrained_checkpoint)
-      logging.info('Restored checkpoint: %s',
+      logging.info('Restored only vars %s from checkpoint: %s',
+                   [var.name for var in baselinelearner_embed_vars_to_reload],
                    self.learner_config.pretrained_checkpoint)
-      # We only want the embedding weights of the checkpoint we just restored.
-      # So we re-initialize everything that's not an embedding weight. Also,
-      # since this episodic finetuning procedure is a different optimization
-      # problem than the original training of the baseline whose embedding
-      # weights are re-used, we do not reload ADAM's variables and instead learn
-      # them from scratch.
-      # TODO(etriantafillou): modify backbone_saver's set of variables in order
-      # to exclude *all* non-embedding variables. Then we won't need the
-      # following block of code which explicitly re-initializes those, as they
-      # won't have been reloaded in the first place.
-      vars_to_reinit, embedding_var_names, vars_to_reinit_names = [], [], []
-      for var in tf.global_variables():
-        if (any(keyword in var.name for keyword in EMBEDDING_KEYWORDS) and
-            'adam' not in var.name.lower()):
-          embedding_var_names.append(var.name)
-          continue
-        vars_to_reinit.append(var)
-        vars_to_reinit_names.append(var.name)
-      logging.info('Initializing all variables except for %s.',
-                   embedding_var_names)
-      self.sess.run(tf.variables_initializer(vars_to_reinit))
-      logging.info('Re-initialized vars %s.', vars_to_reinit_names)
 
   def _create_held_out_specification(self, split=TEST_SPLIT):
     """Create an EpisodeSpecification for either validation or testing.
