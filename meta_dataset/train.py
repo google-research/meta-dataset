@@ -86,10 +86,12 @@ tf.flags.DEFINE_enum(
     'to allow for a meaningful analysis.')
 
 tf.flags.DEFINE_multi_enum(
-    'omit_from_saving_and_reloading',
-    ['num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc'], [
-        'num_left_in_epoch', 'finetune', 'linear_classifier', 'adam_opt', 'fc',
+    'omit_from_saving_and_reloading', [
+        'num_left_in_epoch', 'fc_finetune', 'linear_classifier', 'adam_opt',
         'weight_copy'
+    ], [
+        'num_left_in_epoch', 'fc_finetune', 'linear_classifier', 'adam_opt',
+        'weight_copy', 'fc'
     ],
     'A comma-separated list of substrings such that all variables containing '
     'them should not be saved and reloaded.')
