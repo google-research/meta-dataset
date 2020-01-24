@@ -242,7 +242,7 @@ def get_paths_to_events(root_dir,
   return event_paths
 
 
-def extract_best_from_event_file(event_path):
+def extract_best_from_event_file(event_path, log_details=False):
   """Returns the best accuracy and the step it occurs in in the given events.
 
   This searches the summaries written in a given event file, which may be only a
@@ -251,17 +251,36 @@ def extract_best_from_event_file(event_path):
 
   Args:
     event_path: A string. The path to an event file.
+    log_details: A boolean. Whether to log details regarding skipped event paths
+      in which locating the tag "mean valid acc" failed.
   """
   steps, valid_accs = [], []
-  for event in tf.train.summary_iterator(event_path):
-    step = event.step
-    for value in event.summary.value:
-      if value.tag == 'mean valid acc':
-        steps.append(step)
-        valid_accs.append(value.simple_value)
+  try:
+    for event in tf.train.summary_iterator(event_path):
+      step = event.step
+      for value in event.summary.value:
+        if value.tag == 'mean valid acc':
+          steps.append(step)
+          valid_accs.append(value.simple_value)
+  except tf.errors.DataLossError:
+    if log_details:
+      tf.logging.info(
+          'Omitting events from event_path {} because '
+          'tf.train.summary_iterator(event_path) failed.'.format(event_path))
+    return 0, 0
+  if not valid_accs:
+    # Could happen if there is no DataLossError above but for some reason
+    # there is no 'mean valid acc' tag found in the summary values.
+    tf.logging.info(
+        'Did not find any "mean valid acc" tags in event_path {}'.format(
+            event_path))
+    return 0, 0
   argmax_ind = np.argmax(valid_accs)
   best_acc = valid_accs[argmax_ind]
   best_step = steps[argmax_ind]
+  if log_details:
+    tf.logging.info('Successfully read event_path {} with best_acc {}'.format(
+        event_path, best_acc))
   return best_acc, best_step
 
 
@@ -270,6 +289,10 @@ def extract_best_from_variant(event_paths):
 
   Args:
     event_paths: A list of strings. The event files of the given run.
+
+  Raises:
+    RuntimeError: No 'valid' event file for the given variant ('valid' here
+      refers to an event file that has a "mean valid acc" tag).
   """
   best_acc = -1
   for event_path in event_paths:
@@ -277,6 +300,8 @@ def extract_best_from_variant(event_paths):
     if best_acc_ > best_acc:
       best_acc = best_acc_
       best_step = best_step_
+  if best_acc <= 0:
+    raise RuntimeError('Something went wrong with the summary event reading.')
   return best_acc, best_step
 
 
