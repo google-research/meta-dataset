@@ -845,13 +845,14 @@ class Trainer(object):
         ])
         is_embedding_var = any(
             keyword in var.name for keyword in EMBEDDING_KEYWORDS)
-        is_adam_var = 'adam' in var.name.lower()
+        is_adam_var = 'Adam:' in var.name or 'Adam_1:' in var.name
         if (not is_relationnet_var and not requested_to_omit and
-            is_embedding_var):
-          if is_adam_var:
-            raise RuntimeError('Variable name unexpectedly indicates it is '
-                               'both related to an embedding, and to ADAM: %s' %
-                               var.name)
+            is_embedding_var and not is_adam_var):
+          if 'adam' in var.name.lower():
+            logging.error(
+                'Variable name unexpectedly indicates it is '
+                'both related to an embedding, and to ADAM: %s', var.name)
+            continue
           baselinelearner_embed_vars_to_reload.append(var)
       backbone_saver = tf.train.Saver(
           var_list=baselinelearner_embed_vars_to_reload, max_to_keep=1)
