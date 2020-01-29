@@ -56,9 +56,9 @@ tf.flags.DEFINE_string('summary_dir',
                        os.path.join(DEFAULT_SAVING_DIRECTORY, 'summaries'),
                        'The directory for writing summaries.')
 tf.flags.DEFINE_bool(
-    'reload_eval_checkpoint_gin_config', False,
+    'reload_checkpoint_gin_config', False,
     'Whether to reload an operative Gin configuration along with a checkpoint '
-    'for evaluation.')
+    'for evaluation or a pretrained checkpoint.')
 
 tf.flags.DEFINE_bool(
     'is_training', True, 'Whether we are in the training phase. '
@@ -123,7 +123,6 @@ tf.flags.DEFINE_multi_enum(
     'A comma-separated list of substrings such that all variables containing '
     'them should not be saved and reloaded.')
 
-
 FLAGS = tf.flags.FLAGS
 
 
@@ -144,7 +143,7 @@ def load_operative_gin_configurations(checkpoint_dir):
   gin_log_file = operative_config_path(checkpoint_dir)
   with gin.unlock_config():
     gin.parse_config_file(gin_log_file)
-  gin.finalize_config()
+  gin.finalize()
   logging.info('Operative Gin configurations loaded from `checkpoint_dir`: %s',
                gin_log_file)
 
@@ -166,13 +165,20 @@ def main(unused_argv):
   parse_cmdline_gin_configurations()
 
   # Try to reload a previously recorded Gin configuration.
-  # TODO(eringrant): Allow querying of a value to be bound without actually
-  # binding it to avoid the redundant call to `parse_cmdline_gin_configurations`
-  # below.
-  checkpoint_for_eval = gin.query_parameter('LearnerConfig.checkpoint_for_eval')
-  if checkpoint_for_eval and FLAGS.reload_eval_checkpoint_gin_config:
-    eval_checkpoint_dir = os.path.dirname(checkpoint_for_eval)
-    load_operative_gin_configurations(eval_checkpoint_dir)
+  # TODO(eringrant): Allow querying of a value to be bound without binding it
+  # to avoid the redundant call to `parse_cmdline_gin_configurations` below.
+  try:
+    checkpoint_to_reload = gin.query_parameter(
+        'LearnerConfig.checkpoint_for_eval')
+  except ValueError:
+    try:
+      checkpoint_to_reload = gin.query_parameter(
+          'LearnerConfig.pretrained_checkpoint')
+    except ValueError:
+      checkpoint_to_reload = None
+  if checkpoint_to_reload and FLAGS.reload_checkpoint_gin_config:
+    reload_checkpoint_dir = os.path.dirname(checkpoint_to_reload)
+    load_operative_gin_configurations(reload_checkpoint_dir)
 
     # Reload the command-line Gin configuration to allow overriding of the Gin
     # configuration loaded from the checkpoint directory.
