@@ -209,6 +209,12 @@ def get_paths_to_events(root_dir,
       if tf.io.gfile.isdir(os.path.join(summary_dir, fname))
   ]
 
+  if not variant_names:
+    # Maybe there are no variants, and we are already in the directory that
+    # contains the summaries. In this case, we consider that the current
+    # directory (.) is the only variant.
+    variant_names = ['.']
+
   # Further filter variant names based on the given restrictions.
   variant_names = [name for name in variant_names if keep_variant(name)]
 
