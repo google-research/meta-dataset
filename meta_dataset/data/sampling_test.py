@@ -22,6 +22,7 @@ from __future__ import print_function
 
 from absl.testing import parameterized
 import gin.tf
+from meta_dataset.data import config
 from meta_dataset.data import sampling
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.data.learning_spec import Split
@@ -43,7 +44,8 @@ DATASET_SPEC = DatasetSpecification(
     path=None,
     file_pattern='{}.tfrecords')
 
-# Define defaults and set Gin configuration for EpisodeDescriptionSampler
+# Define defaults and instantiate EpisodeDescriptionConfig
+# Define defaults and set Gin configuration for EpisodeDescriptionConfig
 MIN_WAYS = 5
 MAX_WAYS_UPPER_BOUND = 50
 MAX_NUM_QUERY = 10
@@ -51,27 +53,33 @@ MAX_SUPPORT_SET_SIZE = 500
 MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS = 100
 MIN_LOG_WEIGHT = np.log(0.5)
 MAX_LOG_WEIGHT = np.log(2)
-gin.bind_parameter('EpisodeDescriptionSampler.min_ways', MIN_WAYS)
-gin.bind_parameter('EpisodeDescriptionSampler.max_ways_upper_bound',
+
+gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
+gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
+gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)
+gin.bind_parameter('EpisodeDescriptionConfig.min_ways', MIN_WAYS)
+gin.bind_parameter('EpisodeDescriptionConfig.max_ways_upper_bound',
                    MAX_WAYS_UPPER_BOUND)
-gin.bind_parameter('EpisodeDescriptionSampler.max_num_query', MAX_NUM_QUERY)
-gin.bind_parameter('EpisodeDescriptionSampler.max_support_set_size',
+gin.bind_parameter('EpisodeDescriptionConfig.max_num_query', MAX_NUM_QUERY)
+gin.bind_parameter('EpisodeDescriptionConfig.max_support_set_size',
                    MAX_SUPPORT_SET_SIZE)
 gin.bind_parameter(
-    'EpisodeDescriptionSampler.max_support_size_contrib_per_class',
+    'EpisodeDescriptionConfig.max_support_size_contrib_per_class',
     MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
-gin.bind_parameter('EpisodeDescriptionSampler.min_log_weight', MIN_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionSampler.max_log_weight', MAX_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.min_log_weight', MIN_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
+gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
 
 # Following is set in a different scope.
-gin.bind_parameter('none/EpisodeDescriptionSampler.min_ways', None)
-gin.bind_parameter('none/EpisodeDescriptionSampler.max_ways_upper_bound', None)
-gin.bind_parameter('none/EpisodeDescriptionSampler.max_num_query', None)
-gin.bind_parameter('none/EpisodeDescriptionSampler.max_support_set_size', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.min_ways', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.max_ways_upper_bound', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.max_num_query', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.max_support_set_size', None)
 gin.bind_parameter(
-    'none/EpisodeDescriptionSampler.max_support_size_contrib_per_class', None)
-gin.bind_parameter('none/EpisodeDescriptionSampler.min_log_weight', None)
-gin.bind_parameter('none/EpisodeDescriptionSampler.max_log_weight', None)
+    'none/EpisodeDescriptionConfig.max_support_size_contrib_per_class', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.min_log_weight', None)
+gin.bind_parameter('none/EpisodeDescriptionConfig.max_log_weight', None)
 
 
 class SampleNumWaysUniformlyTest(tf.test.TestCase):
@@ -220,6 +228,7 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           max_log_weight=MAX_LOG_WEIGHT)
 
 
+# TODO(vdumoulin): move this class into `config_test.py`.
 class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
   """Episode sampler should verify args when ways/shots are sampled."""
   dataset_spec = DATASET_SPEC
@@ -240,10 +249,11 @@ class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
         _ = sampling.EpisodeDescriptionSampler(
             self.dataset_spec,
             self.split,
-            num_ways=num_ways,
-            num_support=num_support,
-            num_query=num_query,
-            **kwargs)
+            episode_descr_config=config.EpisodeDescriptionConfig(
+                num_ways=num_ways,
+                num_support=num_support,
+                num_query=num_query,
+                **kwargs))
 
   @parameterized.named_parameters(('num_ways_none', None, 5, 10, {
       'min_ways': 3,
@@ -264,10 +274,11 @@ class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
       _ = sampling.EpisodeDescriptionSampler(
           self.dataset_spec,
           self.split,
-          num_ways=num_ways,
-          num_support=num_support,
-          num_query=num_query,
-          **kwargs)
+          episode_descr_config=config.EpisodeDescriptionConfig(
+              num_ways=num_ways,
+              num_support=num_support,
+              num_query=num_query,
+              **kwargs))
 
 
 class EpisodeDescrSamplerTest(tf.test.TestCase):
@@ -285,7 +296,8 @@ class EpisodeDescrSamplerTest(tf.test.TestCase):
 
   def make_sampler(self):
     """Helper function to make a new instance of the tested sampler."""
-    return sampling.EpisodeDescriptionSampler(self.dataset_spec, self.split)
+    return sampling.EpisodeDescriptionSampler(self.dataset_spec, self.split,
+                                              config.EpisodeDescriptionConfig())
 
   def test_max_examples(self):
     """The number of requested examples per class should not be too large."""
@@ -367,7 +379,8 @@ class FixedQueryEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
 
   def make_sampler(self):
     return sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=self.num_query)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(num_query=self.num_query))
 
   def test_num_query_examples(self):
     class_set = self.dataset_spec.get_classes(self.split)
@@ -380,7 +393,8 @@ class FixedQueryEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
   def test_query_too_big(self):
     """Asserts failure if all examples of a class are selected for query."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=10)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(num_query=10))
     with self.assertRaises(ValueError):
       # Sample enough times that we encounter a class with only 10 examples.
       for _ in range(10):
@@ -417,10 +431,9 @@ class FixedShotsEpisodeDescrSamplerTest(FixedQueryEpisodeDescrSamplerTest):
 
   def make_sampler(self):
     return sampling.EpisodeDescriptionSampler(
-        self.dataset_spec,
-        self.split,
-        num_support=self.num_support,
-        num_query=self.num_query)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(
+            num_support=self.num_support, num_query=self.num_query))
 
   def test_num_support_examples(self):
     for _ in range(10):
@@ -431,7 +444,8 @@ class FixedShotsEpisodeDescrSamplerTest(FixedQueryEpisodeDescrSamplerTest):
   def test_shots_too_big(self):
     """Asserts failure if not enough examples to fulfill support and query."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_support=5, num_query=15)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(num_support=5, num_query=15))
     with self.assertRaises(ValueError):
       sampler.sample_episode_description()
 
@@ -447,7 +461,8 @@ class FixedWaysEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
 
   def make_sampler(self):
     return sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_ways=self.num_ways)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(num_ways=self.num_ways))
 
   def test_num_ways(self):
     for _ in range(10):
@@ -458,7 +473,8 @@ class FixedWaysEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
     """Asserts failure if more ways than classes are available."""
     # Use Split.VALID as it only has 10 classes.
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, Split.VALID, num_ways=self.num_ways)
+        self.dataset_spec, Split.VALID,
+        config.EpisodeDescriptionConfig(num_ways=self.num_ways))
     with self.assertRaises(ValueError):
       sampler.sample_episode_description()
 
@@ -473,11 +489,11 @@ class FixedEpisodeDescrSamplerTest(FixedShotsEpisodeDescrSamplerTest,
 
   def make_sampler(self):
     return sampling.EpisodeDescriptionSampler(
-        self.dataset_spec,
-        self.split,
-        num_ways=self.num_ways,
-        num_support=self.num_support,
-        num_query=self.num_query)
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(
+            num_ways=self.num_ways,
+            num_support=self.num_support,
+            num_query=self.num_query))
 
   def test_correct_chunk_sizes(self):
     self.assert_expected_chunk_sizes(self.num_ways * self.num_support,
@@ -501,7 +517,8 @@ class ChunkSizesTest(tf.test.TestCase):
   def test_large_support(self):
     """Support set larger than MAX_SUPPORT_SET_SIZE with fixed shots."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, Split.TRAIN, num_ways=30, num_support=20)
+        self.dataset_spec, Split.TRAIN,
+        config.EpisodeDescriptionConfig(num_ways=30, num_support=20))
     _, support_chunk_size, _ = sampler.compute_chunk_sizes()
     self.assertGreater(support_chunk_size, MAX_SUPPORT_SET_SIZE)
     sampler.sample_episode_description()
@@ -509,7 +526,8 @@ class ChunkSizesTest(tf.test.TestCase):
   def test_large_ways(self):
     """Fixed num_ways above MAX_WAYS_UPPER_BOUND."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, Split.TRAIN, num_ways=60, num_support=10)
+        self.dataset_spec, Split.TRAIN,
+        config.EpisodeDescriptionConfig(num_ways=60, num_support=10))
     _, support_chunk_size, query_chunk_size = sampler.compute_chunk_sizes()
     self.assertGreater(support_chunk_size, MAX_SUPPORT_SET_SIZE)
     self.assertGreater(query_chunk_size, MAX_WAYS_UPPER_BOUND * MAX_NUM_QUERY)
@@ -518,7 +536,8 @@ class ChunkSizesTest(tf.test.TestCase):
   def test_large_query(self):
     """Query set larger than MAX_NUM_QUERY per class."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, Split.TRAIN, num_query=60)
+        self.dataset_spec, Split.TRAIN,
+        config.EpisodeDescriptionConfig(num_query=60))
     _, _, query_chunk_size = sampler.compute_chunk_sizes()
     self.assertGreater(query_chunk_size, MAX_WAYS_UPPER_BOUND * MAX_NUM_QUERY)
     sampler.sample_episode_description()
@@ -526,7 +545,8 @@ class ChunkSizesTest(tf.test.TestCase):
   def test_too_many_ways(self):
     """Too many ways to have 1 example per class with default variable shots."""
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, Split.TRAIN, num_ways=600)
+        self.dataset_spec, Split.TRAIN,
+        config.EpisodeDescriptionConfig(num_ways=600))
     with self.assertRaises(ValueError):
       sampler.sample_episode_description()
 

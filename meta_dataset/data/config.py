@@ -114,7 +114,39 @@ class EpisodeDescriptionConfig(object):
       ignore_bilevel_ontology: Whether to ignore Omniglot's DAG ontology when
         sampling classes from it. This has no effect if Omniglot is not part of
         the benchmark.
+
+    Raises:
+      RuntimeError: if incompatible arguments are passed.
     """
+    arg_groups = {
+        'num_ways': (self.num_ways, ('min_ways', 'max_ways_upper_bound'),
+                     (self.min_ways, self.max_ways_upper_bound)),
+        'num_query':
+            (self.num_query, ('max_num_query',), (self.max_num_query,)),
+        'num_support': (self.num_support, ('max_support_set_size',
+                                           'max_support_size_contrib_per_class',
+                                           'min_log_weight', 'max_log_weight'),
+                        (self.max_support_set_size,
+                         self.max_support_size_contrib_per_class,
+                         self.min_log_weight, self.max_log_weight)),
+    }
+
+    for first_arg_name, values in arg_groups.items():
+      first_arg, required_arg_names, required_args = values
+      if ((first_arg is None) and any(arg is None for arg in required_args)):
+        # Get name of the nones
+        none_arg_names = [
+            name for var, name in zip(required_args, required_arg_names)
+            if var is None
+        ]
+        raise RuntimeError(
+            'The following arguments: %s can not be None, since %s is None. '
+            'Arguments can be set up with gin, for instance by providing '
+            '`--gin_file=learn/gin/setups/data_config.gin` or calling '
+            '`gin.parse_config_file(...)` in the code. Please ensure the '
+            'following gin arguments of EpisodeDescriptionConfig are set: '
+            '%s' % (none_arg_names, first_arg_name, none_arg_names))
+
     self.num_ways = num_ways
     self.num_support = num_support
     self.num_query = num_query
