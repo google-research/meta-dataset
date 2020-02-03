@@ -14,7 +14,10 @@
 # limitations under the License.
 
 # Lint as: python3
-"""Tests for meta_dataset.data.pipeline."""
+r"""Tests for meta_dataset.data.pipeline.
+
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -24,9 +27,42 @@ from meta_dataset.data import config
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data.dataset_spec import DatasetSpecification
-from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
 import tensorflow.compat.v1 as tf
+
+
+def make_example(feat_floats, class_label, input_key, label_key):
+  """Create an Example protocol buffer for the given image.
+
+  Create a protocol buffer with an integer feature for the class label, and a
+  bytes feature for the input (image or feature)
+
+  Args:
+    feat_floats: A list of floats.
+    class_label: the integer class label of the image.
+    input_key: String used as key for the input (feature).
+    label_key: String used as key for the label.
+
+  Returns:
+    example_serial: A string correponding to the serialized example.
+
+  """
+
+  def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+  def _float32_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+  feature = {
+      input_key: _float32_feature(feat_floats),
+      label_key: _int64_feature(class_label)
+  }
+
+  # Create an example protocol buffer.
+  example = tf.train.Example(features=tf.train.Features(feature=feature))
+  example_serial = example.SerializeToString()
+  return example_serial
 
 
 class PipelineTest(tf.test.TestCase):
@@ -38,7 +74,7 @@ class PipelineTest(tf.test.TestCase):
       if not tf.executing_eagerly():
         iterator = dataset.make_one_shot_iterator()
         next_element = iterator.get_next()
-        with tf.Session() as sess:
+        with self.session(use_gpu=False) as sess:
           for idx in range(n):
             yield idx, sess.run(next_element)
       else:
@@ -56,16 +92,11 @@ class PipelineTest(tf.test.TestCase):
         output_path: A string specifying the location of the record.
       """
       writer = tf.python_io.TFRecordWriter(output_path)
-      with self.session(use_gpu=False) as sess:
-        for feat in list(features):
-          feat_serial = sess.run(tf.io.serialize_tensor(feat))
-          # Write the example.
-          dataset_to_records.write_example(
-              feat_serial,
-              label,
-              writer,
-              input_key='image/embedding',
-              label_key='image/class/label')
+      for feat in list(features):
+        # Write the example.
+        serialized_example = make_example(
+            feat.tolist(), label, input_key='embedding', label_key='label')
+        writer.write(serialized_example)
       writer.close()
 
     # Create some feature records and write them to a temp directory.
@@ -73,20 +104,8 @@ class PipelineTest(tf.test.TestCase):
     num_examples = 100
     num_classes = 10
     output_path = self.get_temp_dir()
-    gin.parse_config("""
-        import meta_dataset.data.decoder
-        EpisodeDescriptionConfig.min_ways = 5
-        EpisodeDescriptionConfig.max_ways_upper_bound = 50
-        EpisodeDescriptionConfig.max_num_query = 10
-        EpisodeDescriptionConfig.max_support_set_size = 500
-        EpisodeDescriptionConfig.max_support_size_contrib_per_class = 100
-        EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
-        EpisodeDescriptionConfig.max_log_weight = 0.69314718055994529  # np.log(2)
-        EpisodeDescriptionConfig.ignore_dag_ontology = False
-        EpisodeDescriptionConfig.ignore_bilevel_ontology = False
-        process_episode.support_decoder = @FeatureDecoder()
-        process_episode.query_decoder = @FeatureDecoder()
-        """)
+    gin.parse_config_file(
+        'third_party/py/meta_dataset/learn/gin/setups/data_config_feature.gin')
 
     # 1-Write feature records to temp directory.
     self.rng = np.random.RandomState(0)

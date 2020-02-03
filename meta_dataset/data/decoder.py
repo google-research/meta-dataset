@@ -84,6 +84,14 @@ class ImageDecoder(object):
 class FeatureDecoder(object):
   """Feature decoder."""
 
+  def __init__(self, feat_len):
+    """Class constructor.
+
+    Args:
+      feat_len: The expected length of the feature vectors.
+    """
+    self.feat_len = feat_len
+
   def __call__(self, example_string):
     """Processes a single example string.
 
@@ -95,13 +103,11 @@ class FeatureDecoder(object):
     Returns:
       feat: The feature tensor.
     """
-    feat_string = tf.parse_single_example(
+    feat = tf.parse_single_example(
         example_string,
         features={
-            'image/embedding': tf.FixedLenFeature([], dtype=tf.string),
-            'image/class/label': tf.FixedLenFeature([], tf.int64)
-        })['image/embedding']
-
-    feat = tf.io.parse_tensor(feat_string, tf.float32)
+            'embedding': tf.FixedLenFeature([self.feat_len], dtype=tf.float32),
+            'label': tf.FixedLenFeature([], tf.int64)
+        })['embedding']
 
     return feat
