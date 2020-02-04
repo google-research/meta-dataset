@@ -119,16 +119,15 @@ class EpisodeDescriptionConfig(object):
       RuntimeError: if incompatible arguments are passed.
     """
     arg_groups = {
-        'num_ways': (self.num_ways, ('min_ways', 'max_ways_upper_bound'),
-                     (self.min_ways, self.max_ways_upper_bound)),
-        'num_query':
-            (self.num_query, ('max_num_query',), (self.max_num_query,)),
-        'num_support': (self.num_support, ('max_support_set_size',
-                                           'max_support_size_contrib_per_class',
-                                           'min_log_weight', 'max_log_weight'),
-                        (self.max_support_set_size,
-                         self.max_support_size_contrib_per_class,
-                         self.min_log_weight, self.max_log_weight)),
+        'num_ways': (num_ways, ('min_ways', 'max_ways_upper_bound'),
+                     (min_ways, max_ways_upper_bound)),
+        'num_query': (num_query, ('max_num_query',), (max_num_query,)),
+        'num_support':
+            (num_support,
+             ('max_support_set_size', 'max_support_size_contrib_per_class',
+              'min_log_weight', 'max_log_weight'),
+             (max_support_set_size, max_support_size_contrib_per_class,
+              min_log_weight, max_log_weight)),
     }
 
     for first_arg_name, values in arg_groups.items():
