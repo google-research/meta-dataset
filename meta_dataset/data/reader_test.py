@@ -24,6 +24,7 @@ import collections
 import itertools
 
 import gin.tf
+from meta_dataset.data import config
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
 from meta_dataset.data.dataset_spec import DatasetSpecification
@@ -46,7 +47,7 @@ DATASET_SPEC = DatasetSpecification(
     path=None,
     file_pattern='{}.tfrecords')
 
-# Define defaults and set Gin configuration for EpisodeDescriptionSampler
+# Define defaults and set Gin configuration for EpisodeDescriptionConfig
 MIN_WAYS = 5
 MAX_WAYS_UPPER_BOUND = 50
 MAX_NUM_QUERY = 10
@@ -54,17 +55,23 @@ MAX_SUPPORT_SET_SIZE = 500
 MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS = 100
 MIN_LOG_WEIGHT = np.log(0.5)
 MAX_LOG_WEIGHT = np.log(2)
-gin.bind_parameter('EpisodeDescriptionSampler.min_ways', MIN_WAYS)
-gin.bind_parameter('EpisodeDescriptionSampler.max_ways_upper_bound',
+
+gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
+gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
+gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)
+gin.bind_parameter('EpisodeDescriptionConfig.min_ways', MIN_WAYS)
+gin.bind_parameter('EpisodeDescriptionConfig.max_ways_upper_bound',
                    MAX_WAYS_UPPER_BOUND)
-gin.bind_parameter('EpisodeDescriptionSampler.max_num_query', MAX_NUM_QUERY)
-gin.bind_parameter('EpisodeDescriptionSampler.max_support_set_size',
+gin.bind_parameter('EpisodeDescriptionConfig.max_num_query', MAX_NUM_QUERY)
+gin.bind_parameter('EpisodeDescriptionConfig.max_support_set_size',
                    MAX_SUPPORT_SET_SIZE)
 gin.bind_parameter(
-    'EpisodeDescriptionSampler.max_support_size_contrib_per_class',
+    'EpisodeDescriptionConfig.max_support_size_contrib_per_class',
     MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
-gin.bind_parameter('EpisodeDescriptionSampler.min_log_weight', MIN_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionSampler.max_log_weight', MAX_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.min_log_weight', MIN_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
+gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
+gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
 
 
 def split_into_chunks(batch, chunk_sizes):
@@ -129,32 +136,47 @@ class DatasetIDGenTest(tf.test.TestCase):
                 for class_id in chunk[num_actual_examples:]))
 
   def test_default(self):
-    sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, self.split)
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig())
     self.check_expected_structure(sampler)
 
   def test_fixed_query(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=5)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_query=5))
     self.check_expected_structure(sampler)
 
   def test_no_query(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=0)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_query=5))
     self.check_expected_structure(sampler)
 
   def test_fixed_shots(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_support=3, num_query=7)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(
+            num_support=3, num_query=7))
     self.check_expected_structure(sampler)
 
   def test_fixed_ways(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_ways=12)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_ways=12))
     self.check_expected_structure(sampler)
 
   def test_fixed_episodes(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_ways=12, num_support=3, num_query=7)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(
+            num_ways=12, num_support=3, num_query=7))
     self.check_expected_structure(sampler)
 
 
@@ -329,40 +351,61 @@ class EpisodeReaderTest(tf.test.TestCase):
 
   def test_train(self):
     """Tests that a few episodes are consistent."""
-    sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, Split.TRAIN)
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec,
+        Split.TRAIN,
+        episode_descr_config=config.EpisodeDescriptionConfig())
     self.generate_and_check(sampler, 10)
 
   def test_valid(self):
-    sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, Split.VALID)
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec,
+        Split.VALID,
+        episode_descr_config=config.EpisodeDescriptionConfig())
     self.generate_and_check(sampler, 10)
 
   def test_test(self):
-    sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, Split.TEST)
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec,
+        Split.TEST,
+        episode_descr_config=config.EpisodeDescriptionConfig())
     self.generate_and_check(sampler, 10)
 
   def test_fixed_query(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=5)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_query=5))
     self.generate_and_check(sampler, 10)
 
   def test_no_query(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_query=0)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_query=0))
     self.generate_and_check(sampler, 10)
 
   def test_fixed_shots(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_support=3, num_query=7)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(
+            num_support=3, num_query=7))
     self.generate_and_check(sampler, 10)
 
   def test_fixed_ways(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_ways=12)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(num_ways=12))
     self.generate_and_check(sampler, 10)
 
   def test_fixed_episodes(self):
     sampler = sampling.EpisodeDescriptionSampler(
-        self.dataset_spec, self.split, num_ways=12, num_support=3, num_query=7)
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=config.EpisodeDescriptionConfig(
+            num_ways=12, num_support=3, num_query=7))
     self.generate_and_check(sampler, 10)
 
   def test_non_deterministic_shuffle(self):
@@ -378,8 +421,10 @@ class EpisodeReaderTest(tf.test.TestCase):
     try:
       for _ in range(2):
         sampling.RNG = np.random.RandomState(seed)
-        sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec,
-                                                     self.split)
+        sampler = sampling.EpisodeDescriptionSampler(
+            self.dataset_spec,
+            self.split,
+            episode_descr_config=config.EpisodeDescriptionConfig())
         episodes = self.generate_episodes(sampler, num_episodes)
         episode_streams.append(episodes)
         chunk_size = sampler.compute_chunk_sizes()
@@ -414,8 +459,10 @@ class EpisodeReaderTest(tf.test.TestCase):
     try:
       for _ in range(2):
         sampling.RNG = np.random.RandomState(seed)
-        sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec,
-                                                     self.split)
+        sampler = sampling.EpisodeDescriptionSampler(
+            self.dataset_spec,
+            self.split,
+            episode_descr_config=config.EpisodeDescriptionConfig())
         episodes = self.generate_episodes(sampler, num_episodes, shuffle=False)
         episode_streams.append(episodes)
         chunk_size = sampler.compute_chunk_sizes()
@@ -443,8 +490,10 @@ class EpisodeReaderTest(tf.test.TestCase):
     try:
       for _ in range(2):
         sampling.RNG = np.random.RandomState(seed)
-        sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec,
-                                                     self.split)
+        sampler = sampling.EpisodeDescriptionSampler(
+            self.dataset_spec,
+            self.split,
+            episode_descr_config=config.EpisodeDescriptionConfig())
         episodes = self.generate_episodes(
             sampler, num_episodes, shuffle_seed=seed)
         episode_streams.append(episodes)
@@ -511,14 +560,20 @@ class EpisodeReaderTest(tf.test.TestCase):
     init_rng = sampling.RNG
     try:
       sampling.RNG = np.random.RandomState(seed)
-      sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, split)
+      sampler = sampling.EpisodeDescriptionSampler(
+          self.dataset_spec,
+          split,
+          episode_descr_config=config.EpisodeDescriptionConfig())
       # Each description is a (class_id, num_support, num_query) tuple.
       descriptions = [
           sampler.sample_episode_description() for _ in range(num_episodes)
       ]
 
       sampling.RNG = np.random.RandomState(seed)
-      sampler = sampling.EpisodeDescriptionSampler(self.dataset_spec, split)
+      sampler = sampling.EpisodeDescriptionSampler(
+          self.dataset_spec,
+          split,
+          episode_descr_config=config.EpisodeDescriptionConfig())
       episodes = self.generate_episodes(sampler, num_episodes)
       chunk_sizes = sampler.compute_chunk_sizes()
       self.assertEqual(len(descriptions), len(episodes))
@@ -563,9 +618,8 @@ class EpisodeReaderTest(tf.test.TestCase):
     sampler = sampling.EpisodeDescriptionSampler(
         dataset_spec,
         Split.TRAIN,
-        num_ways=num_classes,
-        num_support=5,
-        num_query=5)
+        episode_descr_config=config.EpisodeDescriptionConfig(
+            num_ways=num_classes, num_support=5, num_query=5))
     episodes = self.generate_episodes(sampler, num_episodes=2, shuffle=False)
 
     # The "flush" part of the second episode should contain 0 from class_id 0, 1
@@ -601,12 +655,12 @@ class EpisodeReaderTest(tf.test.TestCase):
     query2_example_ids = _build_class_id_to_example_ids(query_examples2)
 
     for class_id in range(10):
-      self.assertItemsEqual(support2_example_ids[class_id], list(range(5)))
-      self.assertItemsEqual(query2_example_ids[class_id], list(range(5, 10)))
+      self.assertCountEqual(support2_example_ids[class_id], list(range(5)))
+      self.assertCountEqual(query2_example_ids[class_id], list(range(5, 10)))
 
     for class_id in range(10, num_classes):
-      self.assertItemsEqual(support2_example_ids[class_id], list(range(10, 15)))
-      self.assertItemsEqual(query2_example_ids[class_id], list(range(15, 20)))
+      self.assertCountEqual(support2_example_ids[class_id], list(range(10, 15)))
+      self.assertCountEqual(query2_example_ids[class_id], list(range(15, 20)))
 
 
 if __name__ == '__main__':
