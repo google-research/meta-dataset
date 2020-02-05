@@ -24,6 +24,7 @@ from absl.testing import parameterized
 import gin.tf
 from meta_dataset.data import config
 from meta_dataset.data import sampling
+from meta_dataset.data import test_utils
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.data.learning_spec import Split
 import numpy as np
@@ -31,55 +32,7 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-# DatasetSpecification to use in tests
-DATASET_SPEC = DatasetSpecification(
-    name=None,
-    classes_per_split={
-        Split.TRAIN: 15,
-        Split.VALID: 5,
-        Split.TEST: 10
-    },
-    images_per_class=dict(enumerate([10, 20, 30] * 10)),
-    class_names=None,
-    path=None,
-    file_pattern='{}.tfrecords')
-
-# Define defaults and instantiate EpisodeDescriptionConfig
-# Define defaults and set Gin configuration for EpisodeDescriptionConfig
-MIN_WAYS = 5
-MAX_WAYS_UPPER_BOUND = 50
-MAX_NUM_QUERY = 10
-MAX_SUPPORT_SET_SIZE = 500
-MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS = 100
-MIN_LOG_WEIGHT = np.log(0.5)
-MAX_LOG_WEIGHT = np.log(2)
-
-gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
-gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
-gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)
-gin.bind_parameter('EpisodeDescriptionConfig.min_ways', MIN_WAYS)
-gin.bind_parameter('EpisodeDescriptionConfig.max_ways_upper_bound',
-                   MAX_WAYS_UPPER_BOUND)
-gin.bind_parameter('EpisodeDescriptionConfig.max_num_query', MAX_NUM_QUERY)
-gin.bind_parameter('EpisodeDescriptionConfig.max_support_set_size',
-                   MAX_SUPPORT_SET_SIZE)
-gin.bind_parameter(
-    'EpisodeDescriptionConfig.max_support_size_contrib_per_class',
-    MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
-gin.bind_parameter('EpisodeDescriptionConfig.min_log_weight', MIN_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
-gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
-
-# Following is set in a different scope.
-gin.bind_parameter('none/EpisodeDescriptionConfig.min_ways', None)
-gin.bind_parameter('none/EpisodeDescriptionConfig.max_ways_upper_bound', None)
-gin.bind_parameter('none/EpisodeDescriptionConfig.max_num_query', None)
-gin.bind_parameter('none/EpisodeDescriptionConfig.max_support_set_size', None)
-gin.bind_parameter(
-    'none/EpisodeDescriptionConfig.max_support_size_contrib_per_class', None)
-gin.bind_parameter('none/EpisodeDescriptionConfig.min_log_weight', None)
-gin.bind_parameter('none/EpisodeDescriptionConfig.max_log_weight', None)
+test_utils.set_episode_descr_config_defaults()
 
 
 class SampleNumWaysUniformlyTest(tf.test.TestCase):
@@ -88,45 +41,51 @@ class SampleNumWaysUniformlyTest(tf.test.TestCase):
   def test_min_ways_respected(self):
     for _ in range(10):
       num_ways = sampling.sample_num_ways_uniformly(
-          10, min_ways=MIN_WAYS, max_ways=MAX_WAYS_UPPER_BOUND)
-      self.assertGreaterEqual(num_ways, MIN_WAYS)
+          10,
+          min_ways=test_utils.MIN_WAYS,
+          max_ways=test_utils.MAX_WAYS_UPPER_BOUND)
+      self.assertGreaterEqual(num_ways, test_utils.MIN_WAYS)
 
   def test_num_classes_respected(self):
     num_classes = 10
     for _ in range(10):
       num_ways = sampling.sample_num_ways_uniformly(
-          num_classes, min_ways=MIN_WAYS, max_ways=MAX_WAYS_UPPER_BOUND)
+          num_classes,
+          min_ways=test_utils.MIN_WAYS,
+          max_ways=test_utils.MAX_WAYS_UPPER_BOUND)
       self.assertLessEqual(num_ways, num_classes)
 
   def test_max_ways_upper_bound_respected(self):
-    num_classes = 2 * MAX_WAYS_UPPER_BOUND
+    num_classes = 2 * test_utils.MAX_WAYS_UPPER_BOUND
     for _ in range(10):
       num_ways = sampling.sample_num_ways_uniformly(
-          num_classes, min_ways=MIN_WAYS, max_ways=MAX_WAYS_UPPER_BOUND)
-      self.assertLessEqual(num_ways, MAX_WAYS_UPPER_BOUND)
+          num_classes,
+          min_ways=test_utils.MIN_WAYS,
+          max_ways=test_utils.MAX_WAYS_UPPER_BOUND)
+      self.assertLessEqual(num_ways, test_utils.MAX_WAYS_UPPER_BOUND)
 
 
 class SampleClassIDsUniformlyTest(tf.test.TestCase):
   """Tests for the `sample_class_ids_uniformly` function."""
 
   def test_num_ways_respected(self):
-    num_classes = MAX_WAYS_UPPER_BOUND
-    num_ways = MIN_WAYS
+    num_classes = test_utils.MAX_WAYS_UPPER_BOUND
+    num_ways = test_utils.MIN_WAYS
     for _ in range(10):
       class_ids = sampling.sample_class_ids_uniformly(num_ways, num_classes)
       self.assertLen(set(class_ids), num_ways)
       self.assertLen(class_ids, num_ways)
 
   def test_num_classes_respected(self):
-    num_classes = MAX_WAYS_UPPER_BOUND
-    num_ways = MIN_WAYS
+    num_classes = test_utils.MAX_WAYS_UPPER_BOUND
+    num_ways = test_utils.MIN_WAYS
     for _ in range(10):
       class_ids = sampling.sample_class_ids_uniformly(num_ways, num_classes)
       self.assertContainsSubset(class_ids, list(range(num_classes)))
 
   def test_unique_class_ids(self):
-    num_classes = MAX_WAYS_UPPER_BOUND
-    num_ways = MIN_WAYS
+    num_classes = test_utils.MAX_WAYS_UPPER_BOUND
+    num_ways = test_utils.MIN_WAYS
     for _ in range(10):
       class_ids = sampling.sample_class_ids_uniformly(num_ways, num_classes)
       self.assertCountEqual(class_ids, set(class_ids))
@@ -138,39 +97,42 @@ class ComputeNumQueryTest(tf.test.TestCase):
   def test_max_num_query_respected(self):
     images_per_class = np.array([30, 45, 35, 50])
     num_query = sampling.compute_num_query(
-        images_per_class, max_num_query=MAX_NUM_QUERY)
-    self.assertEqual(num_query, MAX_NUM_QUERY)
+        images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
+    self.assertEqual(num_query, test_utils.MAX_NUM_QUERY)
 
   def test_at_most_half(self):
     images_per_class = np.array([10, 9, 20, 21])
     num_query = sampling.compute_num_query(
-        images_per_class, max_num_query=MAX_NUM_QUERY)
+        images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
     self.assertEqual(num_query, 4)
 
   def test_raises_error_on_one_image_per_class(self):
     images_per_class = np.array([1, 3, 8, 8])
     with self.assertRaises(ValueError):
-      sampling.compute_num_query(images_per_class, max_num_query=MAX_NUM_QUERY)
+      sampling.compute_num_query(
+          images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
 
 
 class SampleSupportSetSizeTest(tf.test.TestCase):
   """Tests for the `sample_support_set_size` function."""
 
   def test_max_support_set_size_respected(self):
-    num_remaining_per_class = np.array([MAX_SUPPORT_SET_SIZE] * 10)
+    num_remaining_per_class = np.array([test_utils.MAX_SUPPORT_SET_SIZE] * 10)
     for _ in range(10):
       support_set_size = sampling.sample_support_set_size(
           num_remaining_per_class,
-          max_support_size_contrib_per_class=MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS,
-          max_support_set_size=MAX_SUPPORT_SET_SIZE)
-      self.assertLessEqual(support_set_size, MAX_SUPPORT_SET_SIZE)
+          max_support_size_contrib_per_class=(
+              test_utils.MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS),
+          max_support_set_size=test_utils.MAX_SUPPORT_SET_SIZE)
+      self.assertLessEqual(support_set_size, test_utils.MAX_SUPPORT_SET_SIZE)
 
   def test_raises_error_max_support_too_small(self):
     num_remaining_per_class = np.array([5] * 10)
     with self.assertRaises(ValueError):
       sampling.sample_support_set_size(
           num_remaining_per_class,
-          max_support_size_contrib_per_class=MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS,
+          max_support_size_contrib_per_class=(
+              test_utils.MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS),
           max_support_set_size=len(num_remaining_per_class) - 1)
 
 
@@ -186,8 +148,8 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           num_images_per_class,
           num_remaining_per_class,
           support_set_size,
-          min_log_weight=MIN_LOG_WEIGHT,
-          max_log_weight=MAX_LOG_WEIGHT)
+          min_log_weight=test_utils.MIN_LOG_WEIGHT,
+          max_log_weight=test_utils.MAX_LOG_WEIGHT)
       self.assertLessEqual(num_support_per_class.sum(), support_set_size)
 
   def test_at_least_one_example_per_class(self):
@@ -199,8 +161,8 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           num_images_per_class,
           num_remaining_per_class,
           support_set_size,
-          min_log_weight=MIN_LOG_WEIGHT,
-          max_log_weight=MAX_LOG_WEIGHT)
+          min_log_weight=test_utils.MIN_LOG_WEIGHT,
+          max_log_weight=test_utils.MAX_LOG_WEIGHT)
       self.assertTrue((num_support_per_class > 0).any())
 
   def test_complains_on_too_small_support_set_size(self):
@@ -212,8 +174,8 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           num_images_per_class,
           num_remaining_per_class,
           support_set_size,
-          min_log_weight=MIN_LOG_WEIGHT,
-          max_log_weight=MAX_LOG_WEIGHT)
+          min_log_weight=test_utils.MIN_LOG_WEIGHT,
+          max_log_weight=test_utils.MAX_LOG_WEIGHT)
 
   def test_complains_on_zero_remaining(self):
     num_images_per_class = np.array([10, 10, 10, 10, 10])
@@ -224,14 +186,14 @@ class SampleNumSupportPerClassTest(tf.test.TestCase):
           num_images_per_class,
           num_remaining_per_class,
           support_set_size,
-          min_log_weight=MIN_LOG_WEIGHT,
-          max_log_weight=MAX_LOG_WEIGHT)
+          min_log_weight=test_utils.MIN_LOG_WEIGHT,
+          max_log_weight=test_utils.MAX_LOG_WEIGHT)
 
 
 # TODO(vdumoulin): move this class into `config_test.py`.
 class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
   """Episode sampler should verify args when ways/shots are sampled."""
-  dataset_spec = DATASET_SPEC
+  dataset_spec = test_utils.DATASET_SPEC
   split = Split.VALID
 
   @parameterized.named_parameters(('num_ways_none', None, 5, 10, {}),
@@ -287,7 +249,7 @@ class EpisodeDescrSamplerTest(tf.test.TestCase):
   This class provides some tests to be run by inherited classes.
   """
 
-  dataset_spec = DATASET_SPEC
+  dataset_spec = test_utils.DATASET_SPEC
   split = Split.VALID
 
   def setUp(self):
@@ -361,8 +323,9 @@ class EpisodeDescrSamplerTest(tf.test.TestCase):
     self.assertEqual(query_chunk_size, expected_query_chunk_size)
 
   def test_correct_chunk_sizes(self):
-    self.assert_expected_chunk_sizes(MAX_SUPPORT_SET_SIZE,
-                                     MAX_WAYS_UPPER_BOUND * MAX_NUM_QUERY)
+    self.assert_expected_chunk_sizes(
+        test_utils.MAX_SUPPORT_SET_SIZE,
+        test_utils.MAX_WAYS_UPPER_BOUND * test_utils.MAX_NUM_QUERY)
 
 
 class FixedQueryEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
@@ -401,8 +364,9 @@ class FixedQueryEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
         sampler.sample_episode_description()
 
   def test_correct_chunk_sizes(self):
-    self.assert_expected_chunk_sizes(MAX_SUPPORT_SET_SIZE,
-                                     MAX_WAYS_UPPER_BOUND * self.num_query)
+    self.assert_expected_chunk_sizes(
+        test_utils.MAX_SUPPORT_SET_SIZE,
+        test_utils.MAX_WAYS_UPPER_BOUND * self.num_query)
 
 
 class NoQueryEpisodeDescrSamplerTest(FixedQueryEpisodeDescrSamplerTest):
@@ -450,8 +414,9 @@ class FixedShotsEpisodeDescrSamplerTest(FixedQueryEpisodeDescrSamplerTest):
       sampler.sample_episode_description()
 
   def test_correct_chunk_sizes(self):
-    self.assert_expected_chunk_sizes(MAX_WAYS_UPPER_BOUND * self.num_support,
-                                     MAX_WAYS_UPPER_BOUND * self.num_query)
+    self.assert_expected_chunk_sizes(
+        test_utils.MAX_WAYS_UPPER_BOUND * self.num_support,
+        test_utils.MAX_WAYS_UPPER_BOUND * self.num_query)
 
 
 class FixedWaysEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
@@ -479,8 +444,8 @@ class FixedWaysEpisodeDescrSamplerTest(EpisodeDescrSamplerTest):
       sampler.sample_episode_description()
 
   def test_correct_chunk_sizes(self):
-    self.assert_expected_chunk_sizes(MAX_SUPPORT_SET_SIZE,
-                                     self.num_ways * MAX_NUM_QUERY)
+    self.assert_expected_chunk_sizes(test_utils.MAX_SUPPORT_SET_SIZE,
+                                     self.num_ways * test_utils.MAX_NUM_QUERY)
 
 
 class FixedEpisodeDescrSamplerTest(FixedShotsEpisodeDescrSamplerTest,
@@ -520,7 +485,7 @@ class ChunkSizesTest(tf.test.TestCase):
         self.dataset_spec, Split.TRAIN,
         config.EpisodeDescriptionConfig(num_ways=30, num_support=20))
     _, support_chunk_size, _ = sampler.compute_chunk_sizes()
-    self.assertGreater(support_chunk_size, MAX_SUPPORT_SET_SIZE)
+    self.assertGreater(support_chunk_size, test_utils.MAX_SUPPORT_SET_SIZE)
     sampler.sample_episode_description()
 
   def test_large_ways(self):
@@ -529,8 +494,10 @@ class ChunkSizesTest(tf.test.TestCase):
         self.dataset_spec, Split.TRAIN,
         config.EpisodeDescriptionConfig(num_ways=60, num_support=10))
     _, support_chunk_size, query_chunk_size = sampler.compute_chunk_sizes()
-    self.assertGreater(support_chunk_size, MAX_SUPPORT_SET_SIZE)
-    self.assertGreater(query_chunk_size, MAX_WAYS_UPPER_BOUND * MAX_NUM_QUERY)
+    self.assertGreater(support_chunk_size, test_utils.MAX_SUPPORT_SET_SIZE)
+    self.assertGreater(
+        query_chunk_size,
+        test_utils.MAX_WAYS_UPPER_BOUND * test_utils.MAX_NUM_QUERY)
     sampler.sample_episode_description()
 
   def test_large_query(self):
@@ -539,7 +506,9 @@ class ChunkSizesTest(tf.test.TestCase):
         self.dataset_spec, Split.TRAIN,
         config.EpisodeDescriptionConfig(num_query=60))
     _, _, query_chunk_size = sampler.compute_chunk_sizes()
-    self.assertGreater(query_chunk_size, MAX_WAYS_UPPER_BOUND * MAX_NUM_QUERY)
+    self.assertGreater(
+        query_chunk_size,
+        test_utils.MAX_WAYS_UPPER_BOUND * test_utils.MAX_NUM_QUERY)
     sampler.sample_episode_description()
 
   def test_too_many_ways(self):
