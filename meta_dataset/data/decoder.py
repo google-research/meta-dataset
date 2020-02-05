@@ -106,8 +106,10 @@ class FeatureDecoder(object):
     feat = tf.parse_single_example(
         example_string,
         features={
-            'embedding': tf.FixedLenFeature([self.feat_len], dtype=tf.float32),
-            'label': tf.FixedLenFeature([], tf.int64)
-        })['embedding']
+            'image/embedding':
+                tf.FixedLenFeature([self.feat_len], dtype=tf.float32),
+            'image/class/label':
+                tf.FixedLenFeature([], tf.int64)
+        })['image/embedding']
 
     return feat
