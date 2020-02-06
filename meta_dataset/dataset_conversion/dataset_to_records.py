@@ -53,7 +53,7 @@ from scipy.io import loadmat
 import six
 from six.moves import range
 import six.moves.cPickle as pkl
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 # Datasets in the same order as reported in the article.
 # 'ilsvrc_2012_data_root' is already defined in imagenet_specification.py.

@@ -33,7 +33,7 @@ import six
 from six.moves import cPickle as pkl
 from six.moves import range
 from six.moves import zip
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 # Global records root directory, for all datasets (except diagnostics).
 tf.flags.DEFINE_string('records_root_dir', '',

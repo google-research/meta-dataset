@@ -59,7 +59,7 @@ import numpy as np
 from six.moves import range
 from six.moves import zip
 import six.moves.cPickle as pkl
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 FLAGS = tf.flags.FLAGS
 

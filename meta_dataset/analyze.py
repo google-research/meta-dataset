@@ -57,7 +57,7 @@ from meta_dataset.data import learning_spec
 import numpy as np
 from six.moves import range
 import six.moves.cPickle as pkl
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 FLAGS = tf.flags.FLAGS
 

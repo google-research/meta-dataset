@@ -36,7 +36,7 @@ import collections
 
 from absl import logging
 from meta_dataset.dataset_conversion import dataset_to_records
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 tf.flags.DEFINE_string(
     'mini_imagenet_records_dir',

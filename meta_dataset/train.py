@@ -45,7 +45,7 @@ import gin.tf
 from meta_dataset import data
 from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 DEFAULT_SAVING_DIRECTORY = '/tmp/metadataset'
 
