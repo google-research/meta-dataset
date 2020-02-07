@@ -39,7 +39,6 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-from tensorflow.core.protobuf import rewriter_config_pb2  # pylint: disable=g-direct-tensorflow-import
 
 # Enable TensorFlow optimizations. It can add a few minutes to the first
 # calls to session.run(), but decrease memory usage.
@@ -783,19 +782,18 @@ class Trainer(object):
     if ENABLE_TF_OPTIMIZATIONS:
       self.sess = tf.Session()
     else:
-      rewriter_config = rewriter_config_pb2.RewriterConfig(
-          disable_model_pruning=True,
-          constant_folding=rewriter_config_pb2.RewriterConfig.OFF,
-          arithmetic_optimization=rewriter_config_pb2.RewriterConfig.OFF,
-          remapping=rewriter_config_pb2.RewriterConfig.OFF,
-          shape_optimization=rewriter_config_pb2.RewriterConfig.OFF,
-          dependency_optimization=rewriter_config_pb2.RewriterConfig.OFF,
-          function_optimization=rewriter_config_pb2.RewriterConfig.OFF,
-          layout_optimizer=rewriter_config_pb2.RewriterConfig.OFF,
-          loop_optimization=rewriter_config_pb2.RewriterConfig.OFF,
-          memory_optimization=rewriter_config_pb2.RewriterConfig.NO_MEM_OPT)
-      graph_options = tf.GraphOptions(rewrite_options=rewriter_config)
-      session_config = tf.ConfigProto(graph_options=graph_options)
+      session_config = tf.ConfigProto()
+      rewrite_options = session_config.graph_options.rewrite_options
+      rewrite_options.disable_model_pruning = True
+      rewrite_options.constant_folding = rewrite_options.OFF
+      rewrite_options.arithmetic_optimization = rewrite_options.OFF
+      rewrite_options.remapping = rewrite_options.OFF
+      rewrite_options.shape_optimization = rewrite_options.OFF
+      rewrite_options.dependency_optimization = rewrite_options.OFF
+      rewrite_options.function_optimization = rewrite_options.OFF
+      rewrite_options.layout_optimizer = rewrite_options.OFF
+      rewrite_options.loop_optimization = rewrite_options.OFF
+      rewrite_options.memory_optimization = rewrite_options.NO_MEM_OPT
       self.sess = tf.Session(config=session_config)
 
     # Restore or initialize the variables.
