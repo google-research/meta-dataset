@@ -37,8 +37,9 @@ class DecoderTest(tf.test.TestCase):
     # Encode
     image_bytes = dataset_to_records.encode_image(image, image_format='PNG')
     label = np.zeros(1).astype(np.int64)
-    image_example = dataset_to_records.make_example(
-        image_bytes, label, input_key='image', label_key='label')
+    image_example = dataset_to_records.make_example([
+        ('image', 'bytes', [image_bytes]), ('label', 'int64', [label])
+    ])
 
     # Decode
     image_decoder = decoder.ImageDecoder(image_size=image_size)
@@ -54,18 +55,15 @@ class DecoderTest(tf.test.TestCase):
     feat_size = 64
     feat = np.random.randn(feat_size).astype(np.float32)
     label = np.zeros(1).astype(np.int64)
-    with self.session(use_gpu=False) as sess:
-      feat_serial = sess.run(tf.io.serialize_tensor(feat))
 
     # Encode
-    feat_example = dataset_to_records.make_example(
-        feat_serial,
-        label,
-        input_key='image/embedding',
-        label_key='image/class/label')
+    feat_example = dataset_to_records.make_example([
+        ('image/embedding', 'float32', feat),
+        ('image/class/label', 'int64', [label]),
+    ])
 
     # Decode
-    feat_decoder = decoder.FeatureDecoder()
+    feat_decoder = decoder.FeatureDecoder(feat_len=feat_size)
     feat_decoded = feat_decoder(feat_example)
 
     # Assert perfect reconstruction.

@@ -50,6 +50,8 @@ MAX_LOG_WEIGHT = np.log(2)
 
 def set_episode_descr_config_defaults():
   """Sets default values for EpisodeDescriptionConfig using gin."""
+  gin.parse_config('import meta_dataset.data.config')
+
   gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
   gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
   gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)

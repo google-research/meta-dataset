@@ -261,8 +261,8 @@ class Reader(object):
     return class_datasets
 
 
-class EpisodeReader(Reader):
-  """Subclass of Reader assembling the examples as Episodes."""
+class EpisodeReaderMixin(object):
+  """Mixin class to assemble examples as episodes."""
 
   def create_dataset_input_pipeline(self,
                                     sampler,
@@ -321,6 +321,10 @@ class EpisodeReader(Reader):
     return dataset
 
 
+class EpisodeReader(Reader, EpisodeReaderMixin):
+  """Subclass of Reader assembling the examples as Episodes."""
+
+
 def add_offset_to_target(example_strings, targets, offset):
   """Adds offset to the targets.
 
@@ -339,8 +343,8 @@ def add_offset_to_target(example_strings, targets, offset):
   return (example_strings, labels)
 
 
-class BatchReader(Reader):
-  """Subclass of Reader assembling the examples as Batches."""
+class BatchReaderMixin(object):
+  """Mixin class to assemble examples as batches."""
 
   def create_dataset_input_pipeline(self,
                                     batch_size,
@@ -429,3 +433,7 @@ class BatchReader(Reader):
     dataset = dataset.prefetch(1)
 
     return dataset
+
+
+class BatchReader(Reader, BatchReaderMixin):
+  """Subclass of Reader assembling the examples as Batches."""

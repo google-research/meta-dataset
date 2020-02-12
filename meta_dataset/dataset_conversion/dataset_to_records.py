@@ -134,36 +134,43 @@ VGGFLOWER_LABELS_PATH = os.path.join(AUX_DATA_PATH,
 TRAFFICSIGN_LABELS_PATH = os.path.join(AUX_DATA_PATH, 'TrafficSign_labels.txt')
 
 
-def make_example(img_bytes, class_label, input_key, label_key):
-  """Create an Example protocol buffer for the given image.
+def make_example(features):
+  """Creates an Example protocol buffer.
 
   Create a protocol buffer with an integer feature for the class label, and a
   bytes feature for the input (image or feature)
 
   Args:
-    img_bytes: bytes, an encoded image representation, can be JPEG (or other
-      image format) or a feature vector corresponding to the image.
-    class_label: the integer class label of the image.
-    input_key: String used as key for the input (image of feature).
-    label_key: String used as key for the label.
+    features: sequence of (key, feature_type, value) tuples. Features to encode
+      in the Example. `key` corresponds to the feature name, `feature_type` can
+      either be 'int64', 'float32', or 'bytes', and `value` corresponds to the
+      feature itself.
 
   Returns:
-    example_serial: A string correponding to the serialized example.
+    example_serial: A string corresponding to the serialized example.
 
   """
+
   def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
+  def _float32_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
   def _bytes_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
 
-  feature = {
-      input_key: _bytes_feature(img_bytes),
-      label_key: _int64_feature(class_label)
+  feature_fns = {
+      'int64': _int64_feature,
+      'float32': _float32_feature,
+      'bytes': _bytes_feature
   }
 
+  feature_dict = dict((key, feature_fns[feature_type](value))
+                      for key, feature_type, value in features)
+
   # Create an example protocol buffer.
-  example = tf.train.Example(features=tf.train.Features(feature=feature))
+  example = tf.train.Example(features=tf.train.Features(feature=feature_dict))
   example_serial = example.SerializeToString()
   return example_serial
 
@@ -187,7 +194,8 @@ def write_example(data_bytes,
     input_key: String used as key for the input (image of feature).
     label_key: String used as key for the label.
   """
-  example = make_example(data_bytes, class_label, input_key, label_key)
+  example = make_example([(input_key, 'bytes', [data_bytes]),
+                          (label_key, 'int64', [class_label])])
   writer.write(example)
 
 

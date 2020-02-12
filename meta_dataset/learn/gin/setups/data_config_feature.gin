@@ -1,5 +1,6 @@
 import meta_dataset.data.config
 import meta_dataset.data.decoder
+import meta_dataset.data.pipeline
 
 # Default values for sampling variable shots / ways.
 EpisodeDescriptionConfig.min_ways = 5
@@ -23,7 +24,7 @@ DataConfig.shuffle_buffer_size = 1000
 DataConfig.read_buffer_size_bytes = 1048576  # 1 MB (1024**2)
 DataConfig.num_prefetch = 64
 
-process_episode.support_decoder = FeatureDecoder()
-process_episode.query_decoder = FeatureDecoder()
-process_batch.batch_decoder = FeatureDecoder()
+process_episode.support_decoder = @FeatureDecoder()
+process_episode.query_decoder = @FeatureDecoder()
+process_batch.batch_decoder = @FeatureDecoder()
 FeatureDecoder.feat_len = 64

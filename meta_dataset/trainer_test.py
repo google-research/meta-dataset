@@ -20,16 +20,27 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from absl import flags
+
 import gin.tf
 from meta_dataset import learner
 from meta_dataset import trainer
 from meta_dataset.data import config
+from meta_dataset.data import decoder
 from meta_dataset.data import providers
+import numpy as np
 import tensorflow.compat.v1 as tf
+
+FLAGS = flags.FLAGS
+
 
 
 class TrainerTest(tf.test.TestCase):
-  """Test for the Trainer class."""
+  """Test for the Trainer class.
+
+  In order to run this test, the records root directory needs to be set via the
+  `--records_root_dir` flag.
+  """
 
   def test_episodic_trainer(self):
     # Inspired from `learn/gin/default/debug_proto_mini_imagenet.gin`, but
@@ -63,17 +74,24 @@ class TrainerTest(tf.test.TestCase):
     # have the opportunity to pass values to its constructor except through gin.
     gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
 
-    # Values for EpisodeDescriptionSampler
-    gin.bind_parameter('EpisodeDescriptionSampler.min_ways', 5)
-    gin.bind_parameter('EpisodeDescriptionSampler.max_ways_upper_bound', 50)
-    gin.bind_parameter('EpisodeDescriptionSampler.max_num_query', 10)
-    gin.bind_parameter('EpisodeDescriptionSampler.max_support_set_size', 500)
-    gin.bind_parameter(
-        'EpisodeDescriptionSampler.max_support_size_contrib_per_class', 100)
-    gin.bind_parameter('EpisodeDescriptionSampler.min_log_weight',
-                       -0.69314718055994529)  # np.log(0.5)
-    gin.bind_parameter('EpisodeDescriptionSampler.max_log_weight',
-                       0.69314718055994529)  # np.log(2)
+    # Values that can't be passed directly to EpisodeDescriptionConfig
+    gin.bind_parameter('process_episode.support_decoder',
+                       decoder.ImageDecoder())
+    gin.bind_parameter('process_episode.query_decoder', decoder.ImageDecoder())
+
+    episode_config = config.EpisodeDescriptionConfig(
+        num_ways=None,
+        num_support=None,
+        num_query=None,
+        min_ways=5,
+        max_ways_upper_bound=50,
+        max_num_query=10,
+        max_support_set_size=500,
+        max_support_size_contrib_per_class=100,
+        min_log_weight=np.log(0.5),
+        max_log_weight=np.log(2),
+        ignore_dag_ontology=False,
+        ignore_bilevel_ontology=False)
 
     data_config = config.DataConfig(
         image_height=84,
@@ -86,16 +104,19 @@ class TrainerTest(tf.test.TestCase):
         train_learner=learner.PrototypicalNetworkLearner,
         eval_learner=learner.PrototypicalNetworkLearner,
         is_training=True,
-        dataset_list=['mini_imagenet'],
+        train_dataset_list=['mini_imagenet'],
+        eval_dataset_list=['mini_imagenet'],
+        restrict_classes={},
+        restrict_num_per_class={},
         checkpoint_dir='',
         summary_dir='',
+        records_root_dir=FLAGS.records_root_dir,
         eval_finegrainedness=False,
         eval_finegrainedness_split='',
         eval_imbalance_dataset='',
-        num_train_classes=None,
-        num_test_classes=None,
-        num_train_examples=None,
-        num_test_examples=None,
+        omit_from_saving_and_reloading='',
+        train_episode_config=episode_config,
+        eval_episode_config=episode_config,
         learn_config=learn_config,
         learner_config=learner_config,
         data_config=data_config,

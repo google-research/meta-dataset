@@ -27,42 +27,9 @@ from meta_dataset.data import config
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data.dataset_spec import DatasetSpecification
+from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
 import tensorflow.compat.v1 as tf
-
-
-def make_example(feat_floats, class_label, input_key, label_key):
-  """Create an Example protocol buffer for the given image.
-
-  Create a protocol buffer with an integer feature for the class label, and a
-  bytes feature for the input (image or feature)
-
-  Args:
-    feat_floats: A list of floats.
-    class_label: the integer class label of the image.
-    input_key: String used as key for the input (feature).
-    label_key: String used as key for the label.
-
-  Returns:
-    example_serial: A string correponding to the serialized example.
-
-  """
-
-  def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-  def _float32_feature(value):
-    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
-
-  feature = {
-      input_key: _float32_feature(feat_floats),
-      label_key: _int64_feature(class_label)
-  }
-
-  # Create an example protocol buffer.
-  example = tf.train.Example(features=tf.train.Features(feature=feature))
-  example_serial = example.SerializeToString()
-  return example_serial
 
 
 class PipelineTest(tf.test.TestCase):
@@ -94,8 +61,10 @@ class PipelineTest(tf.test.TestCase):
       writer = tf.python_io.TFRecordWriter(output_path)
       for feat in list(features):
         # Write the example.
-        serialized_example = make_example(
-            feat.tolist(), label, input_key='embedding', label_key='label')
+        serialized_example = dataset_to_records.make_example([
+            ('image/embedding', 'float32', feat.tolist()),
+            ('image/class/label', 'int64', [label])
+        ])
         writer.write(serialized_example)
       writer.close()
 
