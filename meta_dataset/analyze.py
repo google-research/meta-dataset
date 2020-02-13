@@ -470,6 +470,8 @@ def get_event_files(root_dir):
         os.path.join(summaries_dir, f)
         for f in tf.io.gfile.listdir(summaries_dir)
     ]
+  # Filter out non-directory files, if any.
+  child_dirs = [child for child in child_dirs if tf.io.gfile.isdir(child)]
   logging.info('Looking for events in dirs: %s', child_dirs)
   for child_dir in child_dirs:
     for file_name in tf.io.gfile.listdir(child_dir):
@@ -536,9 +538,9 @@ def analyze_events(paths_to_event_files, experiment_root_dir,
 
     else:
       # Read the data from the event files.
-      (ways, shots, class_props,
-       class_ids, test_logits, test_targets) = read_data(
-           path_to_event, do_finegrainedness_analysis, do_imbalance_analysis)
+      (ways, shots, class_props, class_ids, test_logits,
+       test_targets) = read_data(path_to_event, do_finegrainedness_analysis,
+                                 do_imbalance_analysis)
 
       # A dict mapping each observed 'shot' to a list of class precisions
       # obtained by classes that had that shot (regardless of shots of other

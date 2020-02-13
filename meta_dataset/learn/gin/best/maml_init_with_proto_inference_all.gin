@@ -8,7 +8,7 @@ LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_re
 
 # Model hypers.
 MAMLLearner.first_order = True
-MAMLLearner.alpha = 0.0001
+MAMLLearner.alpha = 0.061445396411177286
 MAMLLearner.additional_test_update_steps = 0
 MAMLLearner.num_update_steps = 1
 
@@ -16,10 +16,10 @@ MAMLLearner.num_update_steps = 1
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
-LearnerConfig.decay_every = 1000
-LearnerConfig.decay_rate = 0.5244960524941158
-LearnerConfig.learning_rate = 0.00032679733991310356
-weight_decay = 0.0000012488579359852795
+LearnerConfig.decay_every = 5000
+LearnerConfig.decay_rate = 0.8449806376151254
+LearnerConfig.learning_rate = 0.0008118174317224871
+weight_decay = 0.0000038819970639091496
 
 # Baseline hypers (just for the record).
 BaselineLearner.cosine_logits_multiplier = 1
