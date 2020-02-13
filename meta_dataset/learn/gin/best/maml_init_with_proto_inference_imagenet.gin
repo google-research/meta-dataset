@@ -6,7 +6,7 @@ include 'meta_dataset/learn/gin/best/pretrained_resnet.gin'
 
 # Model hypers.
 MAMLLearner.first_order = True
-MAMLLearner.alpha = 0.0001
+MAMLLearner.alpha = 0.00577257710776957
 MAMLLearner.additional_test_update_steps = 0
 MAMLLearner.num_update_steps = 1
 
@@ -15,13 +15,13 @@ DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
 LearnerConfig.decay_learning_rate = True
-LearnerConfig.decay_every = 1000
-LearnerConfig.decay_rate = 0.5244960524941158
-LearnerConfig.learning_rate = 0.00032679733991310356
-weight_decay = 0.0000012488579359852795
+LearnerConfig.decay_every = 500
+LearnerConfig.decay_rate = 0.885662482266546
+LearnerConfig.learning_rate = 0.00025036275525430426
+weight_decay = 0.003952085241872012
 
 # Baseline hypers (just for the record).
-BaselineLearner.cosine_logits_multiplier = 1
+BaselineLearner.cosine_logits_multiplier = 10
 BaselineLearner.use_weight_norm = True
 BaselineLearner.knn_distance = 'l2'
-BaselineLearner.cosine_classifier = False
+BaselineLearner.cosine_classifier = True

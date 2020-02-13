@@ -8,8 +8,8 @@ LearnerConfig.pretrained_checkpoint = ''
 
 # Model hypers.
 MAMLLearner.first_order = True
-MAMLLearner.alpha = 0.0001
-MAMLLearner.additional_test_update_steps = 0
+MAMLLearner.alpha = 0.31106175977182243
+MAMLLearner.additional_test_update_steps = 5
 MAMLLearner.num_update_steps = 6
 
 # Data hypers.
@@ -18,6 +18,6 @@ DataConfig.image_height = 126
 # Training hypers (not needed for eval).
 LearnerConfig.decay_learning_rate = True
 LearnerConfig.decay_every = 5000
-LearnerConfig.decay_rate = 0.5286946994117185
-LearnerConfig.learning_rate = 0.0007721239289306513
-weight_decay = 0.0000030599358253125987
+LearnerConfig.decay_rate = 0.6431136271727287
+LearnerConfig.learning_rate = 0.0007181155997029211
+weight_decay = 0.00003630199690303937

@@ -2,22 +2,22 @@ include 'meta_dataset/learn/gin/setups/all.gin'
 include 'meta_dataset/learn/gin/models/maml_init_with_proto_config.gin'
 
 # Backbone hypers.
-LearnerConfig.embedding_network = 'four_layer_convnet'
+LearnerConfig.embedding_network = 'resnet'
 LearnerConfig.pretrained_source = 'scratch'
 LearnerConfig.pretrained_checkpoint = ''
 
 # Model hypers.
 MAMLLearner.first_order = True
-MAMLLearner.alpha = 0.0001
+MAMLLearner.alpha = 0.01139772733084185
 MAMLLearner.additional_test_update_steps = 5
-MAMLLearner.num_update_steps = 6
+MAMLLearner.num_update_steps = 1
 
 # Data hypers.
-DataConfig.image_height = 84
+DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
 LearnerConfig.decay_learning_rate = True
-LearnerConfig.decay_every = 1000
-LearnerConfig.decay_rate = 0.7426863132454387
-LearnerConfig.learning_rate = 0.001919948382829506
-weight_decay = 0.03357807857351324
+LearnerConfig.decay_every = 10000
+LearnerConfig.decay_rate = 0.6731268939317062
+LearnerConfig.learning_rate = 0.0007252750256444753
+weight_decay = 0.00005323094246436839
