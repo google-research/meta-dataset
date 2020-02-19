@@ -30,6 +30,7 @@ from __future__ import division
 from __future__ import print_function
 
 import functools
+import itertools
 import os
 
 from meta_dataset import data
@@ -41,30 +42,45 @@ import tensorflow.compat.v1 as tf
 DUMMY_CLASS_ID = -1
 
 
+def _pad(dataset_indices, chunk_size, dummy_dataset_id):
+  """Pads `dataset_indices` with dummy values so it has length `chunk_size`.
+
+  Args:
+    dataset_indices: list of int, dataset indices.
+    chunk_size: int, size to pad to.
+    dummy_dataset_id: int, dummy value to pad with.
+  """
+  pad_size = chunk_size - len(dataset_indices)
+  assert pad_size >= 0
+  dataset_indices.extend([dummy_dataset_id] * pad_size)
+
+
 def dataset_id_generator(dataset_spec, split, pool, sampler):
   """Generates a stream of dataset IDs forming a sequence of episodes.
 
-  Each episode has three parts:
+  Each episode is chunked into:
 
-  1) A "flush" part, which is meant to allow to flush examples, in case we are
-     at the end of an epoch for one or more class in the episode (we want to
-     avoid accidentally repeating an example due to epoch boundaries).
-  2) The support set.
-  3) The query set.
+  * a "flush" chunk, which is meant to allow to flush examples, in case we are
+    at the end of an epoch for one or more class in the episode (we want to
+    avoid accidentally repeating an example due to epoch boundaries), and
+  * some number of additional chunks (for example, a "support" chunk and a
+    "query" chunk).
 
   To make sure the input pipeline knows where the episode boundary is within the
-  stream (and where the boundary is between the flush, support, and query parts
-  of an episode), we use fixed sizes for each part and pad each part with dummy
-  dataset IDs (of value `num_classes`) as needed to maintain a fixed size (it's
-  possible in some cases that no padding is needed). The size of each part is
-  prescribed by the `compute_chunk_sizes` function.
+  stream (and where the boundary is between chunks in an episode), we enforce
+  that each chunk has a fixed size by padding with dummy dataset IDs (of value
+  `num_classes`) as needed (in some cases it's possible that no padding is ever
+  needed). The size of each chunk is prescribed by the `compute_chunk_sizes`
+  method of `sampler`, which also implicitly defines the number of additional
+  chunks (i.e. `len(chunk_sizes) - 1`).
 
-  This generator is meant to be used with `tf.data.experimental.choose_from_datasets`
-  and assumes that the list of tf.data.Dataset objects corresponding to each
-  class in the dataset (there are `num_classes` of them, which is determined by
-  inspecting the `dataset_spec` argument using the `split` argument) is appended
-  with a "dummy" Dataset (which has index `num_classes` in the list) which
-  outputs a constant `(b'', DUMMY_CLASS_ID)` tuple).
+  This generator is meant to be used with
+  `tf.data.experimental.choose_from_datasets` and assumes that the list of
+  tf.data.Dataset objects corresponding to each class in the dataset (there are
+  `num_classes` of them, which is determined by inspecting the `dataset_spec`
+  argument using the `split` argument) is appended with a "dummy" Dataset (which
+  has index `num_classes` in the list) which outputs a constant `(b'',
+  DUMMY_CLASS_ID)` tuple).
 
   Note that a dataset ID is different from the (absolute) class ID: the dataset
   ID refers to the index of the Dataset in the list of Dataset objects, and the
@@ -81,8 +97,11 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   Yields:
     i: int, dataset ID.
   """
-  flush_chunk_size, support_chunk_size, query_chunk_size = \
-      sampler.compute_chunk_sizes()
+  chunk_sizes = sampler.compute_chunk_sizes()
+  # An episode always starts with a "flush" chunk to allow flushing examples at
+  # class epoch boundaries, and contains `len(chunk_sizes) - 1` additional
+  # chunks.
+  flush_chunk_size, other_chunk_sizes = chunk_sizes[0], chunk_sizes[1:]
 
   class_set = dataset_spec.get_classes(split)
   num_classes = len(class_set)
@@ -97,47 +116,51 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   # Infinite loop over episodes.
   while True:
     flushed_dataset_indices = []
-    support_dataset_indices = []
-    query_dataset_indices = []
-    # Sample episode description. A description consists in a tuple of
-    # `(class_idx, num_support_shots, num_query)` tuples.
+    selected_dataset_indices = [[] for _ in other_chunk_sizes]
+    # Sample an episode description. A description is a tuple of
+    # `(class_idx, ...)` tuples, where `class_idx` indicates the class to sample
+    # from and the remaining `len(chunk_sizes) - 1` elements indicate how many
+    # examples to allocate to each chunk.
     episode_description = sampler.sample_episode_description()
-    for class_idx, shots, query in episode_description:
-      if shots + query > total_images_per_class[class_idx]:
+    for element in episode_description:
+      class_idx, distribution = element[0], element[1:]
+      total_requested = sum(distribution)
+      if total_requested > total_images_per_class[class_idx]:
         raise ValueError("Requesting more images than what's available for the "
                          'whole class')
-      # If the number of requested examples is greater than the number of
+      # If the total number of requested examples is greater than the number of
       # examples remaining for the current pass over class `class_idx`, we flush
       # the remaining examples and start a new pass over class `class_idx`.
       # TODO(lamblinp): factor this out into its own tracker class for
       # readability and testability.
-      requested = shots + query
       remaining = total_images_per_class[class_idx] - cursors[class_idx]
-      if requested > remaining:
+      if total_requested > remaining:
         flushed_dataset_indices.extend([class_idx] * remaining)
         cursors[class_idx] = 0
-      support_dataset_indices.extend([class_idx] * shots)
-      query_dataset_indices.extend([class_idx] * query)
-      cursors[class_idx] += shots + query
+      # Elements of `distribution` correspond to how many examples of class
+      # `class_idx` to allocate for each chunk (e.g. in a few-shot learning
+      # context `distribution = [5, 8]` would allocate 5 examples to the
+      # "support" chunk and 8 examples to the "query" chunk). Elements of
+      # `selected_dataset_indices` correspond to the list of dataset indices
+      # that have so far been requested for each chunk.
+      for num_to_allocate, dataset_indices in zip(distribution,
+                                                  selected_dataset_indices):
+        dataset_indices.extend([class_idx] * num_to_allocate)
+      cursors[class_idx] += total_requested
 
-    # An episode sequence is generated in three phases, each padded with an
-    # agreed-upon number of dummy dataset IDs: "flush", "support", and "query".
-    def _pad(dataset_indices, chunk_size):
-      """Pads dataset_indices so it has length chunk_size."""
-      pad_size = chunk_size - len(dataset_indices)
-      assert pad_size >= 0
-      dataset_indices.extend([dummy_dataset_id] * pad_size)
+    # An episode sequence is generated in multiple phases, each padded with an
+    # agreed-upon number of dummy dataset IDs.
 
-    _pad(flushed_dataset_indices, flush_chunk_size)
-    _pad(support_dataset_indices, support_chunk_size)
-    _pad(query_dataset_indices, query_chunk_size)
+    _pad(flushed_dataset_indices, flush_chunk_size, dummy_dataset_id)
+    for dataset_indices, chunk_size in zip(selected_dataset_indices,
+                                           other_chunk_sizes):
+      _pad(dataset_indices, chunk_size, dummy_dataset_id)
 
     # Yield dataset IDs one by one.
     # TODO(lamblinp): revisit yielding the whole list at once rather than
     # element by element for performance reasons.
-    dataset_indices = (
-        flushed_dataset_indices + support_dataset_indices +
-        query_dataset_indices)
+    dataset_indices = itertools.chain(flushed_dataset_indices,
+                                      *selected_dataset_indices)
     for i in dataset_indices:
       yield i
 

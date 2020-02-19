@@ -72,6 +72,41 @@ def _log_data_augmentation(data_augmentation, name):
     logging.info('gaussian_noise_std: %s', data_augmentation.gaussian_noise_std)
 
 
+def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
+  """Removes flushed examples from an episode and chunks it.
+
+  This function:
+
+  1) splits the batch of examples into a "flush" chunk and some number of
+     additional chunks (as determined by `chunk_sizes`),
+  2) throws away the "flush" chunk, and
+  3) removes the padded dummy examples from the additional chunks.
+
+  For example, in the context of few-shot learning, where episodes are composed
+  of a support set and a query set, `chunk_size = (150, 100, 50)` would be
+  interpreted as describing a "flush" chunk of size 150, a "support" chunk of
+  size 100, and a "query" chunk of size 50.
+
+  Args:
+    example_strings: 1-D Tensor of dtype str, tf.train.Example protocol buffers.
+    class_ids: 1-D Tensor of dtype int, class IDs (absolute wrt the original
+      dataset).
+    chunk_sizes: tuple of ints representing the sizes of the flush and
+      additional chunks.
+
+  Returns:
+    A tuple of episode chunks of the form `((chunk_0_example_strings,
+    chunk_0_class_ids), (chunk_1_example_strings, chunk_1_class_ids), ...)`.
+  """
+  example_strings_chunks = tf.split(
+      example_strings, num_or_size_splits=chunk_sizes)[1:]
+  class_ids_chunks = tf.split(class_ids, num_or_size_splits=chunk_sizes)[1:]
+
+  return tuple(
+      filter_dummy_examples(strings, ids)
+      for strings, ids in zip(example_strings_chunks, class_ids_chunks))
+
+
 @gin.configurable(whitelist=['support_decoder', 'query_decoder'])
 def process_episode(example_strings,
                     class_ids,
@@ -95,8 +130,8 @@ def process_episode(example_strings,
     example_strings: 1-D Tensor of dtype str, tf.train.Example protocol buffers.
     class_ids: 1-D Tensor of dtype int, class IDs (absolute wrt the original
       dataset).
-    chunk_sizes: Tuple of 3 ints representing the sizes of (resp.) the flush,
-      support, and query chunks.
+    chunk_sizes: Tuple of ints representing the sizes the flush and additional
+      chunks.
     image_size: int, desired image size used during decoding.
     support_decoder: Decoder class instance for support set.
     query_decoder: Decoder class instance for query set.
@@ -116,22 +151,11 @@ def process_episode(example_strings,
     _log_data_augmentation(query_decoder.data_augmentation, 'query')
     query_decoder.image_size = image_size
 
-  flush_chunk_size, support_chunk_size, _ = chunk_sizes
-  support_start = flush_chunk_size
-  query_start = support_start + support_chunk_size
+  (support_strings, support_class_ids), (query_strings, query_class_ids) = \
+      flush_and_chunk_episode(example_strings, class_ids, chunk_sizes)
 
-  support_strings = example_strings[support_start:query_start]
-  support_class_ids = class_ids[support_start:query_start]
-  (support_strings,
-   support_class_ids) = filter_dummy_examples(support_strings,
-                                              support_class_ids)
   support_images = tf.map_fn(
       support_decoder, support_strings, dtype=tf.float32, back_prop=False)
-
-  query_strings = example_strings[query_start:]
-  query_class_ids = class_ids[query_start:]
-  (query_strings,
-   query_class_ids) = filter_dummy_examples(query_strings, query_class_ids)
   query_images = tf.map_fn(
       query_decoder, query_strings, dtype=tf.float32, back_prop=False)
 
