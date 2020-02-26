@@ -23,7 +23,9 @@ from __future__ import print_function
 import gin.tf
 from meta_dataset.data.dataset_spec import DatasetSpecification
 from meta_dataset.data.learning_spec import Split
+from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
+import tensorflow.compat.v1 as tf
 
 # DatasetSpecification to use in tests
 DATASET_SPEC = DatasetSpecification(
@@ -78,3 +80,22 @@ def set_episode_descr_config_defaults():
       'none/EpisodeDescriptionConfig.max_support_size_contrib_per_class', None)
   gin.bind_parameter('none/EpisodeDescriptionConfig.min_log_weight', None)
   gin.bind_parameter('none/EpisodeDescriptionConfig.max_log_weight', None)
+
+
+def write_feature_records(features, label, output_path):
+  """Creates a record file from features and labels.
+
+  Args:
+    features: An [n, m] numpy array of features.
+    label: An integer, the label common to all records.
+    output_path: A string specifying the location of the record.
+  """
+  writer = tf.python_io.TFRecordWriter(output_path)
+  for feat in list(features):
+    # Write the example.
+    serialized_example = dataset_to_records.make_example([
+        ('image/embedding', 'float32', feat.tolist()),
+        ('image/class/label', 'int64', [label])
+    ])
+    writer.write(serialized_example)
+  writer.close()

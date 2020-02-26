@@ -26,8 +26,8 @@ import gin
 from meta_dataset.data import config
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
+from meta_dataset.data import test_utils
 from meta_dataset.data.dataset_spec import DatasetSpecification
-from meta_dataset.dataset_conversion import dataset_to_records
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -35,38 +35,6 @@ import tensorflow.compat.v1 as tf
 class PipelineTest(tf.test.TestCase):
 
   def test_make_multisource_episode_pipeline_feature(self):
-
-    def iterate_dataset(dataset, n):
-      """Iterate over dataset."""
-      if not tf.executing_eagerly():
-        iterator = dataset.make_one_shot_iterator()
-        next_element = iterator.get_next()
-        with self.session(use_gpu=False) as sess:
-          for idx in range(n):
-            yield idx, sess.run(next_element)
-      else:
-        for idx, episode in enumerate(dataset):
-          if idx == n:
-            break
-          yield idx, episode
-
-    def write_feature_records(features, label, output_path):
-      """Create a record file from features and labels.
-
-      Args:
-        features: An [n, m] numpy array of features.
-        label: A numpy array containing the label.
-        output_path: A string specifying the location of the record.
-      """
-      writer = tf.python_io.TFRecordWriter(output_path)
-      for feat in list(features):
-        # Write the example.
-        serialized_example = dataset_to_records.make_example([
-            ('image/embedding', 'float32', feat.tolist()),
-            ('image/class/label', 'int64', [label])
-        ])
-        writer.write(serialized_example)
-      writer.close()
 
     # Create some feature records and write them to a temp directory.
     feat_size = 64
@@ -83,7 +51,7 @@ class PipelineTest(tf.test.TestCase):
       features = self.rng.randn(num_examples, feat_size).astype(np.float32)
       label = np.array(class_id).astype(np.int64)
       output_file = os.path.join(output_path, str(class_id) + '.tfrecords')
-      write_feature_records(features, label, output_file)
+      test_utils.write_feature_records(features, label, output_file)
       class_features.append(features)
     class_features = np.stack(class_features)
 
@@ -117,7 +85,9 @@ class PipelineTest(tf.test.TestCase):
         split=learning_spec.Split.TRAIN,
         image_size=None)
 
-    _, episode = next(iterate_dataset(dataset_episodic, 1))
+    episode = self.evaluate(
+        dataset_episodic.make_one_shot_iterator().get_next())
+
     # 3-Check that support and query features are in class_features and have
     # the correct corresponding label.
     support_features, support_class_ids = episode[0], episode[2]

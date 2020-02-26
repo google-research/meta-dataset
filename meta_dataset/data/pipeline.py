@@ -59,7 +59,7 @@ def filter_dummy_examples(example_strings, class_ids):
   return (actual_example_strings, actual_class_ids)
 
 
-def _log_data_augmentation(data_augmentation, name):
+def log_data_augmentation(data_augmentation, name):
   """Logs the given data augmentation parameters for diagnostic purposes."""
   if not data_augmentation:
     logging.info('No data augmentation provided for %s', name)
@@ -121,8 +121,7 @@ def process_episode(example_strings,
   1) splits the batch of examples into "flush", "support", and "query" chunks,
   2) throws away the "flush" chunk,
   3) removes the padded dummy examples from the "support" and "query" chunks,
-     and
-  4) extracts and processes images out of the example strings.
+  4) extracts and processes images out of the example strings, and
   5) builds support and query targets (numbers from 0 to K-1 where K is the
      number of classes in the episode) from the class IDs.
 
@@ -145,10 +144,10 @@ def process_episode(example_strings,
   # TODO(goroshin): Eventually remove setting the image size here and pass it
   # to the ImageDecoder constructor instead.
   if isinstance(support_decoder, decoder.ImageDecoder):
-    _log_data_augmentation(support_decoder.data_augmentation, 'support')
+    log_data_augmentation(support_decoder.data_augmentation, 'support')
     support_decoder.image_size = image_size
   if isinstance(query_decoder, decoder.ImageDecoder):
-    _log_data_augmentation(query_decoder.data_augmentation, 'query')
+    log_data_augmentation(query_decoder.data_augmentation, 'query')
     query_decoder.image_size = image_size
 
   (support_strings, support_class_ids), (query_strings, query_class_ids) = \
@@ -188,7 +187,7 @@ def process_batch(example_strings, class_ids, image_size, batch_decoder=None):
   """
   # TODO(goroshin): Replace with `batch_decoder.log_summary(name='support')`.
   if isinstance(batch_decoder, decoder.ImageDecoder):
-    _log_data_augmentation(batch_decoder.data_augmentation, 'batch')
+    log_data_augmentation(batch_decoder.data_augmentation, 'batch')
     batch_decoder.image_size = image_size
   images = tf.map_fn(
       batch_decoder, example_strings, dtype=tf.float32, back_prop=False)
