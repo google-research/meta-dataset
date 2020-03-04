@@ -1002,8 +1002,10 @@ class Trainer(object):
     data_pipeline = apply_dataset_options(data_pipeline)
 
     iterator = data_pipeline.make_one_shot_iterator()
+    episode, _ = iterator.get_next()
     (support_images, support_labels, support_class_ids, query_images,
-     query_labels, query_class_ids) = iterator.get_next()
+     query_labels, query_class_ids) = episode
+
     return providers.EpisodeDataset(
         train_images=support_images,
         test_images=query_images,
@@ -1069,7 +1071,7 @@ class Trainer(object):
 
     data_pipeline = apply_dataset_options(data_pipeline)
     iterator = data_pipeline.make_one_shot_iterator()
-    images, class_ids = iterator.get_next()
+    (images, class_ids), _ = iterator.get_next()
     return providers.Batch(images=images, labels=class_ids)
 
   def get_next(self, split):

@@ -276,7 +276,8 @@ def make_one_source_episode_pipeline(dataset_spec,
       all data is used.
 
   Returns:
-    A Dataset instance that outputs fully-assembled and decoded episodes.
+    A Dataset instance that outputs tuples of fully-assembled and decoded
+      episodes zipped with the ID of their data source of origin.
   """
   use_all_classes = False
   if pool is not None:
@@ -306,6 +307,11 @@ def make_one_source_episode_pipeline(dataset_spec,
   map_fn = functools.partial(
       process_episode, chunk_sizes=chunk_sizes, image_size=image_size)
   dataset = dataset.map(map_fn)
+
+  # There is only one data source, so we know that all episodes belong to it,
+  # but for interface consistency, zip with a dataset identifying the source.
+  source_id_dataset = tf.data.Dataset.from_tensors(0).repeat()
+  dataset = tf.data.Dataset.zip((dataset, source_id_dataset))
 
   # Overlap episode processing and training.
   dataset = dataset.prefetch(1)
@@ -352,7 +358,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       applied to any dataset and all data per class is used.
 
   Returns:
-    A Dataset instance that outputs fully-assembled and decoded episodes.
+    A Dataset instance that outputs tuples of fully-assembled and decoded
+      episodes zipped with the ID of their data source of origin.
   """
   if pool is not None:
     if not data.POOL_SUPPORTED:
@@ -363,9 +370,10 @@ def make_multisource_episode_pipeline(dataset_spec_list,
   if num_to_take is None:
     num_to_take = [-1] * len(dataset_spec_list)
   sources = []
-  for (dataset_spec, use_dag_ontology, use_bilevel_ontology,
-       num_to_take_for_dataset) in zip(dataset_spec_list, use_dag_ontology_list,
-                                       use_bilevel_ontology_list, num_to_take):
+  for source_id, (dataset_spec, use_dag_ontology, use_bilevel_ontology,
+                  num_to_take_for_dataset) in enumerate(
+                      zip(dataset_spec_list, use_dag_ontology_list,
+                          use_bilevel_ontology_list, num_to_take)):
     episode_reader = reader.EpisodeReader(dataset_spec, split,
                                           shuffle_buffer_size,
                                           read_buffer_size_bytes, num_prefetch,
@@ -378,9 +386,11 @@ def make_multisource_episode_pipeline(dataset_spec_list,
         use_dag_hierarchy=use_dag_ontology,
         use_bilevel_hierarchy=use_bilevel_ontology)
     dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
-    sources.append(dataset)
+    # Create a dataset to zip with the above for identifying the source.
+    source_id_dataset = tf.data.Dataset.from_tensors(source_id).repeat()
+    sources.append(tf.data.Dataset.zip((dataset, source_id_dataset)))
 
-  # Sample uniformly among sources
+  # Sample uniformly among sources.
   dataset = tf.data.experimental.sample_from_datasets(sources)
 
   # Episodes coming out of `dataset` contain flushed examples and are internally
@@ -388,8 +398,11 @@ def make_multisource_episode_pipeline(dataset_spec_list,
   # splits the episode into support and query sets, removes the dummy examples
   # and decodes the example strings.
   chunk_sizes = sampler.compute_chunk_sizes()
-  map_fn = functools.partial(
-      process_episode, chunk_sizes=chunk_sizes, image_size=image_size)
+
+  def map_fn(episode, source_id):
+    return process_episode(
+        *episode, chunk_sizes=chunk_sizes, image_size=image_size), source_id
+
   dataset = dataset.map(map_fn)
 
   # Overlap episode processing and training.
@@ -440,6 +453,11 @@ def make_one_source_batch_pipeline(dataset_spec,
       batch_size=batch_size, pool=pool)
   map_fn = functools.partial(process_batch, image_size=image_size)
   dataset = dataset.map(map_fn)
+
+  # There is only one data source, so we know that all batches belong to it,
+  # but for interface consistency, zip with a dataset identifying the source.
+  source_id_dataset = tf.data.Dataset.from_tensors(0).repeat()
+  dataset = tf.data.Dataset.zip((dataset, source_id_dataset))
 
   # Overlap episode processing and training.
   dataset = dataset.prefetch(1)
@@ -492,21 +510,25 @@ def make_multisource_batch_pipeline(dataset_spec_list,
     num_to_take = [-1] * len(dataset_spec_list)
   sources = []
   offset = 0
-  for dataset_spec, num_to_take_for_dataset in zip(dataset_spec_list,
-                                                   num_to_take):
+  for source_id, (dataset_spec, num_to_take_for_dataset) in enumerate(
+      zip(dataset_spec_list, num_to_take)):
     batch_reader = reader.BatchReader(dataset_spec, split, shuffle_buffer_size,
                                       read_buffer_size_bytes, num_prefetch,
                                       num_to_take_for_dataset)
     dataset = batch_reader.create_dataset_input_pipeline(
         batch_size=batch_size, pool=pool, offset=offset)
-    sources.append(dataset)
+    # Create a dataset to zip with the above for identifying the source.
+    source_id_dataset = tf.data.Dataset.from_tensors(source_id).repeat()
+    sources.append(tf.data.Dataset.zip((dataset, source_id_dataset)))
     if add_dataset_offset:
       offset += len(dataset_spec.get_classes(split))
 
   # Sample uniformly among sources
   dataset = tf.data.experimental.sample_from_datasets(sources)
 
-  map_fn = functools.partial(process_batch, image_size=image_size)
+  def map_fn(batch, source_id):
+    return process_batch(*batch, image_size=image_size), source_id
+
   dataset = dataset.map(map_fn)
 
   # Overlap episode processing and training.
