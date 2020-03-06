@@ -1170,8 +1170,9 @@ class Trainer(object):
       acc, summaries = self.sess.run(
           [self.accs[split], self.evaluation_summaries])
       accuracies.append(acc)
-      # Write evaluation summaries.
-      if split == self.eval_split and self.summary_writer:
+      # Write complete summaries during evaluation, but not training.
+      # Otherwise, validation summaries become too big.
+      if not self.is_training and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
     logging.info('Done.')
 
