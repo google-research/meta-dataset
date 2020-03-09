@@ -85,7 +85,7 @@ class PipelineTest(tf.test.TestCase):
         split=learning_spec.Split.TRAIN,
         image_size=None)
 
-    episode = self.evaluate(
+    episode, _ = self.evaluate(
         dataset_episodic.make_one_shot_iterator().get_next())
 
     # 3-Check that support and query features are in class_features and have

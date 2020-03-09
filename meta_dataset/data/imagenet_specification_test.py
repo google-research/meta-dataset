@@ -390,7 +390,8 @@ class ImagenetSpecificationTest(tf.test.TestCase):
     self.assertLen(set(all_classes), len(all_classes))  # no duplicates
 
   def test_imagenet_specification(self):
-    spec = imagenet_spec.create_imagenet_specification(learning_spec.Split)
+    spec = imagenet_spec.create_imagenet_specification(learning_spec.Split,
+                                                       set())
     splits, _, graph_nodes, synsets_2012, num_synset_2012_images, roots = spec
     span_leaves = imagenet_spec.get_spanning_leaves(graph_nodes)
     num_span_images = imagenet_spec.get_num_spanning_images(
