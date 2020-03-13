@@ -412,9 +412,10 @@ class BatchReaderMixin(object):
         raise NotImplementedError(
             'Example-level splits or pools not supported.')
     else:
-      # TODO(lamblinp): Adapt the labels so that their set is contiguous and
-      # starts at 0, even when the split's class set is not.
-      class_set = [self.class_set[ds_id] for ds_id in range(num_classes)]
+      # To have labels start at 0 and be contiguous, subtracting the starting
+      # index from all labels
+      start_ind = self.class_set[0]
+      class_set = [self.class_set[ds_id] - start_ind for ds_id in range(num_classes)]
       if list(class_set) != list(range(num_classes)):
         raise NotImplementedError('Batch training currently assumes the class '
                                   'set is contiguous and starts at 0.')
