@@ -39,7 +39,6 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-
 # Enable TensorFlow optimizations. It can add a few minutes to the first
 # calls to session.run(), but decrease memory usage.
 ENABLE_TF_OPTIMIZATIONS = True
@@ -143,18 +142,20 @@ def apply_dataset_options(dataset):
   return dataset.with_options(TF_DATA_OPTIONS)
 
 
-def compute_train_class_proportions(episode, shots, dataset_spec):
-  """Computes the proportion of each class' examples in the support set.
+def compute_class_proportions(unique_class_ids, shots, dataset_spec):
+  """Computes the proportion of the total number of examples appearing as shots.
 
   Args:
-    episode: An EpisodeDataset.
-    shots: A 1D Tensor whose length is the `way' of the episode that stores the
-      shots for this episode.
-    dataset_spec: A DatasetSpecification.
+    unique_class_ids: A 1D int Tensor of unique class IDs.
+    shots: A 1D Tensor of the number of shots for each class in
+      `unique_class_ids`.
+    dataset_spec: A DatasetSpecification that contains informations about the
+      class labels in `unique_class_ids`.
 
   Returns:
-    class_props: A 1D Tensor whose length is the `way' of the episode, storing
-      for each class the proportion of its examples that are in the support set.
+    A 1D Tensor with the proportion of examples appearing as shots per class in
+    `unique_class_ids`, normalized by the total number of examples for each
+    class in the dataset according to `dataset_spec`.
   """
   # Get the total number of examples of each class in the dataset.
   num_dataset_classes = len(dataset_spec.images_per_class)
@@ -163,18 +164,17 @@ def compute_train_class_proportions(episode, shots, dataset_spec):
       for class_id in range(num_dataset_classes)
   ]
 
-  # Get the (absolute) class ID's that appear in the episode.
-  class_ids, _ = tf.unique(episode.train_class_ids)  # [?, ]
-
-  # Make sure that class_ids are valid indices of num_images_per_class. This is
-  # important since tf.gather will fail silently and return zeros otherwise.
+  # Make sure that `unique_class_ids` are valid indices of
+  # `num_images_per_class`. This is important since `tf.gather` will fail
+  # silently and return zeros otherwise.
   num_classes = tf.shape(num_images_per_class)[0]
-  check_valid_inds_op = tf.assert_less(class_ids, num_classes)
+  check_valid_inds_op = tf.assert_less(unique_class_ids, num_classes)
   with tf.control_dependencies([check_valid_inds_op]):
     # Get the total number of examples of each class that is in the episode.
-    num_images_per_class = tf.gather(num_images_per_class, class_ids)  # [?, ]
+    num_images_per_class = tf.gather(num_images_per_class,
+                                     unique_class_ids)  # [?, ]
 
-  # Get the proportions of examples of each class that appear in the train set.
+  # Get the proportions of examples of each class that appear in the episode.
   class_props = tf.truediv(shots, num_images_per_class)
   return class_props
 
@@ -198,32 +198,6 @@ def get_split_enum(split):
   else:
     raise UnexpectedSplitError(split)
   return split_enum
-
-
-def compute_episode_stats(episode):
-  """Computes various episode stats: way, shots, and class IDs.
-
-  Args:
-    episode: An EpisodeDataset.
-
-  Returns:
-    way: An int constant tensor. The number of classes in the episode.
-    shots: An int 1D tensor: The number of support examples per class.
-    class_ids: An int 1D tensor: (absolute) class IDs.
-  """
-  # The train labels of the next episode.
-  train_labels = episode.train_labels
-  # Compute way.
-  episode_classes, _ = tf.unique(train_labels)
-  way = tf.size(episode_classes)
-  # Compute shots.
-  class_ids = tf.reshape(tf.range(way), [way, 1])
-  class_labels = tf.reshape(train_labels, [1, -1])
-  is_equal = tf.equal(class_labels, class_ids)
-  shots = tf.reduce_sum(tf.cast(is_equal, tf.int32), axis=1)
-  # Compute class_ids.
-  class_ids, _ = tf.unique(episode.train_class_ids)
-  return way, shots, class_ids
 
 
 @gin.configurable
@@ -579,11 +553,14 @@ class Trainer(object):
         (way_, shots_, class_props_, class_ids_, test_logits_,
          test_targets_) = [None] * 6
       else:
-        way_, shots_, class_ids_ = compute_episode_stats(self.next_data[split])
+        data = self.next_data[split]
+        way_ = data.way
+        shots_ = data.train_shots
+        class_ids_ = data.unique_class_ids
         class_props_ = None
         if self.eval_imbalance_dataset:
-          class_props_ = compute_train_class_proportions(
-              self.next_data[split], shots_, self.eval_imbalance_dataset_spec)
+          class_props_ = compute_class_proportions(
+              class_ids_, shots_, self.eval_imbalance_dataset_spec)
         test_logits_ = self.learners[split].test_logits
         test_targets_ = self.learners[split].test_targets
       way.append(way_)
