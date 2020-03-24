@@ -1037,11 +1037,19 @@ def gradient_descent_step(loss,
   return {'updated_vars': updated_vars, 'update_ops': update_ops}
 
 
+@gin.configurable
 class Learner(object):
   """A Learner."""
 
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, data):
+  def __init__(
+      self,
+      is_training,
+      transductive_batch_norm,
+      backprop_through_moments,
+      ema_object,
+      embedding_fn,
+      data,
+  ):
     """Initializes a Learner.
 
     Args:
@@ -1064,6 +1072,9 @@ class Learner(object):
     self.ema_object = ema_object
     self.embedding_fn = embedding_fn
     self.data = data
+
+    if self.transductive_batch_norm:
+      logging.info('Using transductive batch norm!')
 
   def update_ema(self):
     """Apply the update operation."""

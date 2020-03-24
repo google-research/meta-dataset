@@ -165,15 +165,30 @@ def get_paths_to_events(root_dir,
   summary_dir = os.path.join(root_dir, 'summaries')
 
   def get_variant_architecture(name):
-    """Get the architecture of the given variant if it's recorded, o/w None."""
+    """Return the architecture of the given variant if recorded; o/w None."""
     variant_params_dir = os.path.join(params_dir, name)
-    return get_value_from_params_dir(variant_params_dir,
-                                     '_gin.LearnerConfig.embedding_network')
+    architecture = get_value_from_params_dir(variant_params_dir,
+                                             '_gin.Trainer.embedding_network')
+
+    if not architecture:
+      # Backwards compatibility.
+      architecture = get_value_from_params_dir(
+          variant_params_dir, '_gin.LearnerConfig.embedding_network')
+
+    return architecture
 
   def get_variant_pretrained_source(name):
+    """Return the pretrained src of the given variant if recorded; o/w None."""
     variant_params_dir = os.path.join(params_dir, name)
-    return get_value_from_params_dir(variant_params_dir,
-                                     '_gin.LearnerConfig.pretrained_source')
+    pretrained_source = get_value_from_params_dir(
+        variant_params_dir, '_gin.Trainer.pretrained_source')
+
+    if not pretrained_source:
+      # Backwards compatibility.
+      pretrained_source = get_value_from_params_dir(
+          variant_params_dir, '_gin.LearnerConfig.pretrained_source')
+
+    return pretrained_source
 
   def keep_variant(name):
     """Determine if the variant in directory name should be considered."""

@@ -60,7 +60,7 @@ do
     --train_checkpoint_dir=${EXPROOT}/checkpoints/${JOBNAME} \
     --summary_dir=${EXPROOT}/summaries/${JOBNAME} \
     --gin_config=meta_dataset/learn/gin/best/${JOBNAME}.gin \
-    --gin_bindings="LearnerConfig.experiment_name='$EXPNAME'"
+    --gin_bindings="Trainer.experiment_name='$EXPNAME'"
 done
 ```
 
@@ -84,8 +84,8 @@ The best models for `baselinefinetune` ("Finetune") and `prototypical`
 ("ProtoNet") on ILSVRC-2012 were not initialized from pre-trained model, so
 their respective gin config indicates:
 
-- `LearnerConfig.pretrained_source = 'scratch'`, and
-- `LearnerConfig.pretrained_checkpoint = ''`
+- `Trainer.pretrained_source = 'scratch'`, and
+- `Trainer.pretrained_checkpoint = ''`
 
 They can be launched right away (in parallel with the pre-training), and their
 configuration does not need to be changed.
@@ -98,8 +98,8 @@ For the other models, the respective best pre-train model is:
 - `maml` ("fo-MAML"): `mamlconvnet` (`four_layer_convnet_maml`)
 - `maml_init_with_proto` ("Proto-MAML"): `mamlresnet` (`resnet_maml`)
 
-The corresponding `.gin` file indicates `LearnerConfig.pretrained_source =
-'imagenet'`, and has a placeholder for `LearnerConfig.pretrained_checkpoint`.
+The corresponding `.gin` file indicates `Trainer.pretrained_source =
+'imagenet'`, and has a placeholder for `Trainer.pretrained_checkpoint`.
 The number of steps for the best checkpoint did not make a measurable difference
 in our experience, so you can simply update the base path and keep the number in
 "`model_?????.ckpt`". If you would like to perform the selection for the best
@@ -118,13 +118,13 @@ do
     --train_checkpoint_dir=${EXPROOT}/checkpoints/${EXPNAME} \
     --summary_dir=${EXPROOT}/summaries/${EXPNAME} \
     --gin_config=meta_dataset/learn/gin/best/${EXPNAME}.gin \
-    --gin_bindings="LearnerConfig.experiment_name='$EXPNAME'"
+    --gin_bindings="Trainer.experiment_name='$EXPNAME'"
 done
 ```
 
 Note: rather than editing the `.gin` file, it is also possible to specify the
 path to the pretrained checkpoint to load on the command-line, adding
-`--gin_bindings="LearnerConfig.pretrained_checkpoint='...'"`.
+`--gin_bindings="Trainer.pretrained_checkpoint='...'"`.
 
 Run time:
 
@@ -185,9 +185,9 @@ do
       --records_root_dir=$RECORDS \
       --summary_dir=${EXPROOT}/summaries/${EXPNAME}_eval_$DATASET \
       --gin_config=meta_dataset/learn/gin/best/${EXPNAME}.gin \
-      --gin_bindings="LearnerConfig.experiment_name='${EXPNAME}'" \
-      --gin_bindings="LearnerConfig.pretrained_checkpoint=''" \
-      --gin_bindings="LearnerConfig.checkpoint_for_eval='${EXPROOT}/checkpoints/${EXPNAME}/model_${BESTNUM}.ckpt'" \
+      --gin_bindings="Trainer.experiment_name='${EXPNAME}'" \
+      --gin_bindings="Trainer.pretrained_checkpoint=''" \
+      --gin_bindings="Trainer.checkpoint_for_eval='${EXPROOT}/checkpoints/${EXPNAME}/model_${BESTNUM}.ckpt'" \
       --gin_bindings="benchmark.eval_datasets='$DATASET'"
   done
 done
@@ -228,7 +228,7 @@ do
     --train_checkpoint_dir=${EXPROOT}/checkpoints/${EXPNAME} \
     --summary_dir=${EXPROOT}/summaries/${EXPNAME} \
     --gin_config=meta_dataset/learn/gin/best/${EXPNAME}.gin \
-    --gin_bindings="LearnerConfig.experiment_name='$EXPNAME'"
+    --gin_bindings="Trainer.experiment_name='$EXPNAME'"
 done
 ```
 

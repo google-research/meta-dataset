@@ -1,8 +1,7 @@
-LearnerConfig.pretrained_checkpoint = ''
-LearnerConfig.checkpoint_for_eval = ''
-LearnerConfig.learning_rate = 1e-4
-LearnerConfig.decay_learning_rate = False
-LearnerConfig.decay_every = 5000
-LearnerConfig.decay_rate = 0.5
-LearnerConfig.pretrained_source = ''
-Trainer.learner_config = @LearnerConfig()
+Trainer.pretrained_checkpoint = ''
+Trainer.checkpoint_for_eval = ''
+Trainer.learning_rate = 1e-4
+Trainer.decay_learning_rate = False
+Trainer.decay_every = 5000
+Trainer.decay_rate = 0.5
+Trainer.pretrained_source = ''

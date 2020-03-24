@@ -23,7 +23,7 @@ python -m meta_dataset.train \
   --records_root_dir=<records_root> \
   --alsologtostderr \
   --gin_config=meta_dataset/learn/gin/default/<exp_name>.gin
-  --gin_bindings="LearnerConfig.experiment_name='<exp_name>'"
+  --gin_bindings="Trainer.experiment_name='<exp_name>'"
 # pylint: enable=line-too-long
 
 where:
@@ -164,47 +164,35 @@ def main(unused_argv):
   # Parse Gin configurations passed to this script.
   parse_cmdline_gin_configurations()
 
-  # Try to reload a previously recorded Gin configuration.
-  # TODO(eringrant): Allow querying of a value to be bound without binding it
-  # to avoid the redundant call to `parse_cmdline_gin_configurations` below.
-  try:
-    checkpoint_to_reload = gin.query_parameter(
-        'LearnerConfig.checkpoint_for_eval')
-  except ValueError:
+  if FLAGS.reload_checkpoint_gin_config:
+    # Try to reload a previously recorded Gin configuration.
+    # TODO(eringrant): Allow querying of a value to be bound without binding it
+    # to avoid the redundant call to `parse_cmdline_gin_configurations` below.
     try:
-      checkpoint_to_reload = gin.query_parameter(
-          'LearnerConfig.pretrained_checkpoint')
+      checkpoint_to_reload = gin.query_parameter('Trainer.checkpoint_for_eval')
     except ValueError:
-      checkpoint_to_reload = None
-  if checkpoint_to_reload and FLAGS.reload_checkpoint_gin_config:
-    reload_checkpoint_dir = os.path.dirname(checkpoint_to_reload)
-    load_operative_gin_configurations(reload_checkpoint_dir)
+      try:
+        checkpoint_to_reload = gin.query_parameter(
+            'Trainer.pretrained_checkpoint')
+      except ValueError:
+        checkpoint_to_reload = None
 
-    # Reload the command-line Gin configuration to allow overriding of the Gin
-    # configuration loaded from the checkpoint directory.
-    parse_cmdline_gin_configurations()
+    # Load the operative Gin configurations from the checkpoint directory.
+    if checkpoint_to_reload:
+      reload_checkpoint_dir = os.path.dirname(checkpoint_to_reload)
+      load_operative_gin_configurations(reload_checkpoint_dir)
+
+      # Reload the command-line Gin configuration to allow overriding of the Gin
+      # configuration loaded from the checkpoint directory.
+      parse_cmdline_gin_configurations()
 
   # Wrap object instantiations to print out full Gin configuration on failure.
   try:
-    learner_config = trainer.LearnerConfig()
-
     (train_datasets, eval_datasets, restrict_classes,
      restrict_num_per_class) = trainer.get_datasets_and_restrictions()
 
-    train_learner = None
-    if FLAGS.is_training or (
-        FLAGS.eval_finegrainedness and
-        FLAGS.eval_finegrainedness_split == trainer.TRAIN_SPLIT):
-      # If eval_finegrainedness is True, even in pure evaluation mode we still
-      # require a train learner, since we may perform this analysis on the
-      # training sub-graph of ImageNet too.
-      train_learner = trainer.NAME_TO_LEARNER[learner_config.train_learner]
-    eval_learner = trainer.NAME_TO_LEARNER[learner_config.eval_learner]
-
     # Get a trainer or evaluator.
     trainer_kwargs = {
-        'train_learner': train_learner,
-        'eval_learner': eval_learner,
         'is_training': FLAGS.is_training,
         'train_dataset_list': train_datasets,
         'eval_dataset_list': eval_datasets,
@@ -218,18 +206,22 @@ def main(unused_argv):
         'eval_imbalance_dataset': FLAGS.eval_imbalance_dataset,
         'omit_from_saving_and_reloading': FLAGS.omit_from_saving_and_reloading,
     }
-    if learner_config.episodic:
+
+    train_learner_class = gin.query_parameter('Trainer.train_learner_class')
+    if gin.query_parameter('Trainer.episodic'):
       trainer_instance = trainer.EpisodicTrainer(**trainer_kwargs)
-      if learner_config.train_learner not in trainer.EPISODIC_LEARNER_NAMES:
+      if train_learner_class not in trainer.EPISODIC_LEARNER_NAMES:
         raise ValueError(
-            'When "episodic" is True, "train_learner" should be an episodic one, '
-            'among {}.'.format(trainer.EPISODIC_LEARNER_NAMES))
+            'When "episodic" is True, "train_learner" should be an episodic '
+            'one, among {}, but received {}.'.format(
+                trainer.EPISODIC_LEARNER_NAMES, train_learner_class))
     else:
       trainer_instance = trainer.BatchTrainer(**trainer_kwargs)
-      if learner_config.train_learner not in trainer.BATCH_LEARNER_NAMES:
+      if train_learner_class not in trainer.BATCH_LEARNER_NAMES:
         raise ValueError(
-            'When "episodic" is False, "train_learner" should be a batch one, '
-            'among {}.'.format(trainer.BATCH_LEARNER_NAMES))
+            'When `episodic` is False, `train_learner` should be a batch one, '
+            'among {}, but received {}.'.format(trainer.BATCH_LEARNER_NAMES,
+                                                train_learner_class))
 
   except ValueError as e:
     logging.info('Full Gin configurations:\n%s', gin.config_str())

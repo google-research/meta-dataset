@@ -200,49 +200,27 @@ def get_split_enum(split):
   return split_enum
 
 
+# TODO(eringrant): Split the current `Trainer` class into `Trainer` and
+# `Evaluator` classes to partition the constructor arguments into meaningful
+# groups.
+# TODO(eringrant): Better organize `Trainer` Gin configurations, which are
+# currently set in many configuration files.
 @gin.configurable
-class LearnConfig(object):
-  """A collection of values pertaining to learning."""
-
-  def __init__(self, num_updates, batch_size, num_eval_episodes,
-               checkpoint_every, validate_every, log_every,
-               transductive_batch_norm):
-    """Initializes a LearnConfig.
-
-    Args:
-      num_updates: An integer, the number of training updates.
-      batch_size: An integer, the size of batches for non-episodic models.
-      num_eval_episodes: An integer, the number of episodes for evaluation.
-      checkpoint_every: An integer, the number of episodes between consecutive
-        checkpoints.
-      validate_every: An integer, the number of episodes between consecutive
-        validatations.
-      log_every: An integer, the number of episodes between consecutive logging.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-    """
-    self.num_updates = num_updates
-    self.batch_size = batch_size
-    self.num_eval_episodes = num_eval_episodes
-    self.checkpoint_every = checkpoint_every
-    self.validate_every = validate_every
-    self.log_every = log_every
-    self.transductive_batch_norm = transductive_batch_norm
-
-
-# TODO(manzagop): consider moving here num_updates/batch_size from LearnConfig.
-# TODO(manzagop): consider combining train and eval learner and inferring
-#   episodic.
-@gin.configurable
-class LearnerConfig(object):
-  """A collection of values pertaining to the model."""
+class Trainer(object):
+  """A Trainer for training a Learner on data provided by ReaderDataSource."""
 
   def __init__(
       self,
+      num_updates,
+      batch_size,
+      num_eval_episodes,
+      checkpoint_every,
+      validate_every,
+      log_every,
       episodic,
-      train_learner,
-      eval_learner,
+      train_learner_class,
+      eval_learner_class,
+      is_training,
       pretrained_checkpoint,
       checkpoint_for_eval,
       embedding_network,
@@ -252,62 +230,6 @@ class LearnerConfig(object):
       decay_rate,
       experiment_name,
       pretrained_source,
-  ):
-    # pyformat: disable
-    """Initializes a LearnerConfig.
-
-    Args:
-      episodic: A boolean, whether meta-training is episodic.
-      train_learner: A string, the name of the learner to use for meta-training.
-      eval_learner: A string, the name of the learner to use for
-        meta-evaluation.
-      pretrained_checkpoint: A string, the path to a checkpoint to use for
-        initializing a model prior to training.
-      checkpoint_for_eval: A string, the path to a checkpoint to restore for
-        evaluation.
-      embedding_network: A string, the embedding network to use.
-      learning_rate: A float, the meta-learning learning rate.
-      decay_learning_rate: A boolean, whether to decay the learning rate.
-      decay_every: An integer, the learning rate is decayed for every multiple
-        of this value.
-      decay_rate: A float, the decay to apply to the learning rate.
-      experiment_name: A string, a name for the experiment.
-      pretrained_source: A string, the pretraining setup to use.
-    """
-    # pyformat: enable
-    if checkpoint_for_eval and pretrained_checkpoint:
-      raise ValueError(
-          'Cannot define both `checkpoint_for_eval` and '
-          '`pretrained_checkpoint`. The difference between them is that for '
-          'the former, all variables are restored (including the global step), '
-          'while the latter is only applicable to the start of training for '
-          'initializing the model from pre-trained weights. It is also only '
-          'applicable to episodic models and restores only the embedding '
-          'weights.')
-
-    self.episodic = episodic
-    self.train_learner = train_learner
-    self.eval_learner = eval_learner
-    self.pretrained_checkpoint = pretrained_checkpoint
-    self.checkpoint_for_eval = checkpoint_for_eval
-    self.embedding_network = embedding_network
-    self.learning_rate = learning_rate
-    self.decay_learning_rate = decay_learning_rate
-    self.decay_every = decay_every
-    self.decay_rate = decay_rate
-    self.experiment_name = experiment_name
-    self.pretrained_source = pretrained_source
-
-
-@gin.configurable
-class Trainer(object):
-  """A Trainer for training a Learner on data provided by ReaderDataSource."""
-
-  def __init__(
-      self,
-      train_learner,
-      eval_learner,
-      is_training,
       train_dataset_list,
       eval_dataset_list,
       restrict_classes,
@@ -321,16 +243,37 @@ class Trainer(object):
       omit_from_saving_and_reloading,
       train_episode_config,
       eval_episode_config,
-      learn_config,
-      learner_config,
       data_config,
   ):
+    # pyformat: disable
     """Initializes a Trainer.
 
     Args:
-      train_learner: A Learner to be used for meta-training.
-      eval_learner: A Learner to be used for meta-validation or meta-testing.
+      num_updates: An integer, the number of training updates.
+      batch_size: An integer, the size of batches for non-episodic models.
+      num_eval_episodes: An integer, the number of episodes for evaluation.
+      checkpoint_every: An integer, the number of episodes between consecutive
+        checkpoints.
+      validate_every: An integer, the number of episodes between consecutive
+        validations.
+      log_every: An integer, the number of episodes between consecutive logging.
+      episodic: A boolean, whether meta-training is episodic.
+      train_learner_class: A string, the name of the learner to use for meta-training.
+      eval_learner_class: A string, the name of the learner to use for
+        meta-evaluation.
       is_training: Bool, whether or not to train or just evaluate.
+      pretrained_checkpoint: A string, the path to a checkpoint to use for
+        initializing a model prior to training.
+      checkpoint_for_eval: A string, the path to a checkpoint to restore for
+        evaluation.
+      embedding_network: A string, the embedding network to use.
+      learning_rate: A float, the meta-learning learning rate.
+      decay_learning_rate: A boolean, whether to decay the learning rate.
+      decay_every: An integer, the learning rate is decayed for every multiple
+        of this value.
+      decay_rate: A float, the decay to apply to the learning rate.
+      experiment_name: A string, a name for the experiment.
+      pretrained_source: A string, the pretraining setup to use.
       train_dataset_list: A list of names of datasets to train on. This can be
         any subset of the supported datasets.
       eval_dataset_list: A list of names of datasets to evaluate on either for
@@ -366,15 +309,44 @@ class Trainer(object):
         training episodes or the parameters for sampling them, if variable.
       eval_episode_config: An instance of EpisodeDescriptionConfig. Analogous to
         train_episode_config but used for eval episodes (validation or testing).
-      learn_config: A LearnConfig, the learning configuration.
-      learner_config: A LearnerConfig, the learner configuration.
       data_config: A DataConfig, the data configuration.
 
     Raises:
       UnexpectedSplitError: If split not as expected for Trainer.
+      ValueError: If both `checkpoint_for_eval` and `pretrained_checkpoint` are
+        defined.
     """
-    self.train_learner_class = train_learner
-    self.eval_learner_class = eval_learner
+    # pyformat: enable
+    if checkpoint_for_eval and pretrained_checkpoint:
+      raise ValueError(
+          'Cannot define both `checkpoint_for_eval` and '
+          '`pretrained_checkpoint`. The difference between them is that for '
+          'the former, all variables are restored (including the global step), '
+          'while the latter is only applicable to the start of training for '
+          'initializing the model from pre-trained weights. It is also only '
+          'applicable to episodic models and restores only the embedding '
+          'weights.')
+
+    self.num_updates = num_updates
+    self.batch_size = batch_size
+    self.num_eval_episodes = num_eval_episodes
+    self.checkpoint_every = checkpoint_every
+    self.validate_every = validate_every
+    self.log_every = log_every
+
+    self.pretrained_checkpoint = pretrained_checkpoint
+    self.checkpoint_for_eval = checkpoint_for_eval
+    self.embedding_network = embedding_network
+    self.learning_rate = learning_rate
+    self.decay_learning_rate = decay_learning_rate
+    self.decay_every = decay_every
+    self.decay_rate = decay_rate
+    self.experiment_name = experiment_name
+    self.pretrained_source = pretrained_source
+
+    self.episodic = episodic
+    self.train_learner_class = train_learner_class
+    self.eval_learner_class = eval_learner_class
     self.is_training = is_training
     self.train_dataset_list = train_dataset_list
     self.eval_dataset_list = eval_dataset_list
@@ -412,19 +384,8 @@ class Trainer(object):
     self.num_support_eval = eval_episode_config.num_support
     self.num_query_eval = eval_episode_config.num_query
 
-    self.learn_config = learn_config
-    self.learner_config = learner_config
     self.train_episode_config = train_episode_config
     self.eval_episode_config = eval_episode_config
-
-    if self.learn_config.transductive_batch_norm:
-      logging.warn('Using transductive batch norm!')
-
-    # Only applicable for non-transudctive batch norm. The correct
-    # implementation here involves computing the mean and variance based on the
-    # support set and then using them to batch normalize the query set. During
-    # meta-learning, we allow the gradients to flow through those moments.
-    self.backprop_through_moments = True
 
     self.data_config = data_config
     # Get the image shape.
@@ -446,8 +407,7 @@ class Trainer(object):
     self.ema_object = None  # Using dummy EMA object for now.
     self.learners = {}
     self.embedding_fn = (
-        learner.NAME_TO_EMBEDDING_NETWORK[self.learner_config.embedding_network]
-    )
+        learner.NAME_TO_EMBEDDING_NETWORK[self.embedding_network])
     for split in self.required_splits:
       # Get the next data (episode or batch) for the different splits.
       if split == TRAIN_SPLIT:
@@ -489,13 +449,13 @@ class Trainer(object):
     self.train_op = None
     if self.is_training:
       global_step = tf.train.get_or_create_global_step()
-      learning_rate = self.learner_config.learning_rate
-      if self.learner_config.decay_learning_rate:
+      learning_rate = self.learning_rate
+      if self.decay_learning_rate:
         learning_rate = tf.train.exponential_decay(
-            self.learner_config.learning_rate,
+            self.learning_rate,
             global_step,
-            decay_steps=self.learner_config.decay_every,
-            decay_rate=self.learner_config.decay_rate,
+            decay_steps=self.decay_every,
+            decay_rate=self.decay_rate,
             staircase=True)
       tf.summary.scalar('learning_rate', learning_rate)
       self.optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -776,11 +736,10 @@ class Trainer(object):
     # Restore or initialize the variables.
     self.sess.run(tf.global_variables_initializer())
     self.sess.run(tf.local_variables_initializer())
-    if self.learner_config.checkpoint_for_eval:
+    if self.checkpoint_for_eval:
       # Requested a specific checkpoint.
-      self.saver.restore(self.sess, self.learner_config.checkpoint_for_eval)
-      logging.info('Restored checkpoint: %s',
-                   self.learner_config.checkpoint_for_eval)
+      self.saver.restore(self.sess, self.checkpoint_for_eval)
+      logging.info('Restored checkpoint: %s', self.checkpoint_for_eval)
     else:
       # Continue from the latest checkpoint if one exists.
       # This handles fault-tolerance.
@@ -798,7 +757,7 @@ class Trainer(object):
     # For episodic models, potentially use pretrained weights at the start of
     # training. If this happens it will overwrite the embedding weights, but
     # taking care to not restore the Adam parameters.
-    if self.learner_config.pretrained_checkpoint and not self.sess.run(
+    if self.pretrained_checkpoint and not self.sess.run(
         tf.train.get_global_step()):
 
       # Load the embedding variables from the pre-trained checkpoint. Since the
@@ -831,11 +790,10 @@ class Trainer(object):
           baselinelearner_embed_vars_to_reload.append(var)
       backbone_saver = tf.train.Saver(
           var_list=baselinelearner_embed_vars_to_reload, max_to_keep=1)
-      backbone_saver.restore(self.sess,
-                             self.learner_config.pretrained_checkpoint)
+      backbone_saver.restore(self.sess, self.pretrained_checkpoint)
       logging.info('Restored only vars %s from checkpoint: %s',
                    [var.name for var in baselinelearner_embed_vars_to_reload],
-                   self.learner_config.pretrained_checkpoint)
+                   self.pretrained_checkpoint)
 
   def _create_held_out_specification(self, split=TEST_SPLIT):
     """Create an EpisodeSpecification for either validation or testing.
@@ -1092,7 +1050,7 @@ class Trainer(object):
     # Compute the initial validation performance before starting the training.
     self.maybe_evaluate(global_step)
 
-    while global_step < self.learn_config.num_updates:
+    while global_step < self.num_updates:
       # Perform the next update.
       (_, train_loss, train_acc, global_step) = self.sess.run([
           self.train_op, self.losses[TRAIN_SPLIT], self.accs[TRAIN_SPLIT],
@@ -1103,7 +1061,7 @@ class Trainer(object):
       self.maybe_evaluate(global_step)
 
       # Log training progress.
-      if not global_step % self.learn_config.log_every:
+      if not global_step % self.log_every:
         message = (
             'Update %d. Train loss: %f, Train accuracy: %f, '
             'Valid accuracy %f +/- %f.\n' %
@@ -1116,7 +1074,7 @@ class Trainer(object):
           self.summary_writer.add_summary(summaries, global_step)
 
       should_save = self.checkpoint_dir is not None
-      if should_save and global_step % self.learn_config.checkpoint_every == 0:
+      if should_save and global_step % self.checkpoint_every == 0:
         save_path = self.saver.save(
             self.sess,
             os.path.join(self.checkpoint_dir, 'model_%d.ckpt' % global_step))
@@ -1124,7 +1082,7 @@ class Trainer(object):
 
   def maybe_evaluate(self, global_step):
     """Maybe perform evaluation, depending on the value of global_step."""
-    if not global_step % self.learn_config.validate_every:
+    if not global_step % self.validate_every:
       # Get the validation accuracy and confidence interval.
       (valid_acc, valid_ci, valid_acc_summary,
        valid_ci_summary) = self.evaluate(VALID_SPLIT)
@@ -1139,7 +1097,7 @@ class Trainer(object):
 
   def evaluate(self, split):
     """Returns performance metrics across num_eval_trials episodes / batches."""
-    num_eval_trials = self.learn_config.num_eval_episodes
+    num_eval_trials = self.num_eval_episodes
     logging.info('Performing evaluation of the %s split using %d episodes...',
                  split, num_eval_trials)
     accuracies = []
@@ -1217,15 +1175,27 @@ class EpisodicTrainer(Trainer):
 
   def create_train_learner(self, train_learner_class, episode_or_batch):
     """Instantiates a train learner."""
-    return train_learner_class(True, self.learn_config.transductive_batch_norm,
-                               self.backprop_through_moments, self.ema_object,
-                               self.embedding_fn, episode_or_batch)
+    return NAME_TO_LEARNER[train_learner_class](
+        is_training=True,
+        backprop_through_moments=gin.query_parameter(
+            'Learner.backprop_through_moments'),
+        transductive_batch_norm=gin.query_parameter(
+            'Learner.transductive_batch_norm'),
+        ema_object=self.ema_object,
+        embedding_fn=self.embedding_fn,
+        reader=episode_or_batch)
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""
-    return eval_learner_class(False, self.learn_config.transductive_batch_norm,
-                              self.backprop_through_moments, self.ema_object,
-                              self.embedding_fn, episode)
+    return NAME_TO_LEARNER[eval_learner_class](
+        is_training=False,
+        backprop_through_moments=gin.query_parameter(
+            'Learner.backprop_through_moments'),
+        transductive_batch_norm=gin.query_parameter(
+            'Learner.transductive_batch_norm'),
+        ema_object=self.ema_object,
+        embedding_fn=self.embedding_fn,
+        reader=episode)
 
 
 class BatchTrainer(Trainer):
@@ -1261,7 +1231,7 @@ class BatchTrainer(Trainer):
                                                 self.num_query_train)
     else:
       return learning_spec.BatchSpecification(learning_spec.Split.TRAIN,
-                                              self.learn_config.batch_size)
+                                              self.batch_size)
 
   def set_way_shots_classes_logits_targets(self):
     """Sets the Tensors for the above info of the learner's next episode."""
@@ -1284,11 +1254,17 @@ class BatchTrainer(Trainer):
     """Instantiates a train learner."""
     num_total_classes = self._get_num_total_classes()
     is_training = False if self.eval_split == TRAIN_SPLIT else True
-    return train_learner_class(is_training,
-                               self.learn_config.transductive_batch_norm,
-                               self.backprop_through_moments, self.ema_object,
-                               self.embedding_fn, episode_or_batch,
-                               num_total_classes, self.num_test_classes)
+    return NAME_TO_LEARNER[train_learner_class](
+        is_training=is_training,
+        backprop_through_moments=gin.query_parameter(
+            'Learner.backprop_through_moments'),
+        transductive_batch_norm=gin.query_parameter(
+            'Learner.transductive_batch_norm'),
+        embedding_fn=self.embedding_fn,
+        ema_object=self.ema_object,
+        reader=episode_or_batch,
+        num_train_classes=num_total_classes,
+        num_test_classes=self.num_test_classes)
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""
@@ -1296,18 +1272,24 @@ class BatchTrainer(Trainer):
     # the inference-only baselines, it will be an episodic learner. This allows
     # to combine the inference algorithm of Prototypical Networks, etc, as the
     # validation (and test) procedure of a baseline-trained model.
-    if eval_learner_class in BATCH_LEARNERS:
+    if eval_learner_class in BATCH_LEARNER_NAMES:
       num_total_classes = self._get_num_total_classes()
-      return eval_learner_class(False,
-                                self.learn_config.transductive_batch_norm,
-                                self.backprop_through_moments, self.ema_object,
-                                self.embedding_fn, episode, num_total_classes,
-                                self.num_test_classes)
-    elif eval_learner_class in EPISODIC_LEARNERS:
-      return eval_learner_class(False,
-                                self.learn_config.transductive_batch_norm,
-                                self.backprop_through_moments, self.ema_object,
-                                self.embedding_fn, episode)
+      return NAME_TO_LEARNER[eval_learner_class](
+          is_training=False,
+          embedding_fn=self.embedding_fn,
+          ema_object=self.ema_object,
+          reader=episode,
+          num_train_classes=num_total_classes,
+          num_test_classes=self.num_test_classes)
+    elif eval_learner_class in EPISODIC_LEARNER_NAMES:
+      return NAME_TO_LEARNER[eval_learner_class](
+          False,
+          embedding_fn=self.embedding_fn,
+          ema_object=self.ema_object,
+          data=episode)
     else:
       raise ValueError('The specified eval_learner_class should belong to '
-                       'BATCH_LEARNERS or EPISODIC_LEARNERS.')
+                       'BATCH_LEARNERS or EPISODIC_LEARNERS, among {},'
+                       'but received {}.'.format(
+                           EPISODIC_LEARNER_NAMES + BATCH_LEARNER_NAMES,
+                           eval_learner_class))

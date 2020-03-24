@@ -1,7 +1,7 @@
 benchmark.train_datasets = 'mini_imagenet'
 benchmark.eval_datasets = 'mini_imagenet'
 include 'meta_dataset/learn/gin/setups/data_config.gin'
-include 'meta_dataset/learn/gin/setups/learn_config.gin'
+include 'meta_dataset/learn/gin/setups/trainer_config.gin'
 include 'meta_dataset/learn/gin/setups/fixed_way_and_shot.gin'
 Trainer.data_config = @DataConfig()
 Trainer.train_episode_config = @train/EpisodeDescriptionConfig()

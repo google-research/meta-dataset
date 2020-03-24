@@ -2,9 +2,9 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/maml_config.gin'
 
 # Backbone hypers.
-LearnerConfig.embedding_network = 'resnet'
-LearnerConfig.pretrained_source = 'imagenet'
-LearnerConfig.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_27500.ckpt'
+Trainer.embedding_network = 'resnet'
+Trainer.pretrained_source = 'imagenet'
+Trainer.pretrained_checkpoint = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_27500.ckpt'
 
 # Model hypers.
 MAMLLearner.first_order = True
@@ -16,7 +16,7 @@ MAMLLearner.num_update_steps = 10
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
-LearnerConfig.decay_every = 10000
-LearnerConfig.decay_rate = 0.8354967819706964
-LearnerConfig.learning_rate = 0.0003601303690709516
+Trainer.decay_every = 10000
+Trainer.decay_rate = 0.8354967819706964
+Trainer.learning_rate = 0.0003601303690709516
 weight_decay = 0.00030572401935585053

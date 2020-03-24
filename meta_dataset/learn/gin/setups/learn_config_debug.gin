@@ -1,8 +1,0 @@
-LearnConfig.num_updates = 100
-LearnConfig.batch_size = 8  # Only applicable to non-episodic models.
-LearnConfig.num_eval_episodes = 10
-LearnConfig.checkpoint_every = 10
-LearnConfig.validate_every = 5
-LearnConfig.log_every = 1
-LearnConfig.transductive_batch_norm = False
-Trainer.learn_config = @LearnConfig()

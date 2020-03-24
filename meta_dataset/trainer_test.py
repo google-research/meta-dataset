@@ -43,33 +43,6 @@ class TrainerTest(tf.test.TestCase):
   """
 
   def test_episodic_trainer(self):
-    # Inspired from `learn/gin/default/debug_proto_mini_imagenet.gin`, but
-    # building the objects explicitly.
-    learn_config = trainer.LearnConfig(
-        num_updates=100,
-        batch_size=8,  # unused
-        num_eval_episodes=10,
-        checkpoint_every=10,
-        validate_every=5,
-        log_every=1,
-        transductive_batch_norm=False,
-    )
-
-    learner_config = trainer.LearnerConfig(
-        episodic=True,
-        train_learner='PrototypicalNet',
-        eval_learner='PrototypicalNet',
-        pretrained_checkpoint='',
-        checkpoint_for_eval='',
-        embedding_network='four_layer_convnet',
-        learning_rate=1e-4,
-        decay_learning_rate=True,
-        decay_every=5000,
-        decay_rate=0.5,
-        experiment_name='test',
-        pretrained_source='',
-    )
-
     # PrototypicalNetworkLearner is built automatically and this test does not
     # have the opportunity to pass values to its constructor except through gin.
     gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
@@ -93,6 +66,8 @@ class TrainerTest(tf.test.TestCase):
         ignore_dag_ontology=False,
         ignore_bilevel_ontology=False)
 
+    # Inspired from `learn/gin/default/debug_proto_mini_imagenet.gin`, but
+    # building the objects explicitly.
     data_config = config.DataConfig(
         image_height=84,
         shuffle_buffer_size=20,
@@ -117,9 +92,23 @@ class TrainerTest(tf.test.TestCase):
         omit_from_saving_and_reloading='',
         train_episode_config=episode_config,
         eval_episode_config=episode_config,
-        learn_config=learn_config,
-        learner_config=learner_config,
         data_config=data_config,
+        num_updates=100,
+        batch_size=8,  # unused
+        num_eval_episodes=10,
+        checkpoint_every=10,
+        validate_every=5,
+        log_every=1,
+        episodic=True,
+        pretrained_checkpoint='',
+        checkpoint_for_eval='',
+        embedding_network='four_layer_convnet',
+        learning_rate=1e-4,
+        decay_learning_rate=True,
+        decay_every=5000,
+        decay_rate=0.5,
+        experiment_name='test',
+        pretrained_source='',
     )
 
     # Get the next train / valid / test episodes.

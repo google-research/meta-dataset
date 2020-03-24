@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
 include 'meta_dataset/learn/gin/models/relationnet_config.gin'
 
 ## Hyperparameters used to train the best model
-LearnerConfig.pretrained_checkpoint = ''
-LearnerConfig.pretrained_source = 'scratch'
+Trainer.pretrained_checkpoint = ''
+Trainer.pretrained_source = 'scratch'
 weight_decay = 1e-6
-LearnConfig.transductive_batch_norm = True
+Learner.transductive_batch_norm = True

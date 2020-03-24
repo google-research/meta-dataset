@@ -3,5 +3,5 @@ EpisodeDescriptionConfig.num_support = 1
 train/EpisodeDescriptionConfig.num_ways = 30
 
 include 'meta_dataset/learn/gin/models/prototypical_config.gin'
-LearnerConfig.learning_rate = 1e-4
-LearnerConfig.decay_learning_rate = True
+Trainer.learning_rate = 1e-4
+Trainer.decay_learning_rate = True

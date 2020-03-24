@@ -1,8 +1,8 @@
 include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/learner_config.gin'
-LearnerConfig.episodic = False
-LearnerConfig.train_learner = 'Baseline'
-LearnerConfig.eval_learner = 'PrototypicalNet'
+Trainer.train_learner_class = 'Baseline'
+Trainer.eval_learner_class = 'PrototypicalNet'
+Trainer.episodic = False
 weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
 BaselineLearner.weight_decay = %weight_decay

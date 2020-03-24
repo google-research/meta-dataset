@@ -3,9 +3,9 @@ EpisodeDescriptionConfig.num_support = 5
 
 include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
 
-LearnerConfig.embedding_network = 'wide_resnet'
+Trainer.embedding_network = 'wide_resnet'
 DataConfig.image_height = 84
-LearnerConfig.pretrained_source = 'scratch'
+Trainer.pretrained_source = 'scratch'
 weight_decay = 0
 
 BaselineFinetuneLearner.num_finetune_steps = 200
