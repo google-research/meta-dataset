@@ -5,10 +5,5 @@ include 'meta_dataset/learn/gin/models/relationnet_config.gin'
 # There are more parameters than usual, so allow more updates.
 Trainer.num_updates = 100000
 
-# Allow transductive batch norm to be faithful with the original Relation Net
-# implementation, even though this gives it an advantage over the rest of the
-# models we used on Meta-Dataset.
-Learner.transductive_batch_norm = True
-
 Trainer.learning_rate = 1e-3
 Trainer.decay_learning_rate = True

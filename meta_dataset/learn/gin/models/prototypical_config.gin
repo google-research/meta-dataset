@@ -5,3 +5,6 @@ Trainer.episodic = True
 Trainer.embedding_network = 'four_layer_convnet'
 weight_decay = 1e-4
 PrototypicalNetworkLearner.weight_decay = %weight_decay
+
+PrototypicalNetworkLearner.transductive_batch_norm = False
+PrototypicalNetworkLearner.backprop_through_moments = True

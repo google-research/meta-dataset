@@ -5,4 +5,3 @@ include 'meta_dataset/learn/gin/models/relationnet_config.gin'
 Trainer.pretrained_checkpoint = ''
 Trainer.pretrained_source = 'scratch'
 weight_decay = 1e-6
-Learner.transductive_batch_norm = True

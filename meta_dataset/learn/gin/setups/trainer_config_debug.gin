@@ -4,5 +4,3 @@ Trainer.num_eval_episodes = 10
 Trainer.checkpoint_every = 10
 Trainer.validate_every = 5
 Trainer.log_every = 1
-Learner.transductive_batch_norm = False
-Learner.backprop_through_moments = False

@@ -13,3 +13,6 @@ MAMLLearner.train_batch_norm = False
 MAMLLearner.debug = False
 MAMLLearner.zero_fc_layer = True
 MAMLLearner.proto_maml_fc_layer_init = True
+
+MAMLLearner.transductive_batch_norm = False
+MAMLLearner.backprop_through_moments = True

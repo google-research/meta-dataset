@@ -7,3 +7,6 @@ BaselineFinetuneLearner.num_finetune_steps = 5
 BaselineFinetuneLearner.finetune_lr = 1e-4
 BaselineFinetuneLearner.finetune_all_layers = False
 BaselineFinetuneLearner.finetune_with_adam = False
+
+BaselineFinetuneLearner.transductive_batch_norm = False
+BaselineFinetuneLearner.backprop_through_moments = True

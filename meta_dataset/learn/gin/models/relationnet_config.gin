@@ -3,6 +3,12 @@ Trainer.train_learner_class = 'RelationNet'
 Trainer.eval_learner_class = 'RelationNet'
 Trainer.episodic = True
 Trainer.embedding_network = 'relationnet_embedding'
-Learner.transductive_batch_norm = True
+
 weight_decay = 1e-6
 RelationNetworkLearner.weight_decay = %weight_decay
+
+# Allow transductive batch norm to be faithful with the original Relation Net
+# implementation, even though this gives it an advantage over the rest of the
+# models we used on Meta-Dataset.
+RelationNetworkLearner.transductive_batch_norm = True
+RelationNetworkLearner.backprop_through_moments = True

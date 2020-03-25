@@ -10,3 +10,6 @@ BaselineLearner.knn_distance = 'l2'
 BaselineLearner.cosine_classifier = False
 BaselineLearner.cosine_logits_multiplier = None
 BaselineLearner.use_weight_norm = False
+
+BaselineLearner.transductive_batch_norm = False
+BaselineLearner.backprop_through_moments = True
