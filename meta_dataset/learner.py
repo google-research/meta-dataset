@@ -917,10 +917,66 @@ def four_layer_convnet(inputs,
       keep_spatial_dims=keep_spatial_dims)
 
 
+@gin.configurable('fully_connected_network', whitelist=['n_hidden_units'])
+def fully_connected_network(inputs,
+                            is_training,
+                            params=None,
+                            moments=None,
+                            n_hidden_units=(64,),
+                            reuse=tf.AUTO_REUSE,
+                            scope='fully_connected',
+                            use_bounded_activation=False,
+                            backprop_through_moments=None,
+                            keep_spatial_dims=None):
+  """A fully connected linear network.
+
+  Since there is no batch-norm, `moments` and `backprop_through_moments` flags
+  are not used.
+
+  Args:
+    inputs: Tensor of shape [None, num_features], where `num_features` is the
+      number of input features.
+    is_training: not used.
+    params: None will create new params (or reuse from scope), otherwise an
+      ordered dict of fully connected weights and biases such that
+      params['weight_0'] stores the kernel of the first fully-connected layer,
+      etc.
+    moments: not used.
+    n_hidden_units: tuple, Number of hidden units for each layer. If empty, it
+      is the identity mapping.
+    reuse: Whether to reuse the network's weights.
+    scope: An optional scope for the tf operations.
+    use_bounded_activation: Whether to enable bounded activation. This is useful
+      for post-training quantization.
+    backprop_through_moments: not used.
+    keep_spatial_dims: not used.
+
+  Returns:
+    A 2D Tensor, where each row is the embedding of an input in inputs.
+  """
+  del is_training, moments, backprop_through_moments, keep_spatial_dims
+  layer = inputs
+  model_params_keys, model_params_vars = [], []
+  activation_fn = functools.partial(
+      relu, use_bounded_activation=use_bounded_activation)
+  with tf.variable_scope(scope, reuse=reuse):
+    for i, n_unit in enumerate(n_hidden_units):
+      with tf.variable_scope('layer_%d' % i, reuse=reuse):
+        layer, dense_params = dense(
+            layer, n_unit, activation_fn=activation_fn, params=params)
+        model_params_keys.extend(dense_params.keys())
+        model_params_vars.extend(dense_params.values())
+  model_params = collections.OrderedDict(
+      zip(model_params_keys, model_params_vars))
+  return_dict = {'embeddings': layer, 'params': model_params, 'moments': {}}
+  return return_dict
+
+
 NAME_TO_EMBEDDING_NETWORK = {
     'resnet': resnet,
     'relationnet_embedding': relationnet_embedding,
     'four_layer_convnet': four_layer_convnet,
+    'fully_connected_network': fully_connected_network,
     'wide_resnet': wide_resnet,
 }
 

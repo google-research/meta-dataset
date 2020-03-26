@@ -231,6 +231,10 @@ def main(unused_argv):
   logging.info('Operative Gin configurations:\n%s', gin.operative_config_str())
   if FLAGS.is_training and FLAGS.train_checkpoint_dir:
     record_operative_gin_configurations(FLAGS.train_checkpoint_dir)
+  # TODO(all) Improve saving of gin configs (during train and eval).
+  # Above, handles training only and now below is a hack for evaluation.
+  elif not FLAGS.is_training and FLAGS.summary_dir:
+    record_operative_gin_configurations(FLAGS.summary_dir)
 
   datasets = train_datasets if FLAGS.is_training else eval_datasets
   logging.info('Starting %s for dataset(s) %s...',

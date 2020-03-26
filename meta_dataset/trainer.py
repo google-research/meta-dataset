@@ -476,7 +476,14 @@ class Trainer(object):
         vars_to_restore.append(var)
       else:
         logging.info('Omitting variable %s', var.name)
-    self.saver = tf.train.Saver(var_list=vars_to_restore, max_to_keep=500)
+
+    # We need to omit the Saver call with empty variable list, since it throws
+    # an error. Empty variable list is possible when we evaluate parameterless
+    # meta-learners on embeddings.
+    if vars_to_restore:
+      self.saver = tf.train.Saver(var_list=vars_to_restore, max_to_keep=500)
+    else:
+      self.saver = None
 
     if self.checkpoint_dir is not None:
       if not tf.io.gfile.exists(self.checkpoint_dir):
@@ -634,7 +641,6 @@ class Trainer(object):
 
       dataset_records_path = os.path.join(dataset_records_root, dataset_name)
       data_spec = dataset_spec_lib.load_dataset_spec(dataset_records_path)
-
       # Only ImageNet has a DAG ontology.
       has_dag = (dataset_name == 'ilsvrc_2012')
       # Only Omniglot has a bi-level ontology.
@@ -737,6 +743,11 @@ class Trainer(object):
     self.sess.run(tf.global_variables_initializer())
     self.sess.run(tf.local_variables_initializer())
     if self.checkpoint_for_eval:
+      if not self.saver:
+        raise ValueError(
+            'Checkpoint not restored, since there is no Saver created. This is '
+            'likely due to no parameters being available. If you intend to run '
+            'parameterless training, set checkpoint_for_eval to None.')
       # Requested a specific checkpoint.
       self.saver.restore(self.sess, self.checkpoint_for_eval)
       logging.info('Restored checkpoint: %s', self.checkpoint_for_eval)
@@ -747,6 +758,10 @@ class Trainer(object):
       if self.checkpoint_dir is not None:
         latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
       if latest_checkpoint:
+        if not self.saver:
+          raise ValueError(
+              'Checkpoint not restored, since there is no Saver created. This '
+              'is likely due to no parameters being available. ')
         self.saver.restore(self.sess, latest_checkpoint)
         logging.info('Restored checkpoint: %s', latest_checkpoint)
       else:
@@ -1085,7 +1100,8 @@ class Trainer(object):
     if not global_step % self.validate_every:
       # Get the validation accuracy and confidence interval.
       (valid_acc, valid_ci, valid_acc_summary,
-       valid_ci_summary) = self.evaluate(VALID_SPLIT)
+       valid_ci_summary) = self.evaluate(
+           VALID_SPLIT, step=global_step)
       # Validation summaries are updated every time validation happens which is
       # every validate_every steps instead of log_every steps.
       if self.summary_writer:
@@ -1094,8 +1110,10 @@ class Trainer(object):
       self.valid_acc = valid_acc
       self.valid_ci = valid_ci
 
+# TODO(evcu) Improve this so that if the eval_only loads a global_step, it is
+# used at logging instead of value 0.
 
-  def evaluate(self, split):
+  def evaluate(self, split, step=0):
     """Returns performance metrics across num_eval_trials episodes / batches."""
     num_eval_trials = self.num_eval_episodes
     logging.info('Performing evaluation of the %s split using %d episodes...',
