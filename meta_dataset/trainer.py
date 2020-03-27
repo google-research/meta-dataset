@@ -57,7 +57,6 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   # optimizations to apply.
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
-
 NAME_TO_LEARNER = {
     'Baseline': learner.BaselineLearner,
     'BaselineFinetune': learner.BaselineFinetuneLearner,
@@ -1110,6 +1109,7 @@ class Trainer(object):
       self.valid_acc = valid_acc
       self.valid_ci = valid_ci
 
+
 # TODO(evcu) Improve this so that if the eval_only loads a global_step, it is
 # used at logging instead of value 0.
 
@@ -1195,10 +1195,6 @@ class EpisodicTrainer(Trainer):
     """Instantiates a train learner."""
     return NAME_TO_LEARNER[train_learner_class](
         is_training=True,
-        backprop_through_moments=gin.query_parameter(
-            'Learner.backprop_through_moments'),
-        transductive_batch_norm=gin.query_parameter(
-            'Learner.transductive_batch_norm'),
         ema_object=self.ema_object,
         embedding_fn=self.embedding_fn,
         reader=episode_or_batch)
@@ -1207,10 +1203,6 @@ class EpisodicTrainer(Trainer):
     """Instantiates an eval learner."""
     return NAME_TO_LEARNER[eval_learner_class](
         is_training=False,
-        backprop_through_moments=gin.query_parameter(
-            'Learner.backprop_through_moments'),
-        transductive_batch_norm=gin.query_parameter(
-            'Learner.transductive_batch_norm'),
         ema_object=self.ema_object,
         embedding_fn=self.embedding_fn,
         reader=episode)
@@ -1274,10 +1266,6 @@ class BatchTrainer(Trainer):
     is_training = False if self.eval_split == TRAIN_SPLIT else True
     return NAME_TO_LEARNER[train_learner_class](
         is_training=is_training,
-        backprop_through_moments=gin.query_parameter(
-            'Learner.backprop_through_moments'),
-        transductive_batch_norm=gin.query_parameter(
-            'Learner.transductive_batch_norm'),
         embedding_fn=self.embedding_fn,
         ema_object=self.ema_object,
         reader=episode_or_batch,
@@ -1301,7 +1289,7 @@ class BatchTrainer(Trainer):
           num_test_classes=self.num_test_classes)
     elif eval_learner_class in EPISODIC_LEARNER_NAMES:
       return NAME_TO_LEARNER[eval_learner_class](
-          False,
+          is_training=False,
           embedding_fn=self.embedding_fn,
           ema_object=self.ema_object,
           data=episode)
