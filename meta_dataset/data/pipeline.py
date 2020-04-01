@@ -132,8 +132,10 @@ def process_episode(example_strings,
     chunk_sizes: Tuple of ints representing the sizes the flush and additional
       chunks.
     image_size: int, desired image size used during decoding.
-    support_decoder: Decoder class instance for support set.
-    query_decoder: Decoder class instance for query set.
+    support_decoder: Decoder or None, used to decode support set images. If None
+      image strings are not decoded and left as string Tensors.
+    query_decoder: Decoder or None, used to decode query set images. If None
+      image strings are not decoded and left as string Tensors.
 
   Returns:
     support_images, support_labels, support_class_ids, query_images,
@@ -152,11 +154,18 @@ def process_episode(example_strings,
 
   (support_strings, support_class_ids), (query_strings, query_class_ids) = \
       flush_and_chunk_episode(example_strings, class_ids, chunk_sizes)
-
-  support_images = tf.map_fn(
-      support_decoder, support_strings, dtype=tf.float32, back_prop=False)
-  query_images = tf.map_fn(
-      query_decoder, query_strings, dtype=tf.float32, back_prop=False)
+  if support_decoder:
+    support_images = tf.map_fn(
+        support_decoder, support_strings, dtype=tf.float32, back_prop=False)
+  else:
+    logging.info('No support_decoder given, not decoding input strings.')
+    support_images = support_strings
+  if query_decoder:
+    query_images = tf.map_fn(
+        query_decoder, query_strings, dtype=tf.float32, back_prop=False)
+  else:
+    logging.info('No query_decoder given, not decoding input strings.')
+    query_images = query_strings
 
   # Convert class IDs into labels in [0, num_ways).
   _, support_labels = tf.unique(support_class_ids)

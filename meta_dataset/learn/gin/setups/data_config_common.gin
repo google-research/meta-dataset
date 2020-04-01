@@ -1,0 +1,24 @@
+# This gin file doesn't set process_episode.support_decoder and .query_decoder
+# therefore the image strings are not decoded. This gin file can be used directly
+# if the episodes are needed without decoding.
+import meta_dataset.data.config
+# Default values for sampling variable shots / ways.
+EpisodeDescriptionConfig.min_ways = 5
+EpisodeDescriptionConfig.max_ways_upper_bound = 50
+EpisodeDescriptionConfig.max_num_query = 10
+EpisodeDescriptionConfig.max_support_set_size = 500
+EpisodeDescriptionConfig.max_support_size_contrib_per_class = 100
+EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
+EpisodeDescriptionConfig.max_log_weight = 0.69314718055994529  # np.log(2)
+EpisodeDescriptionConfig.ignore_dag_ontology = False
+EpisodeDescriptionConfig.ignore_bilevel_ontology = False
+# It is possible to override some of the above defaults only for meta-training.
+# An example is shown in the following two commented-out lines.
+# train/EpisodeDescriptionConfig.min_ways = 5
+# train/EpisodeDescriptionConfig.max_ways_upper_bound = 50
+
+# Other default values for the data pipeline.
+DataConfig.image_height = 84
+DataConfig.shuffle_buffer_size = 1000
+DataConfig.read_buffer_size_bytes = 1048576  # 1 MB (1024**2)
+DataConfig.num_prefetch = 64
