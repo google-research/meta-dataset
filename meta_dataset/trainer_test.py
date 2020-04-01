@@ -23,7 +23,6 @@ from __future__ import print_function
 from absl import flags
 
 import gin.tf
-from meta_dataset import learner
 from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import decoder
@@ -46,6 +45,10 @@ class TrainerTest(tf.test.TestCase):
     # PrototypicalNetworkLearner is built automatically and this test does not
     # have the opportunity to pass values to its constructor except through gin.
     gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
+    gin.bind_parameter('PrototypicalNetworkLearner.backprop_through_moments',
+                       True)
+    gin.bind_parameter('PrototypicalNetworkLearner.transductive_batch_norm',
+                       False)
 
     # Values that can't be passed directly to EpisodeDescriptionConfig
     gin.bind_parameter('process_episode.support_decoder',
@@ -76,8 +79,8 @@ class TrainerTest(tf.test.TestCase):
     )
 
     episodic_trainer = trainer.EpisodicTrainer(
-        train_learner=learner.PrototypicalNetworkLearner,
-        eval_learner=learner.PrototypicalNetworkLearner,
+        train_learner_class='PrototypicalNet',
+        eval_learner_class='PrototypicalNet',
         is_training=True,
         train_dataset_list=['mini_imagenet'],
         eval_dataset_list=['mini_imagenet'],
