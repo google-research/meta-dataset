@@ -254,7 +254,10 @@ def main(unused_argv):
     if FLAGS.eval_finegrainedness:
       eval_split = FLAGS.eval_finegrainedness_split
 
-    trainer_instance.evaluate(eval_split)
+    _, _, acc_summary, ci_acc_summary = trainer_instance.evaluate(eval_split)
+    if trainer_instance.summary_writer:
+      trainer_instance.summary_writer.add_summary(acc_summary)
+      trainer_instance.summary_writer.add_summary(ci_acc_summary)
 
   # Flushes the event file to disk and closes the file.
   if trainer_instance.summary_writer:
