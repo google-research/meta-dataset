@@ -36,7 +36,7 @@ DATASET_SPEC = DatasetSpecification(
         Split.TEST: 10
     },
     images_per_class=dict(enumerate([10, 20, 30] * 10)),
-    class_names=None,
+    class_names=['%d' % i for i in range(30)],
     path=None,
     file_pattern='{}.tfrecords')
 

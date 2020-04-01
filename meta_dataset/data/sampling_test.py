@@ -465,6 +465,52 @@ class FixedEpisodeDescrSamplerTest(FixedShotsEpisodeDescrSamplerTest,
                                      self.num_ways * self.num_query)
 
 
+class NotEnoughExamplesSamplerTest(EpisodeDescrSamplerTest):
+  """Tests skipping classes with too few examples."""
+  # Skip classes 0, 3, ..., 27 of test_utils.DATASET_SPEC, as they only have 10
+  # examples each.
+  split = Split.TRAIN
+  min_examples_in_class = 11
+
+  def make_sampler(self):
+    return sampling.EpisodeDescriptionSampler(
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(
+            min_examples_in_class=self.min_examples_in_class))
+
+  def test_skip_classes(self):
+    expected_classes = [i for i in range(30) if i % 3]
+    for _ in range(10):
+      episode_description = self.sampler.sample_episode_description()
+      print('episode_description:', episode_description)
+      self.assertAllInSet([cid for cid, _, _ in episode_description],
+                          expected_classes)
+
+  def test_noskip_at_min(self):
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec, self.split,
+        config.EpisodeDescriptionConfig(min_examples_in_class=10))
+    # We expect 10-example classes to be sampled at least some times
+    for _ in range(10):
+      episode_description = sampler.sample_episode_description()
+      if any(cid % 3 == 0 for cid, _, _ in episode_description):
+        # Test should pass
+        break
+      else:
+        # The end of the loop was reached with no "break" triggered.
+        # If no 10-example class is sampled after 10 iterations, it is an error.
+        raise AssertionError('Classes with exactly `min_examples_in_class` '
+                             'were not sampled.')
+
+  def test_skip_too_many(self):
+    # The "valid" split does not have MIN_WAYS (5) classes left if we skip some.
+    with self.assertRaises(ValueError):
+      sampling.EpisodeDescriptionSampler(
+          self.dataset_spec, Split.VALID,
+          config.EpisodeDescriptionConfig(
+              min_examples_in_class=self.min_examples_in_class))
+
+
 class ChunkSizesTest(tf.test.TestCase):
   """Tests the boundaries of compute_chunk_sizes."""
 

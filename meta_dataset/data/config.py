@@ -81,10 +81,20 @@ class DataAugmentation(object):
 class EpisodeDescriptionConfig(object):
   """Configuration options for episode characteristics."""
 
-  def __init__(self, num_ways, num_support, num_query, min_ways,
-               max_ways_upper_bound, max_num_query, max_support_set_size,
-               max_support_size_contrib_per_class, min_log_weight,
-               max_log_weight, ignore_dag_ontology, ignore_bilevel_ontology):
+  def __init__(self,
+               num_ways,
+               num_support,
+               num_query,
+               min_ways,
+               max_ways_upper_bound,
+               max_num_query,
+               max_support_set_size,
+               max_support_size_contrib_per_class,
+               min_log_weight,
+               max_log_weight,
+               ignore_dag_ontology,
+               ignore_bilevel_ontology,
+               min_examples_in_class=0):
     """Initialize a EpisodeDescriptionConfig.
 
     This is used in sampling.py in Trainer and in EpisodeDescriptionSampler to
@@ -114,6 +124,12 @@ class EpisodeDescriptionConfig(object):
       ignore_bilevel_ontology: Whether to ignore Omniglot's DAG ontology when
         sampling classes from it. This has no effect if Omniglot is not part of
         the benchmark.
+      min_examples_in_class: An integer, the minimum number of examples that a
+        class has to contain to be considered. All classes with fewer examples
+        will be ignored. 0 means no classes are ignored, so having classes with
+        no examples may trigger errors later. For variable shots, a value of 2
+        makes it sure that there are at least one support and one query samples.
+        For fixed shots, you could set it to `num_support + num_query`.
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
@@ -158,3 +174,4 @@ class EpisodeDescriptionConfig(object):
     self.max_log_weight = max_log_weight
     self.ignore_dag_ontology = ignore_dag_ontology
     self.ignore_bilevel_ontology = ignore_bilevel_ontology
+    self.min_examples_in_class = min_examples_in_class

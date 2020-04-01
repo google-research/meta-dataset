@@ -29,6 +29,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from absl import logging
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import imagenet_specification
 import numpy as np
@@ -68,18 +69,17 @@ def sample_num_ways_uniformly(num_classes, min_ways, max_ways):
   return RNG.randint(low=min_ways, high=max_ways + 1)
 
 
-def sample_class_ids_uniformly(num_ways, num_classes):
+def sample_class_ids_uniformly(num_ways, rel_classes):
   """Samples the (relative) class IDs for the episode.
 
   Args:
     num_ways: int, number of ways for the episode.
-    num_classes: int, number of classes.
+    rel_classes: list of int, available class IDs to sample from.
 
   Returns:
-    class_ids: np.array, class IDs for the episode, with values in
-        [0, num_classes - 1].
+    class_ids: np.array, class IDs for the episode, with values in rel_classes.
   """
-  return RNG.choice(num_classes, num_ways, replace=False)
+  return RNG.choice(rel_classes, num_ways, replace=False)
 
 
 def compute_num_query(images_per_class, max_num_query):
@@ -242,20 +242,47 @@ class EpisodeDescriptionSampler(object):
     self.max_support_size_contrib_per_class = episode_descr_config.max_support_size_contrib_per_class
     self.min_log_weight = episode_descr_config.min_log_weight
     self.max_log_weight = episode_descr_config.max_log_weight
+    self.min_examples_in_class = episode_descr_config.min_examples_in_class
 
     self.class_set = dataset_spec.get_classes(self.split)
     self.num_classes = len(self.class_set)
+    # Filter out classes with too few examples
+    self._filtered_class_set = []
+    # Store (class_id, n_examples) of skipped classes for logging.
+    skipped_classes = []
+    for class_id in self.class_set:
+      n_examples = dataset_spec.get_total_images_per_class(class_id, pool=pool)
+      if n_examples < self.min_examples_in_class:
+        skipped_classes.append((class_id, n_examples))
+      else:
+        self._filtered_class_set.append(class_id)
+    self.num_filtered_classes = len(self._filtered_class_set)
 
-    if self.min_ways and self.num_classes < self.min_ways:
-      raise ValueError('"min_ways" is set to {}, but split {} of dataset {} '
-                       'only has {} classes, so it is not possible to create '
-                       'an episode for it. This may have resulted from '
-                       'applying a restriction on this split of this dataset '
-                       'by specifying benchmark.restrict_classes.'.format(
-                           self.min_ways, split, dataset_spec.name,
-                           self.num_classes))
+    if skipped_classes:
+      logging.info(
+          'Skipping the following classes, which do not have at least '
+          '%d examples', self.min_examples_in_class)
+    for class_id, n_examples in skipped_classes:
+      logging.info('%s (ID=%d, %d examples)',
+                   dataset_spec.class_names[class_id], class_id, n_examples)
+
+    if self.min_ways and self.num_filtered_classes < self.min_ways:
+      raise ValueError(
+          '"min_ways" is set to {}, but split {} of dataset {} only has {} '
+          'classes with at least {} examples ({} total), so it is not possible '
+          'to create an episode for it. This may have resulted from applying a '
+          'restriction on this split of this dataset by specifying '
+          'benchmark.restrict_classes or benchmark.min_examples_in_class.'
+          .format(self.min_ways, split, dataset_spec.name,
+                  self.num_filtered_classes, self.min_examples_in_class,
+                  self.num_classes))
 
     if self.use_all_classes:
+      if self.num_classes != self.num_filtered_classes:
+        raise ValueError('"use_all_classes" is not compatible with a value of '
+                         '"min_examples_in_class" ({}) that results in some '
+                         'classes being excluded.'.format(
+                             self.min_examples_in_class))
       self.num_ways = self.num_classes
 
     # Maybe overwrite use_dag_hierarchy or use_bilevel_hierarchy if requested.
@@ -269,6 +296,9 @@ class EpisodeDescriptionSampler(object):
       if self.num_ways is not None:
         raise ValueError('"use_bilevel_hierarchy" is incompatible with '
                          '"num_ways".')
+      if self.min_examples_in_class > 0:
+        raise ValueError('"use_bilevel_hierarchy" is incompatible with '
+                         '"min_examples_in_class".')
 
       if not isinstance(dataset_spec,
                         dataset_spec_lib.BiLevelDatasetSpecification):
@@ -292,7 +322,7 @@ class EpisodeDescriptionSampler(object):
 
       # Map the absolute class IDs in the split's class set to IDs relative to
       # the split.
-      class_set = self.dataset_spec.get_classes(self.split)
+      class_set = self.class_set
       abs_to_rel_ids = dict((abs_id, i) for i, abs_id in enumerate(class_set))
 
       # Extract the sets of leaves and internal nodes in the DAG.
@@ -307,12 +337,17 @@ class EpisodeDescriptionSampler(object):
       self.span_leaves_rel = []
       for node in internal_nodes:
         node_leaves = spanning_leaves_dict[node]
+        # Build a list of relative class IDs of leaves that have at least
+        # min_examples_in_class examples.
+        ids_rel = []
+        for leaf in node_leaves:
+          abs_id = dataset_spec.class_names_to_ids[leaf.wn_id]
+          if abs_id in self._filtered_class_set:
+            ids_rel.append(abs_to_rel_ids[abs_id])
+
         # Internal nodes are eligible if they span at least
         # `min_allowed_classes` and at most `max_eligible` leaves.
-        if self.min_ways <= len(node_leaves) <= MAX_SPANNING_LEAVES_ELIGIBLE:
-          # Build a list of relative class IDs for this internal node.
-          ids = [dataset_spec.class_names_to_ids[s.wn_id] for s in node_leaves]
-          ids_rel = [abs_to_rel_ids[abs_id] for abs_id in ids]
+        if self.min_ways <= len(ids_rel) <= MAX_SPANNING_LEAVES_ELIGIBLE:
           self.span_leaves_rel.append(ids_rel)
 
       num_eligible_nodes = len(self.span_leaves_rel)
@@ -327,6 +362,8 @@ class EpisodeDescriptionSampler(object):
 
     If self.use_dag_hierarchy, it samples them according to a procedure
     informed by the dataset's ontology, otherwise randomly.
+    If self.min_examples_in_class > 0, classes with too few examples will not
+    be selected.
     """
     if self.use_dag_hierarchy:
       # Retrieve the list of relative class IDs for an internal node sampled
@@ -373,11 +410,14 @@ class EpisodeDescriptionSampler(object):
         num_ways = self.num_ways
       else:
         num_ways = sample_num_ways_uniformly(
-            self.num_classes,
+            self.num_filtered_classes,
             min_ways=self.min_ways,
             max_ways=self.max_ways_upper_bound)
-      episode_classes_rel = sample_class_ids_uniformly(num_ways,
-                                                       self.num_classes)
+      # Filtered class IDs relative to the selected split
+      ids_rel = [
+          class_id - self.class_set[0] for class_id in self._filtered_class_set
+      ]
+      episode_classes_rel = sample_class_ids_uniformly(num_ways, ids_rel)
 
     return episode_classes_rel
 
