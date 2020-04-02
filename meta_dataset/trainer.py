@@ -57,6 +57,7 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   # optimizations to apply.
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
+
 NAME_TO_LEARNER = {
     'Baseline': learner.BaselineLearner,
     'BaselineFinetune': learner.BaselineFinetuneLearner,
