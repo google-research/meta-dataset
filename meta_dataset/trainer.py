@@ -1141,8 +1141,10 @@ class Trainer(object):
     mean_acc = np.mean(accuracies)
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
 
-    if split == TEST_SPLIT:
-      logging.info('Test accuracy: %f, +/- %f.\n', mean_acc, ci_acc)
+    if not self.is_training:
+      # Logging during training is handled by self.train() instead.
+      logging.info('Accuracy on the meta-%s split: %f, +/- %f.\n', split,
+                   mean_acc, ci_acc)
 
     mean_acc_summary = tf.Summary()
     mean_acc_summary.value.add(tag='mean %s acc' % split, simple_value=mean_acc)
