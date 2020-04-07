@@ -183,8 +183,7 @@ def get_split_enum(split):
   """Returns the Enum value corresponding to the given split.
 
   Args:
-    split: A String.
-
+    split: A string, one of TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT.
   Raises:
     UnexpectedSplitError: split not TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
   """
@@ -241,6 +240,7 @@ class Trainer(object):
       eval_finegrainedness_split,
       eval_imbalance_dataset,
       omit_from_saving_and_reloading,
+      eval_split,
       train_episode_config,
       eval_episode_config,
       data_config,
@@ -304,6 +304,9 @@ class Trainer(object):
         default it is empty and no imbalance analysis is performed.
       omit_from_saving_and_reloading: A list of strings that specifies
         substrings of variable names that should not be reloaded.
+      eval_split: One of the constants TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT
+        or '' according to the split whose results we want to
+        use for the analysis.
       train_episode_config: An instance of EpisodeDescriptionConfig (in
         data/config.py). This is a config for setting the ways and shots of
         training episodes or the parameters for sampling them, if variable.
@@ -360,11 +363,16 @@ class Trainer(object):
     self.eval_imbalance_dataset = eval_imbalance_dataset
     self.omit_from_saving_and_reloading = omit_from_saving_and_reloading
 
-    self.eval_split = VALID_SPLIT if is_training else TEST_SPLIT
     if eval_finegrainedness:
       # The fine- vs coarse- grained evaluation may potentially be performed on
       # the training graph as it exhibits greater variety in this aspect.
       self.eval_split = eval_finegrainedness_split
+    elif eval_split:
+      self.eval_split = eval_split
+    elif is_training:
+      self.eval_split = VALID_SPLIT
+    else:
+      self.eval_split = TEST_SPLIT
 
     if eval_finegrainedness or eval_imbalance_dataset:
       # We restrict this analysis to the binary classification setting.

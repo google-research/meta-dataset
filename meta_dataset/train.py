@@ -74,6 +74,16 @@ tf.flags.DEFINE_string(
     'for assessing how class imbalance affects performance in binary episodes. '
     'By default it is empty and no imbalance analysis is performed.')
 
+# TODO(crisnv): eval_split is supposed to substitute eval_finegrainedness and
+# eval_finegrainedness_split in the future
+tf.flags.DEFINE_enum(
+    'eval_split', '',
+    [trainer.TRAIN_SPLIT, trainer.VALID_SPLIT, trainer.TEST_SPLIT],
+    'Override the evaluation split. If "", regular logic is used, that is '
+    'if "is_training" is True, "trainer.VALID_SPLIT" is used, '
+    'otherwise "trainer.TEST_SPLIT" is used. The "is_training" case also uses '
+    'the value of eval_finegrainedness_split if eval_finegrainedness is True.')
+
 tf.flags.DEFINE_bool(
     'eval_finegrainedness', False, 'Whether to perform only 2-way ImageNet '
     'evaluation for assessing performance as a function of how finegrained '
@@ -205,6 +215,7 @@ def main(unused_argv):
         'eval_finegrainedness_split': FLAGS.eval_finegrainedness_split,
         'eval_imbalance_dataset': FLAGS.eval_imbalance_dataset,
         'omit_from_saving_and_reloading': FLAGS.omit_from_saving_and_reloading,
+        'eval_split': FLAGS.eval_split,
     }
 
     train_learner_class = gin.query_parameter('Trainer.train_learner_class')
@@ -250,11 +261,14 @@ def main(unused_argv):
                        'should be performed on individual datasets '
                        'only.'.format(datasets))
 
-    eval_split = trainer.TEST_SPLIT
     if FLAGS.eval_finegrainedness:
       eval_split = FLAGS.eval_finegrainedness_split
+    elif FLAGS.eval_split:
+      eval_split = FLAGS.eval_split
+    else:
+      eval_split = trainer.TEST_SPLIT
 
-    _, _, acc_summary, ci_acc_summary = trainer_instance.evaluate(eval_split)
+      _, _, acc_summary, ci_acc_summary = trainer_instance.evaluate(eval_split)
     if trainer_instance.summary_writer:
       trainer_instance.summary_writer.add_summary(acc_summary)
       trainer_instance.summary_writer.add_summary(ci_acc_summary)
