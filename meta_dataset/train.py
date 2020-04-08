@@ -77,7 +77,7 @@ tf.flags.DEFINE_string(
 # TODO(crisnv): eval_split is supposed to substitute eval_finegrainedness and
 # eval_finegrainedness_split in the future
 tf.flags.DEFINE_enum(
-    'eval_split', '',
+    'eval_split', None,
     [trainer.TRAIN_SPLIT, trainer.VALID_SPLIT, trainer.TEST_SPLIT],
     'Override the evaluation split. If "", regular logic is used, that is '
     'if "is_training" is True, "trainer.VALID_SPLIT" is used, '
