@@ -110,6 +110,11 @@ tf.flags.DEFINE_enum(
     'The name of a  pretrained_source to '
     'restrict to for model selection.')
 
+tf.flags.DEFINE_integer(
+    'smooth_window', 1, 'rolling average window to be '
+    'applied before the best model selection. '
+    'Set 1 for no smoothing.')
+
 
 def get_value_from_params_dir(params_dir, param_name):
   """Gets the value for param_name in the params file in params_dir."""
@@ -263,7 +268,28 @@ def get_paths_to_events(root_dir,
   return event_paths
 
 
-def extract_best_from_event_file(event_path, log_details=False):
+# TODO(crisnv): add smooth_type='uniform' that defines the smooth policy
+def moving_average(x, smooth_window):
+  """Returns a smoothed version of x.
+
+  This smoothes the x array according to the smooth_window parameter.
+
+  Args:
+    x: The array to smooth.
+    smooth_window: An integer that defines the neighborhood to be used in
+      smoothing.
+  """
+  conv_filter = getattr(moving_average, 'conv_filter', None)
+  if conv_filter is None or (moving_average.conv_filter_size != smooth_window):
+    moving_average.conv_filter = np.ones((smooth_window,)) / smooth_window
+    moving_average.conv_filter_size = smooth_window
+  # if smooth_window is even, pad accordingly to keep stream size
+  x = np.pad(x, (smooth_window // 2, smooth_window - 1 - (smooth_window // 2)),
+             'reflect')
+  return np.convolve(x, moving_average.conv_filter, mode='valid')
+
+
+def extract_best_from_event_file(event_path, smooth_window, log_details=False):
   """Returns the best accuracy and the step it occurs in in the given events.
 
   This searches the summaries written in a given event file, which may be only a
@@ -272,6 +298,8 @@ def extract_best_from_event_file(event_path, log_details=False):
 
   Args:
     event_path: A string. The path to an event file.
+    smooth_window: An integer that defines the neighborhood to be used in
+      smoothing before the argmax (use <=1 for no smoothing)
     log_details: A boolean. Whether to log details regarding skipped event paths
       in which locating the tag "mean valid acc" failed.
   """
@@ -296,6 +324,8 @@ def extract_best_from_event_file(event_path, log_details=False):
         'Did not find any "mean valid acc" tags in event_path {}'.format(
             event_path))
     return 0, 0
+  if smooth_window > 1:
+    valid_accs = moving_average(valid_accs, smooth_window)
   argmax_ind = np.argmax(valid_accs)
   best_acc = valid_accs[argmax_ind]
   best_step = steps[argmax_ind]
@@ -305,19 +335,22 @@ def extract_best_from_event_file(event_path, log_details=False):
   return best_acc, best_step
 
 
-def extract_best_from_variant(event_paths):
+def extract_best_from_variant(event_paths, smooth_window):
   """Returns the best accuracy and the step it occurs in for the given run.
 
   Args:
     event_paths: A list of strings. The event files of the given run.
+    smooth_window:  An integer that defines the neighborhood to be used in
+      smoothing before the argmax (use <=1 for no smoothing)
 
   Raises:
     RuntimeError: No 'valid' event file for the given variant ('valid' here
       refers to an event file that has a "mean valid acc" tag).
   """
-  best_acc = -1
+  best_step = best_acc = -1
   for event_path in event_paths:
-    best_acc_, best_step_ = extract_best_from_event_file(event_path)
+    best_acc_, best_step_ = extract_best_from_event_file(
+        event_path, smooth_window)
     if best_acc_ > best_acc:
       best_acc = best_acc_
       best_step = best_step_
@@ -360,6 +393,7 @@ def main(argv):
     if FLAGS.restrict_to_architectures:
       restrict_to_architectures = FLAGS.restrict_to_architectures.split(',')
 
+    smooth_window = FLAGS.smooth_window
     event_paths = get_paths_to_events(
         root_experiment_dir,
         restrict_to_architectures,
@@ -371,7 +405,8 @@ def main(argv):
     best_valid_acc = -1
     best_step = -1
     for variant_name, event_path in event_paths.items():
-      best_valid_acc_, best_step_ = extract_best_from_variant(event_path)
+      best_valid_acc_, best_step_ = extract_best_from_variant(
+          event_path, smooth_window)
       if best_valid_acc_ > best_valid_acc:
         best_variant = variant_name
         best_valid_acc = best_valid_acc_
@@ -394,6 +429,8 @@ def main(argv):
       else:
         description += '_pretrained_on_{}'.format(
             FLAGS.restrict_to_pretrained_source)
+    if FLAGS.smooth_window > 1:
+      description += '_smoothed_by_window_{}'.format(smooth_window)
 
     output_path_pklz = os.path.join(root_experiment_dir,
                                     '{}.pklz'.format(description))
