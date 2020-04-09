@@ -266,10 +266,11 @@ class Reader(object):
         num_examples = self.dataset_spec.get_total_images_per_class(
             class_id, pool=pool)
         shuffle_buffer_size = min(num_examples, self.shuffle_buffer_size)
-        example_string_dataset = example_string_dataset.shuffle(
-            buffer_size=shuffle_buffer_size,
-            seed=shuffle_seed,
-            reshuffle_each_iteration=True)
+        if shuffle_buffer_size > 1:
+          example_string_dataset = example_string_dataset.shuffle(
+              buffer_size=shuffle_buffer_size,
+              seed=shuffle_seed,
+              reshuffle_each_iteration=True)
       if repeat:
         example_string_dataset = example_string_dataset.repeat()
 
