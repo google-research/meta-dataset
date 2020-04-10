@@ -306,7 +306,7 @@ class Trainer(object):
       omit_from_saving_and_reloading: A list of strings that specifies
         substrings of variable names that should not be reloaded.
       eval_split: One of the constants TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT
-        or '' according to the split whose results we want to
+        or None, according to the split whose results we want to
         use for the analysis.
       train_episode_config: An instance of EpisodeDescriptionConfig (in
         data/config.py). This is a config for setting the ways and shots of

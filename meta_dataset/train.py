@@ -79,8 +79,8 @@ tf.flags.DEFINE_string(
 tf.flags.DEFINE_enum(
     'eval_split', None,
     [trainer.TRAIN_SPLIT, trainer.VALID_SPLIT, trainer.TEST_SPLIT],
-    'Override the evaluation split. If "", regular logic is used, that is '
-    'if "is_training" is True, "trainer.VALID_SPLIT" is used, '
+    'Override the evaluation split. If None (default), regular logic is used, '
+    'that is, if "is_training" is True, "trainer.VALID_SPLIT" is used, '
     'otherwise "trainer.TEST_SPLIT" is used. The "is_training" case also uses '
     'the value of eval_finegrainedness_split if eval_finegrainedness is True.')
 
