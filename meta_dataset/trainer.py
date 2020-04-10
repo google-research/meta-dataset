@@ -184,6 +184,7 @@ def get_split_enum(split):
 
   Args:
     split: A string, one of TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT.
+
   Raises:
     UnexpectedSplitError: split not TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
   """
@@ -1303,7 +1304,8 @@ class BatchTrainer(Trainer):
           is_training=False,
           embedding_fn=self.embedding_fn,
           ema_object=self.ema_object,
-          data=episode)
+          reader=episode)
+
     else:
       raise ValueError('The specified eval_learner_class should belong to '
                        'BATCH_LEARNERS or EPISODIC_LEARNERS, among {},'

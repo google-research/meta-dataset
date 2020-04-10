@@ -6,5 +6,11 @@ Trainer.eval_learner_class = 'PrototypicalNet'
 Trainer.episodic = False
 weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
+
 BaselineLearner.weight_decay = %weight_decay
+BaselineLearner.transductive_batch_norm = False
+BaselineLearner.backprop_through_moments = True
+
 PrototypicalNetworkLearner.weight_decay = %weight_decay
+PrototypicalNetworkLearner.transductive_batch_norm = False
+PrototypicalNetworkLearner.backprop_through_moments = True

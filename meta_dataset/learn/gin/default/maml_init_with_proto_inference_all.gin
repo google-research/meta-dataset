@@ -8,6 +8,12 @@ Trainer.episodic = False
 MAMLLearner.proto_maml_fc_layer_init = True
 weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
-BaselineLearner.weight_decay = %weight_decay
-MAMLLearner.weight_decay = %weight_decay
 MAMLLearner.debug = False
+
+BaselineLearner.weight_decay = %weight_decay
+BaselineLearner.transductive_batch_norm = False
+BaselineLearner.backprop_through_moments = True
+
+MAMLLearner.weight_decay = %weight_decay
+MAMLLearner.transductive_batch_norm = False
+MAMLLearner.backprop_through_moments = True
