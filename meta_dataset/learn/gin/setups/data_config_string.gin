@@ -1,0 +1,8 @@
+import meta_dataset.data.config
+import meta_dataset.data.decoder
+import meta_dataset.data.pipeline
+include 'meta_dataset/learn/gin/setups/data_config_common.gin'
+
+process_episode.support_decoder = @StringDecoder()
+process_episode.query_decoder = @StringDecoder()
+process_batch.batch_decoder = @StringDecoder()

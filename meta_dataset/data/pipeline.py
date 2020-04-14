@@ -108,12 +108,8 @@ def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
 
 
 @gin.configurable(whitelist=['support_decoder', 'query_decoder'])
-def process_episode(example_strings,
-                    class_ids,
-                    chunk_sizes,
-                    image_size,
-                    support_decoder=None,
-                    query_decoder=None):
+def process_episode(example_strings, class_ids, chunk_sizes, image_size,
+                    support_decoder, query_decoder):
   """Processes an episode.
 
   This function:
@@ -132,10 +128,8 @@ def process_episode(example_strings,
     chunk_sizes: Tuple of ints representing the sizes the flush and additional
       chunks.
     image_size: int, desired image size used during decoding.
-    support_decoder: Decoder or None, used to decode support set images. If None
-      image strings are not decoded and left as string Tensors.
-    query_decoder: Decoder or None, used to decode query set images. If None
-      image strings are not decoded and left as string Tensors.
+    support_decoder: Decoder, used to decode support set images.
+    query_decoder: Decoder, used to decode query set images.
 
   Returns:
     support_images, support_labels, support_class_ids, query_images,
@@ -154,18 +148,16 @@ def process_episode(example_strings,
 
   (support_strings, support_class_ids), (query_strings, query_class_ids) = \
       flush_and_chunk_episode(example_strings, class_ids, chunk_sizes)
-  if support_decoder:
-    support_images = tf.map_fn(
-        support_decoder, support_strings, dtype=tf.float32, back_prop=False)
-  else:
-    logging.info('No support_decoder given, not decoding input strings.')
-    support_images = support_strings
-  if query_decoder:
-    query_images = tf.map_fn(
-        query_decoder, query_strings, dtype=tf.float32, back_prop=False)
-  else:
-    logging.info('No query_decoder given, not decoding input strings.')
-    query_images = query_strings
+  support_images = tf.map_fn(
+      support_decoder,
+      support_strings,
+      dtype=support_decoder.out_type,
+      back_prop=False)
+  query_images = tf.map_fn(
+      query_decoder,
+      query_strings,
+      dtype=query_decoder.out_type,
+      back_prop=False)
 
   # Convert class IDs into labels in [0, num_ways).
   _, support_labels = tf.unique(support_class_ids)
@@ -176,7 +168,7 @@ def process_episode(example_strings,
 
 
 @gin.configurable(whitelist=['batch_decoder'])
-def process_batch(example_strings, class_ids, image_size, batch_decoder=None):
+def process_batch(example_strings, class_ids, image_size, batch_decoder):
   """Processes a batch.
 
   This function:
@@ -199,54 +191,12 @@ def process_batch(example_strings, class_ids, image_size, batch_decoder=None):
     log_data_augmentation(batch_decoder.data_augmentation, 'batch')
     batch_decoder.image_size = image_size
   images = tf.map_fn(
-      batch_decoder, example_strings, dtype=tf.float32, back_prop=False)
+      batch_decoder,
+      example_strings,
+      dtype=batch_decoder.out_type,
+      back_prop=False)
   labels = class_ids
   return (images, labels)
-
-
-def process_example(example_string, image_size, data_augmentation=None):
-  """Processes a single example string.
-
-  Extracts and processes the image, and ignores the label. We assume that the
-  image has three channels.
-
-  Args:
-    example_string: str, an Example protocol buffer.
-    image_size: int, desired image size. The extracted image will be resized to
-      `[image_size, image_size]`.
-    data_augmentation: A DataAugmentation object with parameters for perturbing
-      the images.
-
-  Returns:
-    image_rescaled: the image, resized to `image_size x image_size` and rescaled
-      to [-1, 1]. Note that Gaussian data augmentation may cause values to
-      go beyond this range.
-  """
-  image_string = tf.parse_single_example(
-      example_string,
-      features={
-          'image': tf.FixedLenFeature([], dtype=tf.string),
-          'label': tf.FixedLenFeature([], tf.int64)
-      })['image']
-  image_decoded = tf.image.decode_jpeg(image_string, channels=3)
-  image_resized = tf.image.resize_images(
-      image_decoded, [image_size, image_size],
-      method=tf.image.ResizeMethod.BILINEAR,
-      align_corners=True)
-  image = 2 * (image_resized / 255.0 - 0.5)  # Rescale to [-1, 1].
-
-  if data_augmentation is not None:
-    if data_augmentation.enable_gaussian_noise:
-      image = image + tf.random_normal(
-          tf.shape(image)) * data_augmentation.gaussian_noise_std
-
-    if data_augmentation.enable_jitter:
-      j = data_augmentation.jitter_amount
-      paddings = tf.constant([[j, j], [j, j], [0, 0]])
-      image = tf.pad(image, paddings, 'REFLECT')
-      image = tf.image.random_crop(image, [image_size, image_size, 3])
-
-  return image
 
 
 def make_one_source_episode_pipeline(dataset_spec,

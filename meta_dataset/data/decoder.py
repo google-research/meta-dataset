@@ -19,9 +19,29 @@ import gin.tf
 import tensorflow.compat.v1 as tf
 
 
+def read_single_example(example_string):
+  """Parses the record string."""
+  return tf.parse_single_example(
+      example_string,
+      features={
+          'image': tf.FixedLenFeature([], dtype=tf.string),
+          'label': tf.FixedLenFeature([], tf.int64)
+      })
+
+
+def read_example_and_parse_image(example_string):
+  """Reads the string and decodes the image."""
+  parsed_example = read_single_example(example_string)
+  image_decoded = tf.image.decode_image(parsed_example['image'], channels=3)
+  image_decoded.set_shape([None, None, 3])
+  parsed_example['image'] = image_decoded
+  return parsed_example
+
+
 @gin.configurable
 class ImageDecoder(object):
   """Image decoder."""
+  out_type = tf.float32
 
   def __init__(self, image_size=None, data_augmentation=None):
     """Class constructor.
@@ -32,7 +52,6 @@ class ImageDecoder(object):
       data_augmentation: A DataAugmentation object with parameters for
         perturbing the images.
     """
-
     self.image_size = image_size
     self.data_augmentation = data_augmentation
 
@@ -50,14 +69,7 @@ class ImageDecoder(object):
       rescaled to [-1, 1]. Note that Gaussian data augmentation may cause values
       to go beyond this range.
     """
-    image_string = tf.parse_single_example(
-        example_string,
-        features={
-            'image': tf.FixedLenFeature([], dtype=tf.string),
-            'label': tf.FixedLenFeature([], tf.int64)
-        })['image']
-    image_decoded = tf.image.decode_image(image_string, channels=3)
-    image_decoded.set_shape([None, None, 3])
+    image_decoded = read_example_and_parse_image(example_string)['image']
     image_resized = tf.image.resize_images(
         image_decoded, [self.image_size, self.image_size],
         method=tf.image.ResizeMethod.BILINEAR,
@@ -83,6 +95,7 @@ class ImageDecoder(object):
 @gin.configurable
 class FeatureDecoder(object):
   """Feature decoder."""
+  out_type = tf.float32
 
   def __init__(self, feat_len):
     """Class constructor.
@@ -90,6 +103,7 @@ class FeatureDecoder(object):
     Args:
       feat_len: The expected length of the feature vectors.
     """
+
     self.feat_len = feat_len
 
   def __call__(self, example_string):
@@ -113,3 +127,26 @@ class FeatureDecoder(object):
         })['image/embedding']
 
     return feat
+
+
+@gin.configurable
+class StringDecoder(object):
+  """Simple decoder that reads the image without decoding."""
+  out_type = tf.string
+
+  def __init__(self):
+    """Class constructor."""
+
+  def __call__(self, example_string):
+    """Processes a single example string.
+
+    Extracts the image as string, and ignores the label.
+
+    Args:
+      example_string: str, an Example protocol buffer.
+
+    Returns:
+      img_string: tf.Tensor of type tf.string.
+    """
+    img_string = read_single_example(example_string)['image']
+    return img_string

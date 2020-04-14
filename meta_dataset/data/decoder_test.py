@@ -28,6 +28,28 @@ import tensorflow.compat.v1 as tf
 
 class DecoderTest(tf.test.TestCase):
 
+  def test_string_decoder(self):
+    # Make random image.
+    image_size = 32
+    image = np.random.randint(
+        low=0, high=255, size=[image_size, image_size, 3]).astype(np.ubyte)
+
+    # Encode
+    image_bytes = dataset_to_records.encode_image(image, image_format='PNG')
+    label = np.zeros(1).astype(np.int64)
+    image_example = dataset_to_records.make_example([
+        ('image', 'bytes', [image_bytes]), ('label', 'int64', [label])
+    ])
+
+    # Decode
+    string_decoder = decoder.StringDecoder()
+    image_string = string_decoder(image_example)
+    decoded_image = tf.image.decode_image(image_string)
+    # Assert perfect reconstruction.
+    with self.session(use_gpu=False) as sess:
+      image_decoded = sess.run(decoded_image)
+    self.assertAllClose(image, image_decoded)
+
   def test_image_decoder(self):
     # Make random image.
     image_size = 84
