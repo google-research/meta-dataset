@@ -6,25 +6,25 @@ this repository.
 
 We are currently working on updating the instructions, code, and configuration
 files to reproduce the results in the second version of the article,
-[arxiv.org/abs/1903.03096v2](https://arxiv.org/abs/1903.03096v2).
-You can follow the progess in branch
+[arxiv.org/abs/1903.03096v2](https://arxiv.org/abs/1903.03096v2). You can follow
+the progess in branch
 [arxiv_v2_dev](https://github.com/google-research/meta-dataset/tree/arxiv_v2_dev)
 of this repository.
 
 # Reproducing best results
 
 This section shows how to launch the training experiments with the
-hyperparameters that the search in the paper determined to be best.
-These values are provided in the `.gin` files in `meta_dataset/learn/gin/best/`.
+hyperparameters that the search in the paper determined to be best. These values
+are provided in the `.gin` files in `meta_dataset/learn/gin/best/`.
 
-We assumes you have already converted all datasets according to [these
-instructions](dataset_conversion.md), and that the following environment
+We assumes you have already converted all datasets according to
+[these instructions](dataset_conversion.md), and that the following environment
 variables are defined:
 
-- `$RECORDS`: root directory that contain the converted datasets.
-- `$EXPROOT`: root directory for the output of experiments. It will contain two
-  subdirectories, `summaries/` and `checkpoints/`, each of which will have a
-  subdirectory for each experiment.
+-   `$RECORDS`: root directory that contain the converted datasets.
+-   `$EXPROOT`: root directory for the output of experiments. It will contain
+    two subdirectories, `summaries/` and `checkpoints/`, each of which will have
+    a subdirectory for each experiment.
 
 If any given job gets interrupted, launching the same command again (with the
 same checkpoint directory) should restart from the last checkpoint (every 500
@@ -82,10 +82,10 @@ ln -s ${EXPROOT}/summaries/baseline_imagenet_resnet ${EXPROOT}/summaries/baselin
 
 The best models for `baselinefinetune` ("Finetune") and `prototypical`
 ("ProtoNet") on ILSVRC-2012 were not initialized from pre-trained model, so
-their respective gin config indicates:
+their respective Gin configuration indicates:
 
-- `Trainer.pretrained_source = 'scratch'`, and
-- `Trainer.pretrained_checkpoint = ''`
+-   `Trainer.pretrained_source = 'scratch'`, and
+-   `Trainer.checkpoint_to_restore = ''`
 
 They can be launched right away (in parallel with the pre-training), and their
 configuration does not need to be changed.
@@ -94,17 +94,17 @@ configuration does not need to be changed.
 
 For the other models, the respective best pre-train model is:
 
-- `matching` ("MatchingNet"): `resnet`
-- `maml` ("fo-MAML"): `mamlconvnet` (`four_layer_convnet_maml`)
-- `maml_init_with_proto` ("Proto-MAML"): `mamlresnet` (`resnet_maml`)
+-   `matching` ("MatchingNet"): `resnet`
+-   `maml` ("fo-MAML"): `mamlconvnet` (`four_layer_convnet_maml`)
+-   `maml_init_with_proto` ("Proto-MAML"): `mamlresnet` (`resnet_maml`)
 
 The corresponding `.gin` file indicates `Trainer.pretrained_source =
-'imagenet'`, and has a placeholder for `Trainer.pretrained_checkpoint`.
-The number of steps for the best checkpoint did not make a measurable difference
-in our experience, so you can simply update the base path and keep the number in
+'imagenet'`, and has a placeholder for `Trainer.checkpoint_to_restore`. The
+number of steps for the best checkpoint did not make a measurable difference in
+our experience, so you can simply update the base path and keep the number in
 "`model_?????.ckpt`". If you would like to perform the selection for the best
 number of steps, see [Get the best checkpoint](#get-the-best-checkpoint) section
-below, and update the gin files accordingly.
+below, and update the Gin configuration files accordingly.
 
 ### Command line
 
@@ -124,15 +124,15 @@ done
 
 Note: rather than editing the `.gin` file, it is also possible to specify the
 path to the pretrained checkpoint to load on the command-line, adding
-`--gin_bindings="Trainer.pretrained_checkpoint='...'"`.
+`--gin_bindings="Trainer.checkpoint_to_restore='...'"`.
 
 Run time:
 
-- `baselinefinetune`: ~10 hours
-- `matching` and `prototypical`: ~20 hours
-- `maml`: 2 days
-- `maml_init_with_proto`: manually killed after 4 days, reached only 18k
-  updates.
+-   `baselinefinetune`: ~10 hours
+-   `matching` and `prototypical`: ~20 hours
+-   `maml`: 2 days
+-   `maml_init_with_proto`: manually killed after 4 days, reached only 18k
+    updates.
 
 ## Evaluation
 
@@ -186,8 +186,7 @@ do
       --summary_dir=${EXPROOT}/summaries/${EXPNAME}_eval_$DATASET \
       --gin_config=meta_dataset/learn/gin/best/${EXPNAME}.gin \
       --gin_bindings="Trainer.experiment_name='${EXPNAME}'" \
-      --gin_bindings="Trainer.pretrained_checkpoint=''" \
-      --gin_bindings="Trainer.checkpoint_for_eval='${EXPROOT}/checkpoints/${EXPNAME}/model_${BESTNUM}.ckpt'" \
+      --gin_bindings="Trainer.checkpoint_to_restore='${EXPROOT}/checkpoints/${EXPNAME}/model_${BESTNUM}.ckpt'" \
       --gin_bindings="benchmark.eval_datasets='$DATASET'"
   done
 done
@@ -195,7 +194,7 @@ done
 
 Summaries of the evaluation job are generated, which contain much finer-grained
 information that the mean and confidence interval that are output by the script
-itself.  Total time was about 12 hours, but it could be parallelized.
+itself. Total time was about 12 hours, but it could be parallelized.
 
 ### Other metrics and analyses
 
@@ -206,15 +205,25 @@ TODO: ways, shots, fine-grainedness analyses.
 The setup is quite similar to training on ILSVRC-2012 only, the command lines
 can be easily re-used by setting `$SOURCE` to `all`, with the following
 differences:
-- The pre-trained checkpoints are still the ones trained on ImageNet only,
-  so we are not retraining the baseline with the different backbones.
-- The best baseline still has to be trained on all the data.
-- The best `prototypical` was a pre-trained `resnet`, so the gin configuration also has to be updated for `prototypical_all`.
 
-Since many more `.tfrecords` files are used than for ImageNet only, make sure that the limits on the number of files open at the same time is large enough (`ulimit -n`). We used [these instructions](http://posidev.com/blog/2009/06/04/set-ulimit-parameters-on-ubuntu/) to set the limit to 100000, although 10000 is probably sufficient (1024 was too small). If the limit it too low, the script would crash:
+-   The pre-trained checkpoints are still the ones trained on ImageNet only, so
+    we are not retraining the baseline with the different backbones.
+-   The best baseline still has to be trained on all the data.
+-   The best `prototypical` was a pre-trained `resnet`, so the Gin configuration
+    also has to be updated for `prototypical_all`.
 
-- For batch training, right away with an explicit error: `ResourceExhaustedError [...] Too many open files`,
-- For episodic training, with a more cryptic error like `InvalidArgumentError: Feature: image (data type: string) is required but could not be found.`, after warnings like `DirectedInterleave selected an exhausted input`.
+Since many more `.tfrecords` files are used than for ImageNet only, make sure
+that the limits on the number of files open at the same time is large enough
+(`ulimit -n`). We used
+[these instructions](http://posidev.com/blog/2009/06/04/set-ulimit-parameters-on-ubuntu/)
+to set the limit to 100000, although 10000 is probably sufficient (1024 was too
+small). If the limit it too low, the script would crash:
+
+-   For batch training, right away with an explicit error:
+    `ResourceExhaustedError [...] Too many open files`,
+-   For episodic training, with a more cryptic error like `InvalidArgumentError:
+    Feature: image (data type: string) is required but could not be found.`,
+    after warnings like `DirectedInterleave selected an exhausted input`.
 
 ### Training
 
@@ -234,12 +243,13 @@ done
 
 Run time:
 
-- `baseline` and `baselinefinetune`: ~10 hours
-- `matching` and `prototypical`: ~18 hours
-- `maml`: 2 days
-- `maml_init_with_proto`: manually killed after 4 days, reached only 20k
-  updates.
+-   `baseline` and `baselinefinetune`: ~10 hours
+-   `matching` and `prototypical`: ~18 hours
+-   `maml`: 2 days
+-   `maml_init_with_proto`: manually killed after 4 days, reached only 20k
+    updates.
 
 ### Evaluation
 
-Getting the best checkpoint and evaluating it would be identical, except for `export SOURCE=all`. Timing should be similar as well.
+Getting the best checkpoint and evaluating it would be identical, except for
+`export SOURCE=all`. Timing should be similar as well.

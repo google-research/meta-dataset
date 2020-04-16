@@ -48,8 +48,6 @@ ENABLE_TF_OPTIMIZATIONS = True
 # (or at least not detrimental) in general.
 ENABLE_DATA_OPTIMIZATIONS = True
 
-EMBEDDING_KEYWORDS = ('conv', 'resnet')
-
 DATASETS_WITH_EXAMPLE_SPLITS = ()
 TF_DATA_OPTIONS = tf.data.Options()
 if not ENABLE_DATA_OPTIMIZATIONS:
@@ -200,6 +198,50 @@ def get_split_enum(split):
   return split_enum
 
 
+OPTIMIZER_KEYWORDS = ('Adam:', 'Adam_1:')
+EMBEDDING_KEYWORDS = ('conv', 'resnet')
+
+
+def is_backbone_variable(variable, only_if=lambda x: True):
+  """Returns True if `variable` is a backbone (embedding function) variable.
+
+  Args:
+    variable: A `tf.Variable` whose `name` attribute will be checked to
+      determine whether it belongs to the backbone (embedding function) of a
+      `Learner`.
+    only_if: A callable that returns `True` when a `tf.Variable` satisfies some
+      condition; by default `only_if` returns `True` for any argument.
+
+  Returns:
+    `True` if `variable` belongs to a backbone (embedding function) and
+    `only_if(variable)` is also satisfied.
+  """
+
+  # We restore all embedding variables.
+  is_embedding_var = any(
+      keyword in variable.name for keyword in EMBEDDING_KEYWORDS)
+
+  # We exclude 'relationnet*' variables as they are not present in a pretrained
+  # checkpoint.
+  is_relationnet_var = variable.name.startswith('relationnet')
+
+  # We exclude optimizer variables, as the episodic finetuning procedure is a
+  # different optimization problem than the original training objective.
+  is_optimizer_var = any(
+      keyword in variable.name for keyword in OPTIMIZER_KEYWORDS)
+
+  if (only_if(variable) and is_embedding_var and not is_relationnet_var and
+      not is_optimizer_var):
+    if 'adam' in variable.name.lower():
+      logging.error(
+          'Variable name unexpectedly indicates it is both related '
+          'to an embedding, and to the `AdamOptimizer`: %s', variable.name)
+    else:
+      return True
+
+  return False
+
+
 # TODO(eringrant): Split the current `Trainer` class into `Trainer` and
 # `Evaluator` classes to partition the constructor arguments into meaningful
 # groups.
@@ -221,8 +263,7 @@ class Trainer(object):
       train_learner_class,
       eval_learner_class,
       is_training,
-      pretrained_checkpoint,
-      checkpoint_for_eval,
+      checkpoint_to_restore,
       embedding_network,
       learning_rate,
       decay_learning_rate,
@@ -263,10 +304,8 @@ class Trainer(object):
       eval_learner_class: A string, the name of the learner to use for
         meta-evaluation.
       is_training: Bool, whether or not to train or just evaluate.
-      pretrained_checkpoint: A string, the path to a checkpoint to use for
-        initializing a model prior to training.
-      checkpoint_for_eval: A string, the path to a checkpoint to restore for
-        evaluation.
+      checkpoint_to_restore: A string, the path to a checkpoint from which to
+        restore variables.
       embedding_network: A string, the embedding network to use.
       learning_rate: A float, the meta-learning learning rate.
       decay_learning_rate: A boolean, whether to decay the learning rate.
@@ -317,20 +356,8 @@ class Trainer(object):
 
     Raises:
       UnexpectedSplitError: If split not as expected for Trainer.
-      ValueError: If both `checkpoint_for_eval` and `pretrained_checkpoint` are
-        defined.
     """
     # pyformat: enable
-    if checkpoint_for_eval and pretrained_checkpoint:
-      raise ValueError(
-          'Cannot define both `checkpoint_for_eval` and '
-          '`pretrained_checkpoint`. The difference between them is that for '
-          'the former, all variables are restored (including the global step), '
-          'while the latter is only applicable to the start of training for '
-          'initializing the model from pre-trained weights. It is also only '
-          'applicable to episodic models and restores only the embedding '
-          'weights.')
-
     self.num_updates = num_updates
     self.batch_size = batch_size
     self.num_eval_episodes = num_eval_episodes
@@ -338,8 +365,7 @@ class Trainer(object):
     self.validate_every = validate_every
     self.log_every = log_every
 
-    self.pretrained_checkpoint = pretrained_checkpoint
-    self.checkpoint_for_eval = checkpoint_for_eval
+    self.checkpoint_to_restore = checkpoint_to_restore
     self.embedding_network = embedding_network
     self.learning_rate = learning_rate
     self.decay_learning_rate = decay_learning_rate
@@ -470,36 +496,13 @@ class Trainer(object):
       self.optimizer = tf.train.AdamOptimizer(learning_rate)
       self.train_op = self.get_train_op(global_step)
 
-    vars_to_restore = []
-    # Omit from reloading any variables that contains as a substring anything in
-    # the following list. For example, those that track iterator state, as
-    # iterator state is not saved.
-    logging.info(
-        'Omitting from saving / reloading any variable that '
-        'contains any of the following substrings: %s',
-        omit_from_saving_and_reloading)
-    for var in tf.global_variables():
-      if not any([
-          substring in var.name for substring in omit_from_saving_and_reloading
-      ]):
-        vars_to_restore.append(var)
-      else:
-        logging.info('Omitting variable %s', var.name)
-
-    # We need to omit the Saver call with empty variable list, since it throws
-    # an error. Empty variable list is possible when we evaluate parameterless
-    # meta-learners on embeddings.
-    if vars_to_restore:
-      self.saver = tf.train.Saver(var_list=vars_to_restore, max_to_keep=500)
-    else:
-      self.saver = None
-
     if self.checkpoint_dir is not None:
       if not tf.io.gfile.exists(self.checkpoint_dir):
         tf.io.gfile.makedirs(self.checkpoint_dir)
 
     # Initialize a Session.
     self.initialize_session()
+    self.initialize_saver()
     self.create_summary_writer()
 
   def set_way_shots_classes_logits_targets(self):
@@ -730,7 +733,7 @@ class Trainer(object):
     return benchmark_spec
 
   def initialize_session(self):
-    """Initializes a tf Session."""
+    """Initializes a tf.Session."""
     if ENABLE_TF_OPTIMIZATIONS:
       self.sess = tf.Session()
     else:
@@ -751,73 +754,88 @@ class Trainer(object):
     # Restore or initialize the variables.
     self.sess.run(tf.global_variables_initializer())
     self.sess.run(tf.local_variables_initializer())
-    if self.checkpoint_for_eval:
+
+  def initialize_saver(self):
+    """Initializes a tf.train.Saver and possibly restores parameters."""
+
+    # We omit from saving and restoring any variables that contains as a
+    # substring anything in the list `self.omit_from_saving_and_reloading.
+    # For example, those that track iterator state.
+    logging.info(
+        'Omitting from saving / restoring any variable that '
+        'contains any of the following substrings: %s',
+        self.omit_from_saving_and_reloading)
+
+    def is_not_requested_to_omit(var):
+      return all([
+          substring not in var.name
+          for substring in self.omit_from_saving_and_reloading
+      ])
+
+    try:
+      self.saver = tf.train.Saver(
+          var_list=filter(is_not_requested_to_omit, tf.global_variables()),
+          max_to_keep=500)
+    except TypeError:
+      self.saver = None
+      logging.info('Variables not being saved.')
+
+    if self.checkpoint_to_restore:
       if not self.saver:
         raise ValueError(
             'Checkpoint not restored, since there is no Saver created. This is '
             'likely due to no parameters being available. If you intend to run '
-            'parameterless training, set checkpoint_for_eval to None.')
-      # Requested a specific checkpoint.
-      self.saver.restore(self.sess, self.checkpoint_for_eval)
-      logging.info('Restored checkpoint: %s', self.checkpoint_for_eval)
-    else:
-      # Continue from the latest checkpoint if one exists.
-      # This handles fault-tolerance.
+            'parameterless training, set `checkpoint_to_restore` to None.')
+
+    if self.is_training:
+
+      # To handle pre-emption, we continue from the latest checkpoint if
+      # checkpoints already exist in the checkpoint directory.
       latest_checkpoint = None
       if self.checkpoint_dir is not None:
         latest_checkpoint = tf.train.latest_checkpoint(self.checkpoint_dir)
-      if latest_checkpoint:
+
+      if latest_checkpoint is not None:
         if not self.saver:
           raise ValueError(
               'Checkpoint not restored, since there is no Saver created. This '
               'is likely due to no parameters being available. ')
         self.saver.restore(self.sess, latest_checkpoint)
-        logging.info('Restored checkpoint: %s', latest_checkpoint)
+        logging.info('Restored latest checkpoint from training: %s',
+                     latest_checkpoint)
+        logging.info('(Provided `checkpoint_to_restore` overriden: %s)',
+                     self.checkpoint_to_restore)
+
+      elif self.checkpoint_to_restore:
+        logging.info('No training checkpoints found.')
+        # For training episodic models from a checkpoint, we restore the
+        # backbone weights but omit other (e.g., optimizer) parameters.
+        backbone_vars_to_reload = [
+            var for var in tf.global_variables()
+            if is_backbone_variable(var, only_if=is_not_requested_to_omit)
+        ]
+        backbone_saver = tf.train.Saver(
+            var_list=backbone_vars_to_reload, max_to_keep=1)
+        backbone_saver.restore(self.sess, self.checkpoint_to_restore)
+        logging.info(
+            'Restored only vars %s from provided `checkpoint_to_restore`: %s',
+            [var.name for var in backbone_vars_to_reload],
+            self.checkpoint_to_restore)
+
       else:
-        logging.info('No previous checkpoint.')
-        self.sess.run(tf.global_variables_initializer())
-        self.sess.run(tf.local_variables_initializer())
+        logging.info(
+            'No checkpoints found; training from random initialization.')
 
-    # For episodic models, potentially use pretrained weights at the start of
-    # training. If this happens it will overwrite the embedding weights, but
-    # taking care to not restore the Adam parameters.
-    if self.pretrained_checkpoint and not self.sess.run(
-        tf.train.get_global_step()):
+    elif self.checkpoint_to_restore:
+      # For evaluation, we restore more than the backbone (embedding function)
+      # variables from the provided checkpoint.
+      self.saver.restore(self.sess, self.checkpoint_to_restore)
+      logging.info('Restored checkpoint for evaluation: %s',
+                   self.checkpoint_to_restore)
 
-      # Load the embedding variables from the pre-trained checkpoint. Since the
-      # pre-trained checkpoint comes from a BaselineLearner, we need a Saver
-      # that only considers embedding Variables from a BaselineLearner. In
-      # particular, we exclude 'relationnet*' Variables as they are not present
-      # in the checkpoint. We also exclude any variables that are not related
-      # to the embedding (e.g. `beta1_power:0') and any variables that are
-      # requested to be omitted. Notably, this leads to not reloading ADAM
-      # variables. We do not reload these since this episodic finetuning
-      # procedure is a different optimization problem than the original training
-      # of the baseline whose embedding weights are re-used.
-      baselinelearner_embed_vars_to_reload = []
-      for var in tf.global_variables():
-        is_relationnet_var = var.name.startswith('relationnet')
-        requested_to_omit = any([
-            substring in var.name
-            for substring in self.omit_from_saving_and_reloading
-        ])
-        is_embedding_var = any(
-            keyword in var.name for keyword in EMBEDDING_KEYWORDS)
-        is_adam_var = 'Adam:' in var.name or 'Adam_1:' in var.name
-        if (not is_relationnet_var and not requested_to_omit and
-            is_embedding_var and not is_adam_var):
-          if 'adam' in var.name.lower():
-            logging.error(
-                'Variable name unexpectedly indicates it is '
-                'both related to an embedding, and to ADAM: %s', var.name)
-            continue
-          baselinelearner_embed_vars_to_reload.append(var)
-      backbone_saver = tf.train.Saver(
-          var_list=baselinelearner_embed_vars_to_reload, max_to_keep=1)
-      backbone_saver.restore(self.sess, self.pretrained_checkpoint)
-      logging.info('Restored only vars %s from checkpoint: %s',
-                   [var.name for var in baselinelearner_embed_vars_to_reload],
-                   self.pretrained_checkpoint)
+    else:
+      logging.info(
+          'No checkpoints found; evaluating with a random initialization.')
 
   def _create_held_out_specification(self, split=TEST_SPLIT):
     """Create an EpisodeSpecification for either validation or testing.
@@ -1070,6 +1088,11 @@ class Trainer(object):
     # Dummy variables so that logging works even if called before evaluation.
     self.valid_acc = np.nan
     self.valid_ci = np.nan
+
+    # Save the initialization weights.
+    save_path = self.saver.save(
+        self.sess, os.path.join(self.checkpoint_dir, 'model_0.ckpt'))
+    logging.info('Model initialization saved: %s', save_path)
 
     # Compute the initial validation performance before starting the training.
     self.maybe_evaluate(global_step)

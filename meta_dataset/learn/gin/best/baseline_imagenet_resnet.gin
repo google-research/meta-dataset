@@ -3,7 +3,7 @@ include 'meta_dataset/learn/gin/models/baseline_config.gin'
 
 # Backbone hypers.
 Trainer.embedding_network = 'resnet'
-Trainer.pretrained_checkpoint = ''
+Trainer.checkpoint_to_restore = ''
 Trainer.pretrained_source = 'scratch'
 
 # Model hypers.

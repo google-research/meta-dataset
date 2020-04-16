@@ -57,8 +57,7 @@ tf.flags.DEFINE_string('summary_dir',
                        'The directory for writing summaries.')
 tf.flags.DEFINE_bool(
     'reload_checkpoint_gin_config', False,
-    'Whether to reload an operative Gin configuration along with a checkpoint '
-    'for evaluation or a pretrained checkpoint.')
+    'Whether to reload an operative Gin configuration along with a checkpoint.')
 
 tf.flags.DEFINE_bool(
     'is_training', True, 'Whether we are in the training phase. '
@@ -143,24 +142,23 @@ def parse_cmdline_gin_configurations():
         FLAGS.gin_config, FLAGS.gin_bindings, finalize_config=True)
 
 
-def operative_config_path(checkpoint_dir,
+def operative_config_path(operative_config_dir,
                           operative_config_filename='operative_config.gin'):
-  return os.path.join(checkpoint_dir, operative_config_filename)
+  return os.path.join(operative_config_dir, operative_config_filename)
 
 
-def load_operative_gin_configurations(checkpoint_dir):
-  """Load operative Gin configurations from the given checkpoint directory."""
-  gin_log_file = operative_config_path(checkpoint_dir)
+def load_operative_gin_configurations(operative_config_dir):
+  """Load operative Gin configurations from the given directory."""
+  gin_log_file = operative_config_path(operative_config_dir)
   with gin.unlock_config():
     gin.parse_config_file(gin_log_file)
   gin.finalize()
-  logging.info('Operative Gin configurations loaded from `checkpoint_dir`: %s',
-               gin_log_file)
+  logging.info('Operative Gin configurations loaded from %s.', gin_log_file)
 
 
-def record_operative_gin_configurations(checkpoint_dir):
-  """Record operative Gin configurations in the given checkpoint directory."""
-  gin_log_file = operative_config_path(checkpoint_dir)
+def record_operative_gin_configurations(operative_config_dir):
+  """Record operative Gin configurations in the given directory."""
+  gin_log_file = operative_config_path(operative_config_dir)
   # If it exists already, rename it instead of overwriting it.
   # This just saves the previous one, not all the ones before.
   if tf.io.gfile.exists(gin_log_file):
@@ -175,22 +173,20 @@ def main(unused_argv):
   parse_cmdline_gin_configurations()
 
   if FLAGS.reload_checkpoint_gin_config:
-    # Try to reload a previously recorded Gin configuration.
+    # Try to reload a previously recorded Gin configuration from an operative
+    # Gin configuration file in the provided checkpoint directory.
     # TODO(eringrant): Allow querying of a value to be bound without binding it
     # to avoid the redundant call to `parse_cmdline_gin_configurations` below.
     try:
-      checkpoint_to_reload = gin.query_parameter('Trainer.checkpoint_for_eval')
+      checkpoint_to_restore = gin.query_parameter(
+          'Trainer.checkpoint_to_restore')
     except ValueError:
-      try:
-        checkpoint_to_reload = gin.query_parameter(
-            'Trainer.pretrained_checkpoint')
-      except ValueError:
-        checkpoint_to_reload = None
+      checkpoint_to_restore = None
 
     # Load the operative Gin configurations from the checkpoint directory.
-    if checkpoint_to_reload:
-      reload_checkpoint_dir = os.path.dirname(checkpoint_to_reload)
-      load_operative_gin_configurations(reload_checkpoint_dir)
+    if checkpoint_to_restore:
+      restore_checkpoint_dir = os.path.dirname(checkpoint_to_restore)
+      load_operative_gin_configurations(restore_checkpoint_dir)
 
       # Reload the command-line Gin configuration to allow overriding of the Gin
       # configuration loaded from the checkpoint directory.
@@ -239,11 +235,10 @@ def main(unused_argv):
     raise e
 
   # All configurable objects/functions should have been instantiated/called.
+  # TODO(evcu): Tie saving of Gin configuration at training and evaluation time.
   logging.info('Operative Gin configurations:\n%s', gin.operative_config_str())
   if FLAGS.is_training and FLAGS.train_checkpoint_dir:
     record_operative_gin_configurations(FLAGS.train_checkpoint_dir)
-  # TODO(all) Improve saving of gin configs (during train and eval).
-  # Above, handles training only and now below is a hack for evaluation.
   elif not FLAGS.is_training and FLAGS.summary_dir:
     record_operative_gin_configurations(FLAGS.summary_dir)
 

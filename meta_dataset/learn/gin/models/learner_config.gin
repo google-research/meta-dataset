@@ -1,5 +1,4 @@
-Trainer.pretrained_checkpoint = ''
-Trainer.checkpoint_for_eval = ''
+Trainer.checkpoint_to_restore = ''
 Trainer.learning_rate = 1e-4
 Trainer.decay_learning_rate = False
 Trainer.decay_every = 5000

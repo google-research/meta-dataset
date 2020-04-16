@@ -4,7 +4,7 @@ include 'meta_dataset/learn/gin/models/matching_config.gin'
 # Backbone hypers.
 Trainer.embedding_network = 'four_layer_convnet'
 Trainer.pretrained_source = 'scratch'
-Trainer.pretrained_checkpoint = ''
+Trainer.checkpoint_to_restore = ''
 
 # Data hypers.
 DataConfig.image_height = 126

@@ -4,7 +4,7 @@ include 'meta_dataset/learn/gin/models/baseline_config.gin'
 # Backbone hypers.
 Trainer.embedding_network = 'wide_resnet'
 Trainer.pretrained_source = 'scratch'
-Trainer.pretrained_checkpoint = ''
+Trainer.checkpoint_to_restore = ''
 
 # Model hypers.
 BaselineLearner.knn_distance = 'cosine'
