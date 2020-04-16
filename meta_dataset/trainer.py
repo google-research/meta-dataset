@@ -56,21 +56,6 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
 
-NAME_TO_LEARNER = {
-    'Baseline': learner.BaselineLearner,
-    'BaselineFinetune': learner.BaselineFinetuneLearner,
-    'MatchingNet': learner.MatchingNetworkLearner,
-    'PrototypicalNet': learner.PrototypicalNetworkLearner,
-    'MAML': learner.MAMLLearner,
-    'RelationNet': learner.RelationNetworkLearner,
-}
-BATCH_LEARNER_NAMES = ['Baseline', 'BaselineFinetune']
-EPISODIC_LEARNER_NAMES = [
-    'MatchingNet', 'PrototypicalNet', 'MAML', 'RelationNet'
-]
-BATCH_LEARNERS = [NAME_TO_LEARNER[name] for name in BATCH_LEARNER_NAMES]
-EPISODIC_LEARNERS = [NAME_TO_LEARNER[name] for name in EPISODIC_LEARNER_NAMES]
-
 # TODO(eringrant): Use `learning_spec.Split.TRAIN`, `learning_spec.Split.VALID`,
 # and `learning_spec.Split.TEST` instead of string constants, and replace all
 # remaining string redefinitions.
@@ -100,9 +85,8 @@ def get_datasets_and_restrictions(train_datasets='',
     train_datasets: A string of comma-separated dataset names for training.
     eval_datasets: A string of comma-separated dataset names for evaluation.
     restrict_classes: If provided, a dict that maps dataset names to a dict that
-      specifies for each of `meta_dataset.trainer.TRAIN_SPLIT`,
-      `meta_dataset.trainer.VALID_SPLIT` and `meta_dataset.trainer.TEST_SPLIT`
-      the number of classes to restrict to. This can lead to some classes of a
+      specifies for each of `TRAIN_SPLIT`, `VALID_SPLIT` and `TEST_SPLIT` the
+      number of classes to restrict to. This can lead to some classes of a
       particular split of a particular dataset never participating in episode
       creation.
     restrict_num_per_class: If provided, a dict that maps dataset names to a
@@ -300,9 +284,9 @@ class Trainer(object):
         validations.
       log_every: An integer, the number of episodes between consecutive logging.
       episodic: A boolean, whether meta-training is episodic.
-      train_learner_class: A string, the name of the learner to use for meta-training.
-      eval_learner_class: A string, the name of the learner to use for
-        meta-evaluation.
+      train_learner_class: A Learner to be used for meta-training.
+      eval_learner_class: A Learner to be used for meta-validation or
+        meta-testing.
       is_training: Bool, whether or not to train or just evaluate.
       checkpoint_to_restore: A string, the path to a checkpoint from which to
         restore variables.
@@ -541,7 +525,7 @@ class Trainer(object):
           class_props_ = compute_class_proportions(
               class_ids_, shots_, self.eval_imbalance_dataset_spec)
         test_logits_ = self.learners[split].test_logits
-        test_targets_ = self.learners[split].test_targets
+        test_targets_ = self.next_data[split].test_labels
       way.append(way_)
       shots.append(shots_)
       class_props.append(class_props_)
@@ -1228,19 +1212,23 @@ class EpisodicTrainer(Trainer):
 
   def create_train_learner(self, train_learner_class, episode_or_batch):
     """Instantiates a train learner."""
-    return NAME_TO_LEARNER[train_learner_class](
+    return train_learner_class(
         is_training=True,
+        logit_dim=self.train_episode_config.max_ways,
         ema_object=self.ema_object,
         embedding_fn=self.embedding_fn,
-        reader=episode_or_batch)
+        data=episode_or_batch,
+    )
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""
-    return NAME_TO_LEARNER[eval_learner_class](
+    return eval_learner_class(
         is_training=False,
+        logit_dim=self.eval_episode_config.max_ways,
         ema_object=self.ema_object,
         embedding_fn=self.embedding_fn,
-        reader=episode)
+        data=episode,
+    )
 
 
 class BatchTrainer(Trainer):
@@ -1299,13 +1287,13 @@ class BatchTrainer(Trainer):
     """Instantiates a train learner."""
     num_total_classes = self._get_num_total_classes()
     is_training = False if self.eval_split == TRAIN_SPLIT else True
-    return NAME_TO_LEARNER[train_learner_class](
+    return train_learner_class(
         is_training=is_training,
-        embedding_fn=self.embedding_fn,
+        logit_dim=num_total_classes,
         ema_object=self.ema_object,
-        reader=episode_or_batch,
-        num_train_classes=num_total_classes,
-        num_test_classes=self.num_test_classes)
+        embedding_fn=self.embedding_fn,
+        data=episode_or_batch,
+    )
 
   def create_eval_learner(self, eval_learner_class, episode):
     """Instantiates an eval learner."""
@@ -1313,25 +1301,19 @@ class BatchTrainer(Trainer):
     # the inference-only baselines, it will be an episodic learner. This allows
     # to combine the inference algorithm of Prototypical Networks, etc, as the
     # validation (and test) procedure of a baseline-trained model.
-    if eval_learner_class in BATCH_LEARNER_NAMES:
-      num_total_classes = self._get_num_total_classes()
-      return NAME_TO_LEARNER[eval_learner_class](
-          is_training=False,
-          embedding_fn=self.embedding_fn,
-          ema_object=self.ema_object,
-          reader=episode,
-          num_train_classes=num_total_classes,
-          num_test_classes=self.num_test_classes)
-    elif eval_learner_class in EPISODIC_LEARNER_NAMES:
-      return NAME_TO_LEARNER[eval_learner_class](
-          is_training=False,
-          embedding_fn=self.embedding_fn,
-          ema_object=self.ema_object,
-          reader=episode)
-
+    if issubclass(eval_learner_class, learner.BatchLearner):
+      logit_dim = self._get_num_total_classes()
+    elif issubclass(eval_learner_class, learner.EpisodicLearner):
+      logit_dim = self.eval_episode_config.max_ways
     else:
-      raise ValueError('The specified eval_learner_class should belong to '
-                       'BATCH_LEARNERS or EPISODIC_LEARNERS, among {},'
-                       'but received {}.'.format(
-                           EPISODIC_LEARNER_NAMES + BATCH_LEARNER_NAMES,
-                           eval_learner_class))
+      raise ValueError(
+          'The specified `eval_learner_class` should be a subclass of '
+          '`learner.BatchLearner` or `learner.EpisodicLearner` but received {}.'
+          .format(eval_learner_class))
+    return eval_learner_class(
+        is_training=False,
+        logit_dim=logit_dim,
+        ema_object=self.ema_object,
+        embedding_fn=self.embedding_fn,
+        data=episode,
+    )

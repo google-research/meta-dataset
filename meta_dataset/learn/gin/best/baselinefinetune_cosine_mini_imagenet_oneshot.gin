@@ -5,7 +5,7 @@ include 'meta_dataset/learn/gin/models/baselinefinetune_cosine_config.gin'
 Trainer.embedding_network = 'wide_resnet'
 DataConfig.image_height = 84
 Trainer.pretrained_source = 'scratch'
-weight_decay = 0
+Learner.weight_decay = 0
 
 BaselineFinetuneLearner.num_finetune_steps = 200
 BaselineFinetuneLearner.finetune_lr = 0.01

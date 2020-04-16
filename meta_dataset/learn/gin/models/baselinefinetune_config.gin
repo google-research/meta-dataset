@@ -1,12 +1,9 @@
 include 'meta_dataset/learn/gin/models/baseline_config.gin'
-Trainer.train_learner_class = 'BaselineFinetune'
-Trainer.eval_learner_class = 'BaselineFinetune'
-weight_decay = 1e-4
-BaselineFinetuneLearner.weight_decay = %weight_decay
+Trainer.train_learner_class = @BaselineFinetuneLearner
+Trainer.eval_learner_class = @BaselineFinetuneLearner
+Trainer.episodic = False
+Learner.weight_decay = 1e-4
 BaselineFinetuneLearner.num_finetune_steps = 5
 BaselineFinetuneLearner.finetune_lr = 1e-4
 BaselineFinetuneLearner.finetune_all_layers = False
 BaselineFinetuneLearner.finetune_with_adam = False
-
-BaselineFinetuneLearner.transductive_batch_norm = False
-BaselineFinetuneLearner.backprop_through_moments = True

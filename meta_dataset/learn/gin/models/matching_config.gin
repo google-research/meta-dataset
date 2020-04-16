@@ -1,11 +1,7 @@
 include 'meta_dataset/learn/gin/models/learner_config.gin'
-Trainer.train_learner_class = 'MatchingNet'
-Trainer.eval_learner_class = 'MatchingNet'
+Trainer.train_learner_class = @MatchingNetworkLearner
+Trainer.eval_learner_class = @MatchingNetworkLearner
 Trainer.episodic = True
 Trainer.embedding_network = 'four_layer_convnet'
-weight_decay = 1e-4
-MatchingNetworkLearner.weight_decay = %weight_decay
+Learner.weight_decay = 1e-4
 MatchingNetworkLearner.exact_cosine_distance = False
-
-MatchingNetworkLearner.transductive_batch_norm = False
-MatchingNetworkLearner.backprop_through_moments = True

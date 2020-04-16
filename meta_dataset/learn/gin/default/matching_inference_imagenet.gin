@@ -1,16 +1,14 @@
 include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/learner_config.gin'
-Trainer.train_learner_class = 'Baseline'
-Trainer.eval_learner_class = 'MatchingNet'
+Trainer.train_learner_class = @BaselineLearner
+Trainer.eval_learner_class = @MatchingNetworkLearner
 Trainer.episodic = False
-weight_decay = 1e-4
+Learner.weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
 MatchingNetworkLearner.exact_cosine_distance = False
 
-BaselineLearner.weight_decay = %weight_decay
 BaselineLearner.transductive_batch_norm = False
 BaselineLearner.backprop_through_moments = True
 
-MatchingNetworkLearner.weight_decay = %weight_decay
 MatchingNetworkLearner.transductive_batch_norm = False
 MatchingNetworkLearner.backprop_through_moments = True

@@ -175,3 +175,8 @@ class EpisodeDescriptionConfig(object):
     self.ignore_dag_ontology = ignore_dag_ontology
     self.ignore_bilevel_ontology = ignore_bilevel_ontology
     self.min_examples_in_class = min_examples_in_class
+
+  @property
+  def max_ways(self):
+    """Returns the way (maximum way if variable) of the episode."""
+    return self.num_ways or self.max_ways_upper_bound

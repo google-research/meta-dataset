@@ -20,4 +20,4 @@ DataConfig.image_height = 84
 Trainer.decay_every = 100
 Trainer.decay_rate = 0.9509421043104758
 Trainer.learning_rate = 0.0005102311315353643
-weight_decay = 0.0005155272693869694
+Learner.weight_decay = 0.0005155272693869694

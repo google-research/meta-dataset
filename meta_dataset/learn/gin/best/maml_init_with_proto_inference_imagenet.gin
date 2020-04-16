@@ -19,7 +19,7 @@ DataConfig.image_height = 126
 Trainer.decay_every = 500
 Trainer.decay_rate = 0.885662482266546
 Trainer.learning_rate = 0.00025036275525430426
-weight_decay = 0.003952085241872012
+Learner.weight_decay = 0.003952085241872012
 
 # Baseline hypers (just for the record).
 BaselineLearner.cosine_logits_multiplier = 10

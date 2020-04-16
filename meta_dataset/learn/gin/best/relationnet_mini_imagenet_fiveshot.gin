@@ -4,4 +4,4 @@ include 'meta_dataset/learn/gin/models/relationnet_config.gin'
 ## Hyperparameters used to train the best model
 Trainer.checkpoint_to_restore = ''
 Trainer.pretrained_source = 'scratch'
-weight_decay = 1e-6
+Learner.weight_decay = 1e-6

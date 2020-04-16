@@ -31,8 +31,6 @@ import tensorflow.compat.v1 as tf
 
 FLAGS = tf.flags.FLAGS
 
-MAX_WAY = 50  # The maximum number of classes we will see in any batch.
-
 
 def conv2d(x, w, stride=1, b=None, padding='SAME'):
   """conv2d returns a 2d convolution layer with full stride."""
@@ -1100,16 +1098,25 @@ class Learner(object):
   def __init__(
       self,
       is_training,
+      logit_dim,
       transductive_batch_norm,
       backprop_through_moments,
       ema_object,
       embedding_fn,
       data,
+      weight_decay,
   ):
     """Initializes a Learner.
 
+    Note that Gin configuration of subclasses of `Learner` will override any
+    corresponding Gin configurations of `Learner`, since parameters are passed
+    to the `Learner` base class's constructor (See
+    https://github.com/google/gin-config/blob/master/README.md) for more
+    details).
+
     Args:
       is_training: Whether the learning is in training mode.
+      logit_dim: An integer; the maximum dimensionality of output predictions.
       transductive_batch_norm: Whether to batch normalize in the transductive
         setting where the mean and variance for normalization are computed from
         both the support and query sets.
@@ -1118,19 +1125,24 @@ class Learner(object):
       ema_object: An Exponential Moving Average (EMA).
       embedding_fn: A callable for embedding images.
       data: An EpisodeDataset or Batch.
+      weight_decay: coefficient for L2 regularization.
 
     Returns:
       A loss (potentially dependent on ops, e.g. for updating EMA), predictions.
     """
     self.is_training = is_training
+    self.logit_dim = logit_dim
     self.transductive_batch_norm = transductive_batch_norm
     self.backprop_through_moments = backprop_through_moments
     self.ema_object = ema_object
     self.embedding_fn = embedding_fn
     self.data = data
+    self.weight_decay = weight_decay
 
     if self.transductive_batch_norm:
       logging.info('Using transductive batch norm!')
+
+    self.forward_pass()
 
   def update_ema(self):
     """Apply the update operation."""
@@ -1139,59 +1151,37 @@ class Learner(object):
     """Returns a Tensor representing the loss."""
 
   def forward_pass(self):
-    """Returns the features of the given batch or episode."""
+    """Constructs the computational graph for this Learner's predictions."""
+
+
+class EpisodicLearner(Learner):
+  """An episodic learner."""
+
+  pass
+
+
+class BatchLearner(Learner):
+  """A batch learner."""
+
+  pass
 
 
 @gin.configurable
-class RelationNetworkLearner(Learner):
+class RelationNetworkLearner(EpisodicLearner):
   """A Relation Network."""
-
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, reader,
-               weight_decay):
-    """Initializes a RelationNetworkLearner.
-
-    Args:
-      is_training: Whether the learning is in training mode.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      weight_decay: coefficient for L2 regularization.
-    """
-    super(RelationNetworkLearner,
-          self).__init__(is_training, transductive_batch_norm,
-                         backprop_through_moments, ema_object, embedding_fn,
-                         reader)
-
-    # The data for the next episode.
-    self.episode = self.data
-    self.test_targets = self.episode.test_labels
-
-    # Hyperparameters.
-    self.weight_decay = weight_decay
-    tf.logging.info(
-        'RelationNetworkLearner: weight_decay {}'.format(weight_decay))
-
-    # Parameters for embedding function depending on meta-training or not.
-    self.forward_pass()
 
   def forward_pass(self):
     """Embeds all (training and testing) images of the episode."""
     # Compute the support set's mean and var and use these as the moments for
     # batch norm on the query set.
     train_embeddings = self.embedding_fn(
-        self.episode.train_images, self.is_training, keep_spatial_dims=True)
+        self.data.train_images, self.is_training, keep_spatial_dims=True)
     self.train_embeddings = train_embeddings['embeddings']
     support_set_moments = None
     if not self.transductive_batch_norm:
       support_set_moments = train_embeddings['moments']
     test_embeddings = self.embedding_fn(
-        self.episode.test_images,
+        self.data.test_images,
         self.is_training,
         moments=support_set_moments,
         backprop_through_moments=self.backprop_through_moments,
@@ -1237,59 +1227,32 @@ class RelationNetworkLearner(Learner):
   def compute_accuracy(self):
     """Computes the accuracy on the given episode."""
     self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
-    correct = tf.equal(self.episode.test_labels, self.test_predictions)
+    correct = tf.equal(self.data.test_labels, self.test_predictions)
     return tf.reduce_mean(tf.cast(correct, tf.float32))
 
 
 @gin.configurable
-class PrototypicalNetworkLearner(Learner):
+class PrototypicalNetworkLearner(EpisodicLearner):
   """A Prototypical Network."""
 
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, reader,
-               weight_decay):
-    """Initializes a PrototypicalNetworkLearner.
-
-    Args:
-      is_training: Whether the learning is in training mode.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      weight_decay: coefficient for L2 regularization.
-    """
-    super(PrototypicalNetworkLearner,
-          self).__init__(is_training, transductive_batch_norm,
-                         backprop_through_moments, ema_object, embedding_fn,
-                         reader)
-
-    # The data for the next episode.
-    self.episode = self.data
-    self.test_targets = self.episode.test_labels
-
-    # Hyperparameters.
-    self.weight_decay = weight_decay
-    logging.info('PrototypicalLearner: weight_decay %s', weight_decay)
-
-    # Parameters for embedding function depending on meta-training or not.
-    self.forward_pass()
+  def __init__(self, **kwargs):
+    super(PrototypicalNetworkLearner, self).__init__(**kwargs)
+    # `PrototypicalNetworkLearner`s and subclasses don't require a pre-specified
+    # output dimensionality.
+    delattr(self, 'logit_dim')
 
   def forward_pass(self):
     """Embeds all (training and testing) images of the episode."""
     # Compute the support set's mean and var and use these as the moments for
     # batch norm on the query set.
-    train_embeddings = self.embedding_fn(self.episode.train_images,
+    train_embeddings = self.embedding_fn(self.data.train_images,
                                          self.is_training)
     self.train_embeddings = train_embeddings['embeddings']
     support_set_moments = None
     if not self.transductive_batch_norm:
       support_set_moments = train_embeddings['moments']
     test_embeddings = self.embedding_fn(
-        self.episode.test_images,
+        self.data.test_images,
         self.is_training,
         moments=support_set_moments,
         backprop_through_moments=self.backprop_through_moments)
@@ -1310,13 +1273,11 @@ class PrototypicalNetworkLearner(Learner):
 
   def compute_loss(self):
     """Returns the loss of the Prototypical Network."""
-    onehot_train_labels = tf.one_hot(self.episode.train_labels,
-                                     self.episode.way)
     self.prototypes = compute_prototypes(self.train_embeddings,
-                                         onehot_train_labels)
+                                         self.data.onehot_train_labels)
     self.test_logits = self.compute_logits()
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=self.episode.test_labels, logits=self.test_logits)
+        labels=self.data.test_labels, logits=self.test_logits)
     cross_entropy_loss = tf.reduce_mean(loss)
     regularization = tf.reduce_sum(
         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
@@ -1326,7 +1287,7 @@ class PrototypicalNetworkLearner(Learner):
   def compute_accuracy(self):
     """Computes the accuracy on the given episode."""
     self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
-    correct = tf.equal(self.episode.test_labels, self.test_predictions)
+    correct = tf.equal(self.data.test_labels, self.test_predictions)
     return tf.reduce_mean(tf.cast(correct, tf.float32))
 
 
@@ -1334,34 +1295,17 @@ class PrototypicalNetworkLearner(Learner):
 class MatchingNetworkLearner(PrototypicalNetworkLearner):
   """A Matching Network."""
 
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, reader,
-               weight_decay, exact_cosine_distance):
+  def __init__(self, exact_cosine_distance, **kwargs):
     """Initializes the Matching Networks instance.
 
     Args:
-      is_training: Whether the learning is in training mode.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      weight_decay: coefficient for L2 regularization.
       exact_cosine_distance: If True then the cosine distance is used, otherwise
         the query set embeddings are left unnormalized when computing the dot
         product.
+      **kwargs: Keyword arguments common to all PrototypicalNetworkLearners.
     """
-    super(MatchingNetworkLearner,
-          self).__init__(is_training, transductive_batch_norm,
-                         backprop_through_moments, ema_object, embedding_fn,
-                         reader, weight_decay)
-
     self.exact_cosine_distance = exact_cosine_distance
-    self.weight_decay = weight_decay
-    logging.info('MatchingNetworkLearner: weight_decay %s', weight_decay)
+    super(MatchingNetworkLearner, self).__init__(**kwargs)
 
   def compute_logits(self):
     """Computes the class logits.
@@ -1524,30 +1468,14 @@ def linear_classifier_logits(embeddings, num_classes, cosine_classifier,
 # create a baseline leaner by composing a batch learner and the evaluation
 # process of an episodic kNN learner.
 @gin.configurable
-class BaselineLearner(Learner):
+class BaselineLearner(BatchLearner):
   """A Baseline Network."""
 
-  # TODO(kswersky): get rid of these arguments.
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, reader,
-               num_train_classes, num_test_classes, weight_decay, knn_in_fc,
-               knn_distance, cosine_classifier, cosine_logits_multiplier,
-               use_weight_norm):
+  def __init__(self, knn_in_fc, knn_distance, cosine_classifier,
+               cosine_logits_multiplier, use_weight_norm, **kwargs):
     """Initializes a baseline learner.
 
     Args:
-      is_training: If we are training or not.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      num_train_classes: The total number of classes of the dataset.
-      num_test_classes: The number of classes in each episode.
-      weight_decay: coefficient for L2 regularization.
       knn_in_fc: Whether kNN is performed in the space of fc activations or
         embeddings. If True, the logits from the last fc layer are used as the
         embedding on which kNN lookup is performed. Otherwise, the penultimate
@@ -1561,32 +1489,20 @@ class BaselineLearner(Learner):
         into the softmax.
       use_weight_norm: A bool. Whether to apply weight normalization to the
         linear classifier layer.
+      **kwargs: Keyword arguments common to all BatchLearners.
     """
+    self.knn_in_fc = knn_in_fc
+    self.distance = knn_distance
     self.cosine_classifier = cosine_classifier
     self.cosine_logits_multiplier = cosine_logits_multiplier
     self.use_weight_norm = use_weight_norm
-
-    super(BaselineLearner, self).__init__(is_training, transductive_batch_norm,
-                                          backprop_through_moments, ema_object,
-                                          embedding_fn, reader)
-
-    self.num_train_classes = num_train_classes
-    self.num_test_classes = num_test_classes
-
-    # Hyperparameters.
-    self.weight_decay = weight_decay
-    self.distance = knn_distance
     logging.info(
-        'BaselineLearner: distance %s, weight_decay %s, cosine_classifier: %s',
-        knn_distance, weight_decay, cosine_classifier)
+        'BaselineLearner: '
+        'distance %s, '
+        'cosine_classifier: %s'
+        'knn_in_fc %s', knn_distance, cosine_classifier, knn_in_fc)
 
-    self.forward_pass()
-
-    if not self.is_training:
-      # For aggregating statistics later.
-      self.test_targets = self.data.test_labels
-      self.knn_in_fc = knn_in_fc
-      logging.info('BaselineLearner: knn_in_fc %s', knn_in_fc)
+    super(BaselineLearner, self).__init__(**kwargs)
 
   def forward_pass(self):
     if self.is_training:
@@ -1622,7 +1538,7 @@ class BaselineLearner(Learner):
     with tf.variable_scope('fc', reuse=tf.AUTO_REUSE):
       # Always maps to a space whose dimensionality is the number of classes
       # at meta-training time.
-      logits = linear_classifier_logits(embeddings, self.num_train_classes,
+      logits = linear_classifier_logits(embeddings, self.logit_dim,
                                         self.cosine_classifier,
                                         self.cosine_logits_multiplier,
                                         self.use_weight_norm)
@@ -1680,7 +1596,7 @@ class BaselineLearner(Learner):
       # `self.data.onehot_labels` can be used directly instead of the below
       # computation.
       labels = tf.cast(self.data.labels, tf.int64)
-      onehot_labels = tf.one_hot(labels, self.num_train_classes)
+      onehot_labels = tf.one_hot(labels, self.logit_dim)
 
       with tf.name_scope('loss'):
         cross_entropy = tf.losses.softmax_cross_entropy(
@@ -1713,35 +1629,15 @@ class BaselineFinetuneLearner(BaselineLearner):
   """A Baseline Network with test-time finetuning."""
 
   def __init__(self,
-               is_training,
-               transductive_batch_norm,
-               backprop_through_moments,
-               ema_object,
-               embedding_fn,
-               reader,
-               num_train_classes,
-               num_test_classes,
-               weight_decay,
                num_finetune_steps,
                finetune_lr,
                debug_log=False,
                finetune_all_layers=False,
-               finetune_with_adam=False):
+               finetune_with_adam=False,
+               **kwargs):
     """Initializes a baseline learner.
 
     Args:
-      is_training: If we are training or not.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      num_train_classes: The total number of classes of the dataset.
-      num_test_classes: The number of classes in each episode.
-      weight_decay: coefficient for L2 regularization.
       num_finetune_steps: number of finetune steps.
       finetune_lr: the learning rate used for finetuning.
       debug_log: If True, print out debug logs.
@@ -1749,23 +1645,18 @@ class BaselineFinetuneLearner(BaselineLearner):
         False, only trains a linear classifier on top of the embedding.
       finetune_with_adam: Whether to use Adam for the within-episode finetuning.
         If False, gradient descent is used instead.
+      **kwargs: Keyword arguments common to all `BaselineLearner`s (including
+        `knn_in_fc` and `knn_distance`, which are not used by
+        `BaselineFinetuneLearner` but are used by the parent class).
     """
     self.num_finetune_steps = num_finetune_steps
     self.finetune_lr = finetune_lr
     self.debug_log = debug_log
     self.finetune_all_layers = finetune_all_layers
     self.finetune_with_adam = finetune_with_adam
-
     if finetune_with_adam:
       self.finetune_opt = tf.train.AdamOptimizer(self.finetune_lr)
-
-    # Note: the weight_decay value provided here overrides the value gin might
-    # have for BaselineLearner's own weight_decay.
-    super(BaselineFinetuneLearner,
-          self).__init__(is_training, transductive_batch_norm,
-                         backprop_through_moments, ema_object, embedding_fn,
-                         reader, num_train_classes, num_test_classes,
-                         weight_decay)
+    super(BaselineFinetuneLearner, self).__init__(**kwargs)
 
   def compute_logits(self):
     """Computes the logits."""
@@ -1935,7 +1826,7 @@ class BaselineFinetuneLearner(BaselineLearner):
   def _fc_layer(self, embedding):
     """The fully connected layer to be finetuned."""
     with tf.variable_scope('fc_finetune', reuse=tf.AUTO_REUSE):
-      logits = linear_classifier_logits(embedding, MAX_WAY,
+      logits = linear_classifier_logits(embedding, self.logit_dim,
                                         self.cosine_classifier,
                                         self.cosine_logits_multiplier,
                                         self.use_weight_norm)
@@ -1961,27 +1852,15 @@ class BaselineFinetuneLearner(BaselineLearner):
 
 
 @gin.configurable
-class MAMLLearner(Learner):
+class MAMLLearner(EpisodicLearner):
   """Model-Agnostic Meta Learner."""
 
-  def __init__(self, is_training, transductive_batch_norm,
-               backprop_through_moments, ema_object, embedding_fn, reader,
-               weight_decay, num_update_steps, additional_test_update_steps,
+  def __init__(self, num_update_steps, additional_test_update_steps,
                first_order, alpha, train_batch_norm, debug, zero_fc_layer,
-               proto_maml_fc_layer_init):
+               proto_maml_fc_layer_init, **kwargs):
     """Initializes a baseline learner.
 
     Args:
-      is_training: Whether the learning is in training mode.
-      transductive_batch_norm: Whether to batch normalize in the transductive
-        setting where the mean and variance for normalization are computed from
-        both the support and query sets.
-      backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
-      reader: A SplitReader that reads episodes or batches.
-      weight_decay: coefficient for L2 regularization.
       num_update_steps: The number of inner-loop steps to take.
       additional_test_update_steps: The number of additional inner-loop steps to
         take on meta test and meta validation set.
@@ -1992,6 +1871,7 @@ class MAMLLearner(Learner):
       zero_fc_layer: Whether to use zero fc layer initialization.
       proto_maml_fc_layer_init: Whether to use ProtoNets equivalent fc layer
         initialization.
+      **kwargs: Keyword arguments common to all EpisodicLearners.
 
     Raises:
       ValueError: The embedding function must be MAML-compatible.
@@ -2010,14 +1890,6 @@ class MAMLLearner(Learner):
                            'weights from omit_from_saving_and_reloading for '
                            'this setting to work as expected.')
 
-    super(MAMLLearner, self).__init__(is_training, transductive_batch_norm,
-                                      backprop_through_moments, ema_object,
-                                      embedding_fn, reader)
-
-    # For aggregating statistics later.
-    self.test_targets = self.data.test_labels
-
-    self.weight_decay = weight_decay
     self.alpha = alpha
     self.num_update_steps = num_update_steps
     self.additional_test_update_steps = additional_test_update_steps
@@ -2029,7 +1901,8 @@ class MAMLLearner(Learner):
 
     logging.info('alpha: %s, num_update_steps: %d', self.alpha,
                  self.num_update_steps)
-    self.forward_pass()
+
+    super(MAMLLearner, self).__init__(**kwargs)
 
   def proto_maml_fc_weights(self, prototypes, zero_pad_to_max_way=False):
     """Computes the Prototypical MAML fc layer's weights.
@@ -2040,12 +1913,12 @@ class MAMLLearner(Learner):
 
     Returns:
       fc_weights: Tensor of shape [embedding_size, num_classes] or
-        [embedding_size, MAX_WAY] when zero_pad_to_max_way is True.
+        [embedding_size, self.logit_dim] when zero_pad_to_max_way is True.
     """
     fc_weights = 2 * prototypes
     fc_weights = tf.transpose(fc_weights)
     if zero_pad_to_max_way:
-      paddings = [[0, 0], [0, MAX_WAY - tf.shape(fc_weights)[1]]]
+      paddings = [[0, 0], [0, self.logit_dim - tf.shape(fc_weights)[1]]]
       fc_weights = tf.pad(fc_weights, paddings, 'CONSTANT', constant_values=0)
     return fc_weights
 
@@ -2057,12 +1930,12 @@ class MAMLLearner(Learner):
       zero_pad_to_max_way: Whether to zero padd to max num way.
 
     Returns:
-      fc_bias: Tensor of shape [num_classes] or [MAX_WAY]
+      fc_bias: Tensor of shape [num_classes] or [self.logit_dim]
         when zero_pad_to_max_way is True.
     """
     fc_bias = -tf.square(tf.norm(prototypes, axis=1))
     if zero_pad_to_max_way:
-      paddings = [[0, MAX_WAY - tf.shape(fc_bias)[0]]]
+      paddings = [[0, self.logit_dim - tf.shape(fc_bias)[0]]]
       fc_bias = tf.pad(fc_bias, paddings, 'CONSTANT', constant_values=0)
     return fc_bias
 
@@ -2081,8 +1954,8 @@ class MAMLLearner(Learner):
 
     with tf.variable_scope('linear_classifier', reuse=tf.AUTO_REUSE):
       embedding_depth = train_embeddings.shape.as_list()[-1]
-      fc_weights = weight_variable([embedding_depth, MAX_WAY])
-      fc_bias = bias_variable([MAX_WAY])
+      fc_weights = weight_variable([embedding_depth, self.logit_dim])
+      fc_bias = bias_variable([self.logit_dim])
 
     # A list of variable names, a list of corresponding Variables, and a list
     # of operations (possibly empty) that creates a copy of each Variable.

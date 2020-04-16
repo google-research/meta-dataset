@@ -1,10 +1,6 @@
 include 'meta_dataset/learn/gin/models/learner_config.gin'
-Trainer.train_learner_class = 'PrototypicalNet'
-Trainer.eval_learner_class = 'PrototypicalNet'
+Trainer.train_learner_class = @PrototypicalNetworkLearner
+Trainer.eval_learner_class = @PrototypicalNetworkLearner
 Trainer.episodic = True
 Trainer.embedding_network = 'four_layer_convnet'
-weight_decay = 1e-4
-PrototypicalNetworkLearner.weight_decay = %weight_decay
-
-PrototypicalNetworkLearner.transductive_batch_norm = False
-PrototypicalNetworkLearner.backprop_through_moments = True
+Learner.weight_decay = 1e-4
