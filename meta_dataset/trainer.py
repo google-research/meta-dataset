@@ -756,13 +756,13 @@ class Trainer(object):
           for substring in self.omit_from_saving_and_reloading
       ])
 
-    try:
-      self.saver = tf.train.Saver(
-          var_list=filter(is_not_requested_to_omit, tf.global_variables()),
-          max_to_keep=500)
-    except TypeError:
+    var_list = list(filter(is_not_requested_to_omit, tf.global_variables()))
+    if var_list:
+      self.saver = tf.train.Saver(var_list=var_list, max_to_keep=500)
+    else:
       self.saver = None
-      logging.info('Variables not being saved.')
+      logging.info('Variables not being saved since no variables left after '
+                   'filtering.')
 
     if self.checkpoint_to_restore:
       if not self.saver:
