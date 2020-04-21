@@ -263,7 +263,7 @@ def main(unused_argv):
     else:
       eval_split = trainer.TEST_SPLIT
 
-      _, _, acc_summary, ci_acc_summary = trainer_instance.evaluate(eval_split)
+    _, _, acc_summary, ci_acc_summary = trainer_instance.evaluate(eval_split)
     if trainer_instance.summary_writer:
       trainer_instance.summary_writer.add_summary(acc_summary)
       trainer_instance.summary_writer.add_summary(ci_acc_summary)
