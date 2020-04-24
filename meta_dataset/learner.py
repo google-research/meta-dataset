@@ -137,7 +137,7 @@ def bn(x, params=None, moments=None, backprop_through_moments=True):
     scope_name = tf.get_variable_scope().name
     if moments is None:
       # If not provided, compute the mean and var of the current batch.
-      mean, var = tf.nn.moments(x, axes=[0, 1, 2], keep_dims=True)
+      mean, var = tf.nn.moments(x, axes=range(len(x.shape) - 1), keep_dims=True)
     else:
       if backprop_through_moments:
         mean = moments[scope_name + '/mean']
@@ -915,12 +915,17 @@ def four_layer_convnet(inputs,
       keep_spatial_dims=keep_spatial_dims)
 
 
-@gin.configurable('fully_connected_network', whitelist=['n_hidden_units'])
+@gin.configurable(
+    'fully_connected_network', whitelist=[
+        'n_hidden_units',
+        'use_batchnorm',
+    ])
 def fully_connected_network(inputs,
                             is_training,
                             params=None,
                             moments=None,
                             n_hidden_units=(64,),
+                            use_batchnorm=False,
                             reuse=tf.AUTO_REUSE,
                             scope='fully_connected',
                             use_bounded_activation=False,
@@ -942,6 +947,7 @@ def fully_connected_network(inputs,
     moments: not used.
     n_hidden_units: tuple, Number of hidden units for each layer. If empty, it
       is the identity mapping.
+    use_batchnorm: bool, Whether to use batchnorm after layers, except last.
     reuse: Whether to reuse the network's weights.
     scope: An optional scope for the tf operations.
     use_bounded_activation: Whether to enable bounded activation. This is useful
@@ -952,9 +958,10 @@ def fully_connected_network(inputs,
   Returns:
     A 2D Tensor, where each row is the embedding of an input in inputs.
   """
-  del is_training, moments, backprop_through_moments, keep_spatial_dims
+  del is_training, keep_spatial_dims
   layer = inputs
   model_params_keys, model_params_vars = [], []
+  moments_keys, moments_vars = [], []
   activation_fn = functools.partial(
       relu, use_bounded_activation=use_bounded_activation)
   with tf.variable_scope(scope, reuse=reuse):
@@ -964,9 +971,25 @@ def fully_connected_network(inputs,
             layer, n_unit, activation_fn=activation_fn, params=params)
         model_params_keys.extend(dense_params.keys())
         model_params_vars.extend(dense_params.values())
+        if use_batchnorm:
+          layer, bn_params, bn_moments = bn(
+              layer,
+              params=params,
+              moments=moments,
+              backprop_through_moments=backprop_through_moments)
+          model_params_keys.extend(bn_params.keys())
+          model_params_keys.extend(bn_params.values())
+          moments_keys.extend(bn_moments.keys())
+          moments_vars.extend(bn_moments.values())
+
   model_params = collections.OrderedDict(
       zip(model_params_keys, model_params_vars))
-  return_dict = {'embeddings': layer, 'params': model_params, 'moments': {}}
+  moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+  return_dict = {
+      'embeddings': layer,
+      'params': model_params,
+      'moments': moments
+  }
   return return_dict
 
 
