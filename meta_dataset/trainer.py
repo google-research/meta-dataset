@@ -1208,7 +1208,9 @@ class EpisodicTrainer(Trainer):
 
   def create_train_learner(self, train_learner_class, episode_or_batch):
     """Instantiates a train learner."""
-    return train_learner_class(True, self.learn_config.transductive_batch_norm,
+    is_training = False if self.eval_split == 'train' else True
+    return train_learner_class(is_training,
+                               self.learn_config.transductive_batch_norm,
                                self.backprop_through_moments, self.ema_object,
                                self.embedding_fn, episode_or_batch)
 
