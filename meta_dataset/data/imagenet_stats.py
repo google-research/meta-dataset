@@ -58,6 +58,9 @@ def log_graph_stats(nodes,
       'Graph statistics%s:',
       ' of graph {}'.format(graph_name) if graph_name is not None else '')
   logging.info('Number of nodes: %d', len(nodes))
+  if not nodes:
+    # Empty set
+    return
 
   # Compute the dict mapping internal nodes to their spanning leaves. Note that
   # this is different for the different splits since even for nodes that may be
@@ -149,6 +152,9 @@ def log_stats_finegrainedness(nodes,
     path: A str. The 'path' argument of get_lowest_common_ancestor. Can be
       either 'longest' or 'all.
   """
+  if not nodes:
+    # Empty set
+    return
   logging.info(
       'Finegrainedness analysis of %s graph using %s paths in '
       'finding the lowest common ancestor.', graph_name, path)

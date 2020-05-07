@@ -817,9 +817,14 @@ def get_num_synset_2012_images(path, synsets_2012, files_to_skip=None):
   num_synset_2012_images = {}
   for s_2012 in synsets_2012:
     synset_dir = os.path.join(FLAGS.ilsvrc_2012_data_root, s_2012.wn_id)
+    all_files = set(tf.io.gfile.listdir(synset_dir))
+    img_files = set([f for f in all_files if f.lower().endswith('jpeg')])
+    final_files = img_files - files_to_skip
+    skipped_files = all_files - final_files
+    if skipped_files:
+      logging.info('Synset: %s, files_skipped: %s', s_2012.wn_id, skipped_files)
     # Size of the set difference (-) between listed files and `files_to_skip`.
-    num_synset_2012_images[s_2012.wn_id] = len(
-        set(tf.io.gfile.listdir(synset_dir)) - files_to_skip)
+    num_synset_2012_images[s_2012.wn_id] = len(final_files)
 
   if path:
     with tf.io.gfile.GFile(path, 'w') as f:
@@ -911,6 +916,7 @@ def import_graph(node_representations):
 def create_imagenet_specification(split_enum,
                                   files_to_skip,
                                   path_to_num_leaf_images=None,
+                                  train_split_only=False,
                                   log_stats=True):
   """Creates the dataset specification of ImageNet.
 
@@ -934,6 +940,8 @@ def create_imagenet_specification(split_enum,
       corresponding number of images. If no file is present, it will be created
       in order to save on future computation. If None, no attempt at reloading
       or storing the dict is made.
+    train_split_only: bool, if True, we return the whole Imagenet as our
+      training set.
     log_stats: whether to print statistics about the sampling graph and the
       three split subgraphs
 
@@ -949,7 +957,6 @@ def create_imagenet_specification(split_enum,
     num_synset_2012_images: A dict mapping each WordNet id of ILSVRC 2012 to its
       number of images
   """
-
   # Create Synsets for all ImageNet synsets (82115 in total).
   data_root = FLAGS.ilsvrc_2012_data_root
   synsets = {}
@@ -994,18 +1001,27 @@ def create_imagenet_specification(split_enum,
   # ILSVRC 2012 synsets that live in the sub-graph rooted at that node.
   num_images = get_num_spanning_images(spanning_leaves, num_synset_2012_images)
 
-  # Create class splits, each with its own sampling graph.
-  # Choose roots for the validation and test subtrees (see the docstring of
-  # create_splits for more information on how these are used).
-  valid_test_roots = {
-      'valid': get_synset_by_wnid('n02075296', sampling_graph),  # 'carnivore'
-      'test':
-          get_synset_by_wnid('n03183080', sampling_graph)  # 'device'
-  }
-  # The valid_test_roots returned here correspond to the same Synsets as in the
-  # above dict, but are the copied versions of them for each subgraph.
-  splits, valid_test_roots = create_splits(
-      spanning_leaves, split_enum, valid_test_roots=valid_test_roots)
+  if train_split_only:
+    # We are keeping all graph for training.
+    valid_test_roots = None
+    splits = {
+        split_enum.TRAIN: spanning_leaves,
+        split_enum.VALID: set(),
+        split_enum.TEST: set()
+    }
+  else:
+    # Create class splits, each with its own sampling graph.
+    # Choose roots for the validation and test subtrees (see the docstring of
+    # create_splits for more information on how these are used).
+    valid_test_roots = {
+        'valid': get_synset_by_wnid('n02075296', sampling_graph),  # 'carnivore'
+        'test':
+            get_synset_by_wnid('n03183080', sampling_graph)  # 'device'
+    }
+    # The valid_test_roots returned here correspond to the same Synsets as in
+    # the above dict, but are the copied versions of them for each subgraph.
+    splits, valid_test_roots = create_splits(
+        spanning_leaves, split_enum, valid_test_roots=valid_test_roots)
 
   # Compute num_images for each split.
   split_num_images = {}

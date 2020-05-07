@@ -233,7 +233,7 @@ def gen_rand_split_inds(num_train_classes, num_valid_classes, num_test_classes):
   logging.info(
       'Created splits with %d train, %d validation and %d test classes.',
       len(train_inds), len(valid_inds), len(test_inds))
-  return train_inds, valid_inds, test_inds
+  return train_inds.tolist(), valid_inds.tolist(), test_inds.tolist()
 
 
 def write_tfrecord_from_npy_single_channel(class_npy_file, class_label,
@@ -1488,10 +1488,13 @@ class ImageNetConverter(DatasetConverter):
   used during training.
   """
 
-  def _create_data_spec(self):
+  def _create_data_spec(self, train_split_only=False):
     """Initializes the HierarchicalDatasetSpecification instance for ImageNet.
 
     See HierarchicalDatasetSpecification for details.
+    Args:
+      train_split_only: bool, if True the entire dataset is assigned to the
+        training split.
     """
     # Load lists of image names that are duplicates with images in other
     # datasets. They will be skipped from ImageNet.
@@ -1521,8 +1524,10 @@ class ImageNetConverter(DatasetConverter):
       ilsvrc_2012_num_leaf_images_path = os.path.join(self.records_path,
                                                       'num_leaf_images.json')
     specification = imagenet_specification.create_imagenet_specification(
-        learning_spec.Split, self.files_to_skip,
-        ilsvrc_2012_num_leaf_images_path)
+        learning_spec.Split,
+        self.files_to_skip,
+        ilsvrc_2012_num_leaf_images_path,
+        train_split_only=train_split_only)
     split_subgraphs, images_per_class, _, _, _, _ = specification
 
     # Maps each class id to the name of its class.
