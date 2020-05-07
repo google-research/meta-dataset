@@ -108,6 +108,61 @@ def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
 
 
 @gin.configurable(whitelist=['support_decoder', 'query_decoder'])
+def process_dumped_episode(support_strings, query_strings, image_size,
+                           support_decoder, query_decoder):
+  """Processes a dumped episode.
+
+  This function is almost like `process_episode()` function, except:
+  - It doesn't need to call flush_and_chunk_episode().
+  - And the labels are read from the tf.Example directly. We assume that
+    labels are already mapped in to [0, n_ways - 1].
+
+  Args:
+    support_strings: 1-D Tensor of dtype str, Example protocol buffers of
+      support set.
+    query_strings: 1-D Tensor of dtype str, Example protocol buffers of query
+      set.
+    image_size: int, desired image size used during decoding.
+    support_decoder: ImageDecoder, used to decode support set images.
+    query_decoder: ImageDecoder, used to decode query set images.
+
+  Returns:
+    support_images, support_labels, support_labels, query_images,
+      query_labels, query_labels: Tensors, batches of images, labels, and
+      labels, for the support and query sets (respectively). We return labels
+      twice since dumped datasets doesn't have (absolute) class IDs anymore.
+  """
+  if isinstance(support_decoder, decoder.ImageDecoder):
+    log_data_augmentation(support_decoder.data_augmentation, 'support')
+    support_decoder.image_size = image_size
+  else:
+    raise TypeError('support_decoder type: %s is not ImageDecoder' %
+                    type(support_decoder))
+  if isinstance(query_decoder, decoder.ImageDecoder):
+    log_data_augmentation(query_decoder.data_augmentation, 'query')
+    query_decoder.image_size = image_size
+  else:
+    raise TypeError('query_decoder type: %s is not ImageDecoder' %
+                    type(query_decoder))
+
+  support_decoder.image_size = image_size
+  query_decoder.image_size = image_size
+  support_images, support_labels = tf.map_fn(
+      support_decoder.decode_with_label,
+      support_strings,
+      dtype=(support_decoder.out_type, tf.int32),
+      back_prop=False)
+  query_images, query_labels = tf.map_fn(
+      support_decoder.decode_with_label,
+      query_strings,
+      dtype=(support_decoder.out_type, tf.int32),
+      back_prop=False)
+
+  return (support_images, support_labels, support_labels, query_images,
+          query_labels, query_labels)
+
+
+@gin.configurable(whitelist=['support_decoder', 'query_decoder'])
 def process_episode(example_strings, class_ids, chunk_sizes, image_size,
                     support_decoder, query_decoder):
   """Processes an episode.
@@ -257,7 +312,6 @@ def make_one_source_episode_pipeline(dataset_spec,
       use_bilevel_hierarchy=use_bilevel_ontology,
       use_all_classes=use_all_classes)
   dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
-
   # Episodes coming out of `dataset` contain flushed examples and are internally
   # padded with dummy examples. `process_episode` discards flushed examples,
   # splits the episode into support and query sets, removes the dummy examples
@@ -266,7 +320,6 @@ def make_one_source_episode_pipeline(dataset_spec,
   map_fn = functools.partial(
       process_episode, chunk_sizes=chunk_sizes, image_size=image_size)
   dataset = dataset.map(map_fn)
-
   # There is only one data source, so we know that all episodes belong to it,
   # but for interface consistency, zip with a dataset identifying the source.
   source_id_dataset = tf.data.Dataset.from_tensors(0).repeat()

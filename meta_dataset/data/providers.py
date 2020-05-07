@@ -89,6 +89,8 @@ class EpisodeDataset(
   def test_shots(self):
     return compute_shot(self.way, self.test_labels)
 
+  # TODO(evcu) We should probably calculate way from unique labels, not
+  # class_ids.
   @property
   def way(self):
     return tf.size(self.unique_class_ids)

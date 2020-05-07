@@ -69,7 +69,25 @@ class ImageDecoder(object):
       rescaled to [-1, 1]. Note that Gaussian data augmentation may cause values
       to go beyond this range.
     """
-    image_decoded = read_example_and_parse_image(example_string)['image']
+    return self.decode_with_label(example_string)[0]
+
+  def decode_with_label(self, example_string):
+    """Processes a single example string.
+
+    Extracts and processes the image, and ignores the label. We assume that the
+    image has three channels.
+
+    Args:
+      example_string: str, an Example protocol buffer.
+
+    Returns:
+      image_rescaled: the image, resized to `image_size x image_size` and
+        rescaled to [-1, 1]. Note that Gaussian data augmentation may cause
+        values to go beyond this range.
+      label: tf.int
+    """
+    ex_decoded = read_example_and_parse_image(example_string)
+    image_decoded = ex_decoded['image']
     image_resized = tf.image.resize_images(
         image_decoded, [self.image_size, self.image_size],
         method=tf.image.ResizeMethod.BILINEAR,
@@ -88,8 +106,7 @@ class ImageDecoder(object):
         image = tf.pad(image, paddings, 'REFLECT')
         image = tf.image.random_crop(image,
                                      [self.image_size, self.image_size, 3])
-
-    return image
+    return image, tf.cast(ex_decoded['label'], dtype=tf.int32)
 
 
 @gin.configurable
