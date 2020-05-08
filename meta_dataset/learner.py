@@ -137,7 +137,8 @@ def bn(x, params=None, moments=None, backprop_through_moments=True):
     scope_name = tf.get_variable_scope().name
     if moments is None:
       # If not provided, compute the mean and var of the current batch.
-      mean, var = tf.nn.moments(x, axes=range(len(x.shape) - 1), keep_dims=True)
+      mean, var = tf.nn.moments(
+          x, axes=list(range(len(x.shape) - 1)), keep_dims=True)
     else:
       if backprop_through_moments:
         mean = moments[scope_name + '/mean']
