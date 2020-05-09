@@ -43,7 +43,6 @@ import os
 from absl import logging
 import gin.tf
 from meta_dataset import data
-from meta_dataset import learner
 from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
 import tensorflow.compat.v1 as tf
@@ -199,37 +198,21 @@ def main(unused_argv):
      restrict_num_per_class) = trainer.get_datasets_and_restrictions()
 
     # Get a trainer or evaluator.
-    trainer_kwargs = {
-        'is_training': FLAGS.is_training,
-        'train_dataset_list': train_datasets,
-        'eval_dataset_list': eval_datasets,
-        'restrict_classes': restrict_classes,
-        'restrict_num_per_class': restrict_num_per_class,
-        'checkpoint_dir': FLAGS.train_checkpoint_dir,
-        'summary_dir': FLAGS.summary_dir,
-        'records_root_dir': FLAGS.records_root_dir,
-        'eval_finegrainedness': FLAGS.eval_finegrainedness,
-        'eval_finegrainedness_split': FLAGS.eval_finegrainedness_split,
-        'eval_imbalance_dataset': FLAGS.eval_imbalance_dataset,
-        'omit_from_saving_and_reloading': FLAGS.omit_from_saving_and_reloading,
-        'eval_split': FLAGS.eval_split,
-    }
-
-    train_learner_class = gin.query_parameter(
-        'Trainer.train_learner_class').configurable.fn_or_cls
-    if gin.query_parameter('Trainer.episodic'):
-      trainer_instance = trainer.EpisodicTrainer(**trainer_kwargs)
-      if not issubclass(train_learner_class, learner.EpisodicLearner):
-        raise ValueError(
-            'When `episodic` is True, `train_learner_class` should be an '
-            'episodic learner, but received {}.'.format(train_learner_class))
-    else:
-      trainer_instance = trainer.BatchTrainer(**trainer_kwargs)
-      if not issubclass(train_learner_class, learner.BatchLearner):
-        raise ValueError(
-            'When `episodic` is False, `train_learner` should be a batch one, '
-            'but received {}.'.format(train_learner_class))
-
+    trainer_instance = trainer.Trainer(
+        is_training=FLAGS.is_training,
+        train_dataset_list=train_datasets,
+        eval_dataset_list=eval_datasets,
+        restrict_classes=restrict_classes,
+        restrict_num_per_class=restrict_num_per_class,
+        checkpoint_dir=FLAGS.train_checkpoint_dir,
+        summary_dir=FLAGS.summary_dir,
+        records_root_dir=FLAGS.records_root_dir,
+        eval_finegrainedness=FLAGS.eval_finegrainedness,
+        eval_finegrainedness_split=FLAGS.eval_finegrainedness_split,
+        eval_imbalance_dataset=FLAGS.eval_imbalance_dataset,
+        omit_from_saving_and_reloading=FLAGS.omit_from_saving_and_reloading,
+        eval_split=FLAGS.eval_split,
+    )
   except ValueError as e:
     logging.info('Full Gin configurations:\n%s', gin.config_str())
     raise e

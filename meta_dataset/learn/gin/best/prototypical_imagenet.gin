@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/prototypical_config.gin'
 
 # Backbone hypers.
-Trainer.embedding_network = 'resnet'
+Learner.embedding_fn = 'resnet'
 Trainer.pretrained_source = 'imagenet'
 Trainer.checkpoint_to_restore = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_27500.ckpt'
 

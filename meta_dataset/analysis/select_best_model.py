@@ -116,31 +116,33 @@ tf.flags.DEFINE_integer(
     'Set 1 for no smoothing.')
 
 
-def get_value_from_params_dir(params_dir, param_name):
-  """Gets the value for param_name in the params file in params_dir."""
+def get_value_from_params_dir(params_dir, param_names):
+  """Gets the first found value from `param_names` in `params_dir`."""
 
-  def _load_params(params_file, loader, mode):
+  def _load_params(param_name, params_file, loader, mode):
     with tf.io.gfile.GFile(params_file, mode) as f:
       params = loader(f)
     logging.info('Found params file %s', params_file)
     return params[param_name]
 
-  try:
+  for param_name in param_names:
     try:
-      return _load_params(
-          os.path.join(params_dir, 'params.json'), json.load, 'r')
-    except tf.errors.NotFoundError:
-      logging.info('%s does not exist in %s', 'params.json', params_dir)
+      try:
+        return _load_params(param_name, os.path.join(params_dir, 'params.json'),
+                            json.load, 'r')
+      except tf.errors.NotFoundError:
+        logging.info('%s does not exist in %s', 'params.json', params_dir)
 
-    try:
-      return _load_params(
-          os.path.join(params_dir, 'params.pkl'), pkl.load, 'rb')
-    except tf.errors.NotFoundError:
-      logging.info('%s does not exist in %s', 'params.pkl', params_dir)
+      try:
+        return _load_params(param_name, os.path.join(params_dir, 'params.pkl'),
+                            pkl.load, 'rb')
+      except tf.errors.NotFoundError:
+        logging.info('%s does not exist in %s', 'params.pkl', params_dir)
 
-  except KeyError:
-    logging.info('The params file does not have the key %s', param_name)
-    return None
+    except KeyError:
+      pass
+
+  raise ValueError('Did not find any of the following keys: %s' % param_names)
 
 
 def get_paths_to_events(root_dir,
@@ -172,13 +174,14 @@ def get_paths_to_events(root_dir,
   def get_variant_architecture(name):
     """Return the architecture of the given variant if recorded; o/w None."""
     variant_params_dir = os.path.join(params_dir, name)
-    architecture = get_value_from_params_dir(variant_params_dir,
-                                             '_gin.Trainer.embedding_network')
-
-    if not architecture:
-      # Backwards compatibility.
-      architecture = get_value_from_params_dir(
-          variant_params_dir, '_gin.LearnerConfig.embedding_network')
+    architecture = get_value_from_params_dir(
+        variant_params_dir,
+        (
+            '_gin.Learner.embedding_fn',
+            # The following are for backwards compatibility.
+            '_gin.Trainer.embedding_network',
+            '_gin.LearnerConfig.embedding_network',
+        ))
 
     return architecture
 

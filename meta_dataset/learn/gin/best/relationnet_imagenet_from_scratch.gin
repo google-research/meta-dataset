@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/relationnet_config.gin'
 
 # Backbone hypers.
-Trainer.embedding_network = 'four_layer_convnet'
+Learner.embedding_fn = 'four_layer_convnet'
 Trainer.pretrained_source = 'scratch'
 Trainer.checkpoint_to_restore = ''
 

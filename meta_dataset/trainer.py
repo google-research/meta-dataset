@@ -18,6 +18,9 @@
 # TODO(lamblinp): Update variable names to be more consistent
 # - target, class_idx, label
 # - support, query
+# TODO(lamblinp): Simplify the logic around performing evaluation on the
+# `TRAIN_SPLIT` by, for instance, recording which data is episodic, and which
+# split it is coming from (independently from how it is used).
 
 from __future__ import absolute_import
 from __future__ import division
@@ -28,7 +31,7 @@ import os
 
 from absl import logging
 import gin.tf
-from meta_dataset import learner
+from meta_dataset import learner as learner_lib
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
@@ -229,6 +232,9 @@ def is_backbone_variable(variable, only_if=lambda x: True):
 # TODO(eringrant): Split the current `Trainer` class into `Trainer` and
 # `Evaluator` classes to partition the constructor arguments into meaningful
 # groups.
+# TODO(eringrant): Refactor the current `Trainer` class to more transparently
+# deal with operations per split, since the present logic surrounding the
+# `eval_finegrainedness_split` is confusing.
 # TODO(eringrant): Better organize `Trainer` Gin configurations, which are
 # currently set in many configuration files.
 @gin.configurable
@@ -243,12 +249,10 @@ class Trainer(object):
       checkpoint_every,
       validate_every,
       log_every,
-      episodic,
       train_learner_class,
       eval_learner_class,
       is_training,
       checkpoint_to_restore,
-      embedding_network,
       learning_rate,
       decay_learning_rate,
       decay_every,
@@ -283,14 +287,12 @@ class Trainer(object):
       validate_every: An integer, the number of episodes between consecutive
         validations.
       log_every: An integer, the number of episodes between consecutive logging.
-      episodic: A boolean, whether meta-training is episodic.
       train_learner_class: A Learner to be used for meta-training.
       eval_learner_class: A Learner to be used for meta-validation or
         meta-testing.
       is_training: Bool, whether or not to train or just evaluate.
       checkpoint_to_restore: A string, the path to a checkpoint from which to
         restore variables.
-      embedding_network: A string, the embedding network to use.
       learning_rate: A float, the meta-learning learning rate.
       decay_learning_rate: A boolean, whether to decay the learning rate.
       decay_every: An integer, the learning rate is decayed for every multiple
@@ -339,7 +341,7 @@ class Trainer(object):
       data_config: A DataConfig, the data configuration.
 
     Raises:
-      UnexpectedSplitError: If split not as expected for Trainer.
+      UnexpectedSplitError: If split configuration is not as expected.
     """
     # pyformat: enable
     self.num_updates = num_updates
@@ -350,7 +352,6 @@ class Trainer(object):
     self.log_every = log_every
 
     self.checkpoint_to_restore = checkpoint_to_restore
-    self.embedding_network = embedding_network
     self.learning_rate = learning_rate
     self.decay_learning_rate = decay_learning_rate
     self.decay_every = decay_every
@@ -358,7 +359,6 @@ class Trainer(object):
     self.experiment_name = experiment_name
     self.pretrained_source = pretrained_source
 
-    self.episodic = episodic
     self.train_learner_class = train_learner_class
     self.eval_learner_class = eval_learner_class
     self.is_training = is_training
@@ -379,6 +379,8 @@ class Trainer(object):
       # the training graph as it exhibits greater variety in this aspect.
       self.eval_split = eval_finegrainedness_split
     elif eval_split:
+      if eval_split not in (TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT):
+        raise UnexpectedSplitError(eval_split)
       self.eval_split = eval_split
     elif is_training:
       self.eval_split = VALID_SPLIT
@@ -421,44 +423,37 @@ class Trainer(object):
 
     # Get the training, validation and testing specifications.
     # Each is either an EpisodeSpecification or a BatchSpecification.
-    self.split_episode_or_batch_specs = {}
-    self.next_data = {}
-    self.ema_object = None  # Using dummy EMA object for now.
-    self.learners = {}
-    self.embedding_fn = (
-        learner.NAME_TO_EMBEDDING_NETWORK[self.embedding_network])
-    for split in self.required_splits:
-      # Get the next data (episode or batch) for the different splits.
-      if split == TRAIN_SPLIT:
-        self.split_episode_or_batch_specs[split] = (
-            self._create_train_specification())
-        # TODO(eringrant): Refactor to expose or avoid dependence of
-        # `build_data` on `split_episode_or_batch_specs`.
-        self.next_data[split] = self.build_data(split)
-        self.learners[split] = self.create_train_learner(
-            self.train_learner_class, self.get_next(split))
-      elif split in [VALID_SPLIT, TEST_SPLIT]:
-        self.split_episode_or_batch_specs[split] = (
-            self._create_held_out_specification(split))
-        # TODO(eringrant): Refactor to expose or avoid dependence of
-        # `build_data` on `split_episode_or_batch_specs`.
-        self.next_data[split] = self.build_data(split)
-        self.learners[split] = self.create_eval_learner(self.eval_learner_class,
-                                                        self.get_next(split))
-      else:
-        raise UnexpectedSplitError(split)
+    self.split_episode_or_batch_specs = dict(
+        zip(self.required_splits,
+            map(self.get_batch_or_episodic_specification,
+                self.required_splits)))
 
-    # Get the Tensors for the losses / accuracies of the different learners.
-    self.losses = dict(
-        zip(self.required_splits, [
-            self.learners[split].compute_loss()
-            for split in self.required_splits
-        ]))
-    self.accs = dict(
-        zip(self.required_splits, [
-            self.learners[split].compute_accuracy()
-            for split in self.required_splits
-        ]))
+    # Get the next data (episode or batch) for the different splits.
+    self.next_data = dict(
+        zip(self.required_splits, map(self.build_data, self.required_splits)))
+
+    # Initialize the learners.
+    self.learners = {}
+    for split in self.required_splits:
+      if split == TRAIN_SPLIT:
+        # The learner for the training split should only be in training mode if
+        # the evaluation split is not the training split.
+        learner_is_training = self.eval_split != TRAIN_SPLIT
+        learner_class = self.train_learner_class
+      else:
+        learner_is_training = False
+        learner_class = self.eval_learner_class
+      self.learners[split] = self.create_learner(
+          is_training=learner_is_training,
+          learner_class=learner_class,
+          episode_or_batch=self.next_data[split])
+
+    # Build the prediction, loss and accuracy graphs for each learner.
+    predictions, losses, accuracies = zip(
+        *[self.build_learner(split) for split in self.required_splits])
+    self.predictions = dict(zip(self.required_splits, predictions))
+    self.losses = dict(zip(self.required_splits, losses))
+    self.accuracies = dict(zip(self.required_splits, accuracies))
 
 
     # Set self.way, self.shots to Tensors for the way/shots of the next episode.
@@ -489,30 +484,23 @@ class Trainer(object):
     self.initialize_saver()
     self.create_summary_writer()
 
+  def build_learner(self, split):
+    """Compute predictions, losses and accuracies of the learner for split."""
+    with tf.name_scope(split):
+      prediction = self.learners[split].forward_pass()
+      loss = self.learners[split].compute_loss()
+      accuracy = self.learners[split].compute_accuracy()
+    return prediction, loss, accuracy
+
   def set_way_shots_classes_logits_targets(self):
-    """Sets the Tensors for the above info of the learner's next episode.
-
-    Raises:
-      NotImplementedError: Abstract Method.
-    """
-    raise NotImplementedError('Abstract Method.')
-
-  def maybe_set_way_shots_classes_logits_targets(self, skip_train=False):
-    """Wrapper for set_way_shots_classes_logits_targets.
-
-    Args:
-      skip_train: Whether to assign each of the way, shot, (absolute) class id,
-        test_logits and test_targets of the training split to None. This is used
-        when called with the training split from the batch trainer, since
-        training does not happen in episodes there.
-    """
+    """Sets the Tensors for the info about the learner's next episode."""
     # The batch trainer receives episodes only for the valid and test splits.
     # Therefore for the train split there is no defined way and shots.
     (way, shots, class_props, class_ids, test_logits,
      test_targets) = [], [], [], [], [], []
     for split in self.required_splits:
 
-      if split == TRAIN_SPLIT and skip_train:
+      if isinstance(self.next_data[split], providers.Batch):
         (way_, shots_, class_props_, class_ids_, test_logits_,
          test_targets_) = [None] * 6
       else:
@@ -524,7 +512,7 @@ class Trainer(object):
         if self.eval_imbalance_dataset:
           class_props_ = compute_class_proportions(
               class_ids_, shots_, self.eval_imbalance_dataset_spec)
-        test_logits_ = self.learners[split].test_logits
+        test_logits_ = self.predictions[split]
         test_targets_ = self.next_data[split].test_labels
       way.append(way_)
       shots.append(shots_)
@@ -546,7 +534,7 @@ class Trainer(object):
     standard_summaries = []
     for split in self.required_splits:
       loss_summary = tf.summary.scalar('%s_loss' % split, self.losses[split])
-      acc_summary = tf.summary.scalar('%s_acc' % split, self.accs[split])
+      acc_summary = tf.summary.scalar('%s_acc' % split, self.accuracies[split])
       standard_summaries.append(loss_summary)
       standard_summaries.append(acc_summary)
 
@@ -564,29 +552,24 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.summary_dir):
         tf.io.gfile.makedirs(self.summary_dir)
 
-  def create_train_learner(self, train_learner_class, episode_or_batch):
-    """Instantiates a train learner.
-
-    Args:
-      train_learner_class: A train learner subclass of the Learner class.
-      episode_or_batch: An EpisodeDataset or Batch.
-
-    Raises:
-      NotImplementedError: Abstract Method.
-    """
-    raise NotImplementedError('Abstract Method.')
-
-  def create_eval_learner(self, eval_learner_class, episode):
-    """Instantiates an eval learner.
-
-    Args:
-      eval_learner_class: An eval learner subclass of the Learner class.
-      episode: An EpisodeDataset.
-
-    Raises:
-      NotImplementedError: Abstract Method.
-    """
-    raise NotImplementedError('Abstract Method.')
+  def create_learner(self, is_training, learner_class, episode_or_batch):
+    """Instantiates a Learner."""
+    if issubclass(learner_class, learner_lib.BatchLearner):
+      logit_dim = self._get_num_total_classes()
+    elif issubclass(learner_class, learner_lib.EpisodicLearner):
+      logit_dim = (
+          self.train_episode_config.max_ways
+          if is_training else self.eval_episode_config.max_ways)
+    else:
+      raise ValueError(
+          'The specified `learner_class` should be a subclass of '
+          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          'but received {}.'.format(learner_class))
+    return learner_class(
+        is_training=is_training,
+        logit_dim=logit_dim,
+        data=episode_or_batch,
+    )
 
   def get_benchmark_specification(self, records_root_dir=None):
     """Returns a BenchmarkSpecification.
@@ -821,6 +804,29 @@ class Trainer(object):
       logging.info(
           'No checkpoints found; evaluating with a random initialization.')
 
+  def get_batch_or_episodic_specification(self, split):
+    if split == TRAIN_SPLIT:
+      return self._create_train_specification()
+    else:
+      return self._create_held_out_specification(split)
+
+  def _create_train_specification(self):
+    """Returns an EpisodeSpecification or BatchSpecification for training."""
+    if (issubclass(self.train_learner_class, learner_lib.EpisodicLearner) or
+        self.eval_split == TRAIN_SPLIT):
+      return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
+                                                self.num_train_classes,
+                                                self.num_support_train,
+                                                self.num_query_train)
+    elif issubclass(self.train_learner_class, learner_lib.BatchLearner):
+      return learning_spec.BatchSpecification(learning_spec.Split.TRAIN,
+                                              self.batch_size)
+    else:
+      raise ValueError(
+          'The specified `learner_class` should be a subclass of '
+          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          'but received {}.'.format(self.train_learner_class))
+
   def _create_held_out_specification(self, split=TEST_SPLIT):
     """Create an EpisodeSpecification for either validation or testing.
 
@@ -840,17 +846,6 @@ class Trainer(object):
     return learning_spec.EpisodeSpecification(split_enum, self.num_test_classes,
                                               self.num_support_eval,
                                               self.num_query_eval)
-
-  def _create_train_specification(self):
-    """Returns an EpisodeSpecification or BatchSpecification for training.
-
-    Raises:
-      NotImplementedError: Should be implemented in each subclass.
-    """
-    raise NotImplementedError('Abstract Method.')
-
-  def build_data(self, split):
-    raise NotImplementedError('Abstract method.')
 
   def _restrict_dataset_list_for_split(self, split, splits_to_contribute,
                                        dataset_list):
@@ -881,7 +876,24 @@ class Trainer(object):
         num_to_take = dataset_restrict_num_per_class[split]
     return num_to_take
 
-  def build_episode(self, split):
+  def build_data(self, split):
+    """Builds the data for the learner for `split`."""
+    learner_class = (
+        self.train_learner_class
+        if split == TRAIN_SPLIT else self.eval_learner_class)
+    if (issubclass(learner_class, learner_lib.BatchLearner) and
+        split != self.eval_split):
+      return self._build_batch(split)
+    elif (issubclass(learner_class, learner_lib.EpisodicLearner) or
+          split == self.eval_split):
+      return self._build_episode(split)
+    else:
+      raise ValueError(
+          'The `Learner` for `split` should be a subclass of '
+          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          'but received {}.'.format(learner_class))
+
+  def _build_episode(self, split):
     """Builds an EpisodeDataset containing the next data for "split".
 
     Args:
@@ -975,7 +987,7 @@ class Trainer(object):
         train_class_ids=support_class_ids,
         test_class_ids=query_class_ids)
 
-  def build_batch(self, split):
+  def _build_batch(self, split):
     """Builds a Batch object containing the next data for "split".
 
     Args:
@@ -1035,20 +1047,6 @@ class Trainer(object):
     (images, class_ids), _ = iterator.get_next()
     return providers.Batch(images=images, labels=class_ids)
 
-  def get_next(self, split):
-    """Returns the next batch or episode.
-
-    Args:
-      split: A str, one of TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
-
-    Raises:
-      ValueError: Invalid split.
-    """
-    if split not in [TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT]:
-      raise ValueError('Invalid split. Expected one of "train", "valid", or '
-                       '"test".')
-    return self.next_data[split]
-
   def get_train_op(self, global_step):
     """Returns the operation that performs a training update."""
     # UPDATE_OPS picks up batch_norm updates.
@@ -1073,10 +1071,12 @@ class Trainer(object):
     self.valid_acc = np.nan
     self.valid_ci = np.nan
 
-    # Save the initialization weights.
-    save_path = self.saver.save(
-        self.sess, os.path.join(self.checkpoint_dir, 'model_0.ckpt'))
-    logging.info('Model initialization saved: %s', save_path)
+    should_save = self.checkpoint_dir is not None
+    if should_save and global_step == 0:
+      # Save the initialization weights.
+      save_path = self.saver.save(
+          self.sess, os.path.join(self.checkpoint_dir, 'model_0.ckpt'))
+      logging.info('Model initialization saved: %s', save_path)
 
     # Compute the initial validation performance before starting the training.
     self.maybe_evaluate(global_step)
@@ -1084,7 +1084,7 @@ class Trainer(object):
     while global_step < self.num_updates:
       # Perform the next update.
       (_, train_loss, train_acc, global_step) = self.sess.run([
-          self.train_op, self.losses[TRAIN_SPLIT], self.accs[TRAIN_SPLIT],
+          self.train_op, self.losses[TRAIN_SPLIT], self.accuracies[TRAIN_SPLIT],
           updated_global_step
       ])
 
@@ -1104,7 +1104,6 @@ class Trainer(object):
         if self.summary_writer:
           self.summary_writer.add_summary(summaries, global_step)
 
-      should_save = self.checkpoint_dir is not None
       if should_save and global_step % self.checkpoint_every == 0:
         save_path = self.saver.save(
             self.sess,
@@ -1138,10 +1137,10 @@ class Trainer(object):
     accuracies = []
     for eval_trial_num in range(num_eval_trials):
       acc, summaries = self.sess.run(
-          [self.accs[split], self.evaluation_summaries])
+          [self.accuracies[split], self.evaluation_summaries])
       accuracies.append(acc)
       # Write complete summaries during evaluation, but not training.
-      # Otherwise, validation summaries become too big.
+      # Otherwise, validaation summaries become too big.
       if not self.is_training and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
     logging.info('Done.')
@@ -1161,7 +1160,15 @@ class Trainer(object):
 
     return mean_acc, ci_acc, mean_acc_summary, ci_acc_summary
 
-  def add_eval_summaries_split(self, split):
+  def add_eval_summaries(self):
+    """Returns summaries of way / shot / classes/ logits / targets."""
+    evaluation_summaries = []
+    for split in self.required_splits:
+      if isinstance(self.next_data[split], providers.EpisodeDataset):
+        evaluation_summaries.extend(self._add_eval_summaries_split(split))
+    return evaluation_summaries
+
+  def _add_eval_summaries_split(self, split):
     """Returns split's summaries of way / shot / classes / logits / targets."""
     split_eval_summaries = []
     way_summary = tf.summary.scalar('%s_way' % split, self.way[split])
@@ -1184,66 +1191,6 @@ class Trainer(object):
     split_eval_summaries.append(targets_summary)
     return split_eval_summaries
 
-
-class EpisodicTrainer(Trainer):
-  """A Trainer that trains a learner through a series of episodes."""
-
-  def build_data(self, split):
-    # An EpisodicTrainer will use episodes for all splits.
-    return self.build_episode(split)
-
-  def _create_train_specification(self):
-    """Returns an EpisodeSpecification or BatchSpecification for training."""
-    return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
-                                              self.num_train_classes,
-                                              self.num_support_train,
-                                              self.num_query_train)
-
-  def set_way_shots_classes_logits_targets(self):
-    """Sets the Tensors for the above info of the learner's next episode."""
-    self.maybe_set_way_shots_classes_logits_targets()
-
-  def add_eval_summaries(self):
-    """Returns summaries of way / shot / classes/ logits / targets."""
-    evaluation_summaries = []
-    for split in self.required_splits:
-      evaluation_summaries.extend(self.add_eval_summaries_split(split))
-    return evaluation_summaries
-
-  def create_train_learner(self, train_learner_class, episode_or_batch):
-    """Instantiates a train learner."""
-    return train_learner_class(
-        is_training=True,
-        logit_dim=self.train_episode_config.max_ways,
-        ema_object=self.ema_object,
-        embedding_fn=self.embedding_fn,
-        data=episode_or_batch,
-    )
-
-  def create_eval_learner(self, eval_learner_class, episode):
-    """Instantiates an eval learner."""
-    return eval_learner_class(
-        is_training=False,
-        logit_dim=self.eval_episode_config.max_ways,
-        ema_object=self.ema_object,
-        embedding_fn=self.embedding_fn,
-        data=episode,
-    )
-
-
-class BatchTrainer(Trainer):
-  """A Trainer that trains a learner through a series of batches."""
-
-  def build_data(self, split):
-    # The TRAIN_SPLIT split is read as batches, VALID_SPLIT and TEST_SPLIT as
-    # episodes.
-    if split == TRAIN_SPLIT and self.eval_split != TRAIN_SPLIT:
-      return self.build_batch(split)
-    elif split in (TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT):
-      return self.build_episode(split)
-    else:
-      raise UnexpectedSplitError(split)
-
   def _get_num_total_classes(self):
     """Returns total number of classes in the benchmark."""
     # Total class is needed because for ImageNet instead of linearly assigning
@@ -1254,66 +1201,3 @@ class BatchTrainer(Trainer):
       for split in learning_spec.Split:
         total_classes += len(dataset_spec.get_classes(split))
     return total_classes
-
-  def _create_train_specification(self):
-    """Returns an EpisodeSpecification or BatchSpecification for training."""
-    if self.eval_split == TRAIN_SPLIT:
-      return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
-                                                self.num_train_classes,
-                                                self.num_support_train,
-                                                self.num_query_train)
-    else:
-      return learning_spec.BatchSpecification(learning_spec.Split.TRAIN,
-                                              self.batch_size)
-
-  def set_way_shots_classes_logits_targets(self):
-    """Sets the Tensors for the above info of the learner's next episode."""
-    skip_train = True
-    if self.eval_split == TRAIN_SPLIT:
-      skip_train = False
-    self.maybe_set_way_shots_classes_logits_targets(skip_train=skip_train)
-
-  def add_eval_summaries(self):
-    """Returns summaries of way / shot / class id's / logits / targets."""
-    evaluation_summaries = []
-    for split in self.required_splits:
-      # In the Batch case, training is non-episodic but evaluation is episodic.
-      if split == TRAIN_SPLIT and self.eval_split != TRAIN_SPLIT:
-        continue
-      evaluation_summaries.extend(self.add_eval_summaries_split(split))
-    return evaluation_summaries
-
-  def create_train_learner(self, train_learner_class, episode_or_batch):
-    """Instantiates a train learner."""
-    num_total_classes = self._get_num_total_classes()
-    is_training = False if self.eval_split == TRAIN_SPLIT else True
-    return train_learner_class(
-        is_training=is_training,
-        logit_dim=num_total_classes,
-        ema_object=self.ema_object,
-        embedding_fn=self.embedding_fn,
-        data=episode_or_batch,
-    )
-
-  def create_eval_learner(self, eval_learner_class, episode):
-    """Instantiates an eval learner."""
-    # The eval_learner_class is typically a batch learner, but in the case of
-    # the inference-only baselines, it will be an episodic learner. This allows
-    # to combine the inference algorithm of Prototypical Networks, etc, as the
-    # validation (and test) procedure of a baseline-trained model.
-    if issubclass(eval_learner_class, learner.BatchLearner):
-      logit_dim = self._get_num_total_classes()
-    elif issubclass(eval_learner_class, learner.EpisodicLearner):
-      logit_dim = self.eval_episode_config.max_ways
-    else:
-      raise ValueError(
-          'The specified `eval_learner_class` should be a subclass of '
-          '`learner.BatchLearner` or `learner.EpisodicLearner` but received {}.'
-          .format(eval_learner_class))
-    return eval_learner_class(
-        is_training=False,
-        logit_dim=logit_dim,
-        ema_object=self.ema_object,
-        embedding_fn=self.embedding_fn,
-        data=episode,
-    )

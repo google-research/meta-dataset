@@ -1,8 +1,7 @@
 include 'meta_dataset/learn/gin/models/learner_config.gin'
 Trainer.train_learner_class = @MAMLLearner
 Trainer.eval_learner_class = @MAMLLearner
-Trainer.episodic = True
-Trainer.embedding_network = 'four_layer_convnet'
+Learner.embedding_fn = 'four_layer_convnet'
 Learner.weight_decay = 1e-4
 MAMLLearner.num_update_steps = 5
 MAMLLearner.additional_test_update_steps = 0

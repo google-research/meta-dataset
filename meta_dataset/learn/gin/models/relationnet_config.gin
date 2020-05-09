@@ -1,8 +1,8 @@
 include 'meta_dataset/learn/gin/models/learner_config.gin'
 Trainer.train_learner_class = @RelationNetworkLearner
 Trainer.eval_learner_class = @RelationNetworkLearner
-Trainer.episodic = True
-Trainer.embedding_network = 'relationnet_embedding'
+Learner.embedding_fn = 'relationnet_embedding'
+Learner.transductive_batch_norm = True
 
 Learner.weight_decay = 1e-6
 

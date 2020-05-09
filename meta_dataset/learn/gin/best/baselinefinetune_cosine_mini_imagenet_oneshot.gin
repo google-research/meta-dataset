@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
 EpisodeDescriptionConfig.num_support = 1  # Change 5-shot to 1-shot.
 include 'meta_dataset/learn/gin/models/baselinefinetune_cosine_config.gin'
 
-Trainer.embedding_network = 'wide_resnet'
+Learner.embedding_fn = 'wide_resnet'
 DataConfig.image_height = 84
 Trainer.pretrained_source = 'scratch'
 Learner.weight_decay = 0

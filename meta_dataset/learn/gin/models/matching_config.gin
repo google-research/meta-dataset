@@ -1,7 +1,6 @@
 include 'meta_dataset/learn/gin/models/learner_config.gin'
 Trainer.train_learner_class = @MatchingNetworkLearner
 Trainer.eval_learner_class = @MatchingNetworkLearner
-Trainer.episodic = True
-Trainer.embedding_network = 'four_layer_convnet'
+Learner.embedding_fn = 'four_layer_convnet'
 Learner.weight_decay = 1e-4
 MatchingNetworkLearner.exact_cosine_distance = False

@@ -1125,7 +1125,6 @@ class Learner(object):
       logit_dim,
       transductive_batch_norm,
       backprop_through_moments,
-      ema_object,
       embedding_fn,
       data,
       weight_decay,
@@ -1146,8 +1145,7 @@ class Learner(object):
         both the support and query sets.
       backprop_through_moments: Whether to allow gradients to flow through the
         given support set moments. Only applies to non-transductive batch norm.
-      ema_object: An Exponential Moving Average (EMA).
-      embedding_fn: A callable for embedding images.
+      embedding_fn: A string; the name of the function that embeds images.
       data: An EpisodeDataset or Batch.
       weight_decay: coefficient for L2 regularization.
 
@@ -1158,18 +1156,12 @@ class Learner(object):
     self.logit_dim = logit_dim
     self.transductive_batch_norm = transductive_batch_norm
     self.backprop_through_moments = backprop_through_moments
-    self.ema_object = ema_object
-    self.embedding_fn = embedding_fn
+    self.embedding_fn = NAME_TO_EMBEDDING_NETWORK[embedding_fn]
     self.data = data
     self.weight_decay = weight_decay
 
     if self.transductive_batch_norm:
       logging.info('Using transductive batch norm!')
-
-    self.forward_pass()
-
-  def update_ema(self):
-    """Apply the update operation."""
 
   def compute_loss(self):
     """Returns a Tensor representing the loss."""
@@ -1211,6 +1203,7 @@ class RelationNetworkLearner(EpisodicLearner):
         backprop_through_moments=self.backprop_through_moments,
         keep_spatial_dims=True)
     self.test_embeddings = test_embeddings['embeddings']
+    return self.test_embeddings
 
   def compute_relations(self):
     """Computes the relation score of each test example to each prototype."""
@@ -1281,6 +1274,7 @@ class PrototypicalNetworkLearner(EpisodicLearner):
         moments=support_set_moments,
         backprop_through_moments=self.backprop_through_moments)
     self.test_embeddings = test_embeddings['embeddings']
+    return self.test_embeddings
 
   def compute_logits(self):
     """Computes the negative distances of each test point to each prototype."""
@@ -1548,13 +1542,14 @@ class BaselineLearner(BatchLearner):
           moments=support_set_moments,
           backprop_through_moments=self.backprop_through_moments)
       self.test_embeddings = test_embeddings['embeddings']
+      return self.test_embeddings
 
   def forward_pass_fc(self, embeddings):
     """Passes the provided embeddings through the fc layer to get the logits.
 
     Args:
       embeddings: A Tensor of the penultimate layer activations as computed by
-        self.forward_pass().
+        self.forward_pass.
 
     Returns:
       The fc layer activations.
@@ -1968,6 +1963,9 @@ class MAMLLearner(EpisodicLearner):
 
     Computes the test logits of MAML on the query (test) set after running
     meta update steps on the support (train) set.
+
+    Returns:
+      A `tf.Tensor` representing the unnormalized class probabilities.
     """
     # Have to use one-hot labels since sparse softmax doesn't allow
     # second derivatives.
@@ -2108,6 +2106,7 @@ class MAMLLearner(EpisodicLearner):
 
     self.test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
                         updated_fc_bias)[:, 0:self.data.way]
+    return self.test_logits
 
   def compute_loss(self):
     loss = tf.losses.softmax_cross_entropy(self.data.onehot_test_labels,

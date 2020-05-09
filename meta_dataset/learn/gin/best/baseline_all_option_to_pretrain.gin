@@ -3,7 +3,7 @@ include 'meta_dataset/learn/gin/models/baseline_config.gin'
 BatchSplitReaderGetReader.add_dataset_offset = True
 
 # Backbone hypers.
-Trainer.embedding_network = 'wide_resnet'
+Learner.embedding_fn = 'wide_resnet'
 Trainer.pretrained_source = 'imagenet'
 Trainer.checkpoint_to_restore = '/path/to/checkpoints/baseline_imagenet_wide_resnet_best/model_46000.ckpt'
 

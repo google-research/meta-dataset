@@ -23,6 +23,7 @@ from __future__ import print_function
 from absl import flags
 
 import gin.tf
+from meta_dataset import learner as learner_lib
 from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import decoder
@@ -41,7 +42,7 @@ class TrainerTest(tf.test.TestCase):
   `--records_root_dir` flag.
   """
 
-  def test_episodic_trainer(self):
+  def test_trainer(self):
     # PrototypicalNetworkLearner is built automatically and this test does not
     # have the opportunity to pass values to its constructor except through gin.
     gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
@@ -49,6 +50,8 @@ class TrainerTest(tf.test.TestCase):
                        True)
     gin.bind_parameter('PrototypicalNetworkLearner.transductive_batch_norm',
                        False)
+    gin.bind_parameter('PrototypicalNetworkLearner.embedding_fn',
+                       'four_layer_convnet')
 
     # Values that can't be passed directly to EpisodeDescriptionConfig
     gin.bind_parameter('process_episode.support_decoder',
@@ -78,9 +81,9 @@ class TrainerTest(tf.test.TestCase):
         num_prefetch=2,
     )
 
-    episodic_trainer = trainer.EpisodicTrainer(
-        train_learner_class='PrototypicalNet',
-        eval_learner_class='PrototypicalNet',
+    trainer_instance = trainer.Trainer(
+        train_learner_class=learner_lib.PrototypicalNetworkLearner,
+        eval_learner_class=learner_lib.PrototypicalNetworkLearner,
         is_training=True,
         train_dataset_list=['mini_imagenet'],
         eval_dataset_list=['mini_imagenet'],
@@ -89,6 +92,7 @@ class TrainerTest(tf.test.TestCase):
         checkpoint_dir='',
         summary_dir='',
         records_root_dir=FLAGS.records_root_dir,
+        eval_split=trainer.VALID_SPLIT,
         eval_finegrainedness=False,
         eval_finegrainedness_split='',
         eval_imbalance_dataset='',
@@ -102,9 +106,7 @@ class TrainerTest(tf.test.TestCase):
         checkpoint_every=10,
         validate_every=5,
         log_every=1,
-        episodic=True,
         checkpoint_to_restore=None,
-        embedding_network='four_layer_convnet',
         learning_rate=1e-4,
         decay_learning_rate=True,
         decay_every=5000,
@@ -114,15 +116,15 @@ class TrainerTest(tf.test.TestCase):
     )
 
     # Get the next train / valid / test episodes.
-    train_episode = episodic_trainer.get_next(trainer.TRAIN_SPLIT)
+    train_episode = trainer_instance.next_data[trainer.TRAIN_SPLIT]
     self.assertIsInstance(train_episode, providers.EpisodeDataset)
 
     # This isn't really a test. It just checks that things don't crash...
     print(
-        episodic_trainer.sess.run([
-            episodic_trainer.train_op,
-            episodic_trainer.losses[trainer.TRAIN_SPLIT],
-            episodic_trainer.accs[trainer.TRAIN_SPLIT]
+        trainer_instance.sess.run([
+            trainer_instance.train_op,
+            trainer_instance.losses[trainer.TRAIN_SPLIT],
+            trainer_instance.accuracies[trainer.TRAIN_SPLIT]
         ]))
 
 
