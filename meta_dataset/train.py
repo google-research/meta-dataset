@@ -58,7 +58,8 @@ tf.flags.DEFINE_string('summary_dir',
 tf.flags.DEFINE_bool(
     'reload_checkpoint_gin_config', False,
     'Whether to reload an operative Gin configuration along with a checkpoint.')
-
+tf.flags.DEFINE_string('records_root_dir', '',
+                       'Root directory containing a subdirectory per dataset.')
 tf.flags.DEFINE_bool(
     'is_training', True, 'Whether we are in the training phase. '
     'Used to control whether to perform training or evaluation.')

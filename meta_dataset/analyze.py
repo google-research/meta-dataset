@@ -101,7 +101,8 @@ tf.flags.DEFINE_enum(
 tf.flags.DEFINE_bool(
     'force_recompute', False, 'Whether to always re-compute (and overwrite) '
     'the dictionaries regardless of whether they have already been computed.')
-
+tf.flags.DEFINE_string('records_root_dir', '',
+                       'Root directory containing a subdirectory per dataset.')
 FLAGS = tf.flags.FLAGS
 
 

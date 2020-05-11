@@ -31,6 +31,8 @@ from meta_dataset.data import providers
 import numpy as np
 import tensorflow.compat.v1 as tf
 
+tf.flags.DEFINE_string('records_root_dir', '',
+                       'Root directory containing a subdirectory per dataset.')
 FLAGS = flags.FLAGS
 
 

@@ -35,11 +35,6 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-# Global records root directory, for all datasets (except diagnostics).
-tf.flags.DEFINE_string('records_root_dir', '',
-                       'Root directory containing a subdirectory per dataset.')
-FLAGS = tf.flags.FLAGS
-
 
 def get_classes(split, classes_per_split):
   """Gets the sequence of class labels for a split.
