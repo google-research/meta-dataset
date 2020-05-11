@@ -3,7 +3,7 @@ include 'meta_dataset/learn/gin/models/baseline_config.gin'
 BatchSplitReaderGetReader.add_dataset_offset = True
 
 # Backbone hypers.
-Trainer.embedding_network = 'resnet'
+Learner.embedding_fn = 'resnet'
 Trainer.checkpoint_to_restore = ''
 Trainer.pretrained_source = 'scratch'
 

@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
 
 # Backbone hypers.
-Trainer.embedding_network = 'resnet'
+Learner.embedding_fn = 'resnet'
 Trainer.pretrained_source = 'scratch'
 
 # Model hypers.
