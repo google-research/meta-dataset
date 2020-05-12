@@ -66,6 +66,10 @@ TRAIN_SPLIT = 'train'
 VALID_SPLIT = 'valid'
 TEST_SPLIT = 'test'
 
+FLAGS = tf.flags.FLAGS
+
+
+
 
 class UnexpectedSplitError(ValueError):
 
@@ -454,7 +458,6 @@ class Trainer(object):
     self.predictions = dict(zip(self.required_splits, predictions))
     self.losses = dict(zip(self.required_splits, losses))
     self.accuracies = dict(zip(self.required_splits, accuracies))
-
 
     # Set self.way, self.shots to Tensors for the way/shots of the next episode.
     self.set_way_shots_classes_logits_targets()

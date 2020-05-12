@@ -40,7 +40,9 @@ from __future__ import print_function
 import json
 import os
 
+from absl import app
 from absl import logging
+import gin
 import gin.tf
 from meta_dataset import data
 from meta_dataset import trainer
@@ -257,6 +259,9 @@ def main(unused_argv):
     trainer_instance.summary_writer.close()
 
 
+program = main
+
+
 if __name__ == '__main__':
   logging.set_verbosity(logging.INFO)
-  tf.app.run(main)
+  app.run(program)
