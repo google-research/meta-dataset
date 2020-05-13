@@ -450,7 +450,8 @@ class Trainer(object):
       self.learners[split] = self.create_learner(
           is_training=learner_is_training,
           learner_class=learner_class,
-          episode_or_batch=self.next_data[split])
+          episode_or_batch=self.next_data[split],
+          split=get_split_enum(split))
 
     # Build the prediction, loss and accuracy graphs for each learner.
     predictions, losses, accuracies = zip(
@@ -555,10 +556,10 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.summary_dir):
         tf.io.gfile.makedirs(self.summary_dir)
 
-  def create_learner(self, is_training, learner_class, episode_or_batch):
-    """Instantiates a Learner."""
+  def create_learner(self, is_training, learner_class, episode_or_batch, split):
+    """Instantiates a `Learner`."""
     if issubclass(learner_class, learner_lib.BatchLearner):
-      logit_dim = self._get_num_total_classes()
+      logit_dim = self._get_num_total_classes(split)
     elif issubclass(learner_class, learner_lib.EpisodicLearner):
       logit_dim = (
           self.train_episode_config.max_ways
@@ -1194,13 +1195,9 @@ class Trainer(object):
     split_eval_summaries.append(targets_summary)
     return split_eval_summaries
 
-  def _get_num_total_classes(self):
-    """Returns total number of classes in the benchmark."""
-    # Total class is needed because for ImageNet instead of linearly assigning
-    # class id's we use the hierarchy to do this, thus the assumption:
-    # {train_ids} < {val_ids} < {test_ids} doesn't hold.
+  def _get_num_total_classes(self, split):
+    """Returns the total number of classes in a split of the benchmark."""
     total_classes = 0
     for dataset_spec in self.benchmark_spec.dataset_spec_list:
-      for split in learning_spec.Split:
-        total_classes += len(dataset_spec.get_classes(split))
+      total_classes += len(dataset_spec.get_classes(split))
     return total_classes
