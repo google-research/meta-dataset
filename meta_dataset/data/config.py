@@ -31,8 +31,13 @@ import gin.tf
 class DataConfig(object):
   """Common configuration options for creating data processing pipelines."""
 
-  def __init__(self, image_height, shuffle_buffer_size, read_buffer_size_bytes,
-               num_prefetch):
+  def __init__(
+      self,
+      image_height,
+      shuffle_buffer_size,
+      read_buffer_size_bytes,
+      num_prefetch,
+  ):
     """Initialize a DataConfig.
 
     Args:

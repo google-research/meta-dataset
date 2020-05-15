@@ -5,6 +5,7 @@ include 'meta_dataset/learn/gin/setups/data_config_common.gin'
 
 # If we decode features then change the lines below to use FeatureDecoder.
 process_episode.support_decoder = @support/ImageDecoder()
+process_dumped_episode.support_decoder = @support/ImageDecoder()
 support/ImageDecoder.data_augmentation = @support/DataAugmentation()
 support/DataAugmentation.enable_jitter = True
 support/DataAugmentation.jitter_amount = 0
@@ -12,6 +13,7 @@ support/DataAugmentation.enable_gaussian_noise = True
 support/DataAugmentation.gaussian_noise_std = 0.0
 
 process_episode.query_decoder = @query/ImageDecoder()
+process_dumped_episode.query_decoder = @query/ImageDecoder()
 query/ImageDecoder.data_augmentation = @query/DataAugmentation()
 query/DataAugmentation.enable_jitter = False
 query/DataAugmentation.jitter_amount = 0
@@ -24,3 +26,4 @@ batch/DataAugmentation.enable_jitter = True
 batch/DataAugmentation.jitter_amount = 0
 batch/DataAugmentation.enable_gaussian_noise = True
 batch/DataAugmentation.gaussian_noise_std = 0.0
+

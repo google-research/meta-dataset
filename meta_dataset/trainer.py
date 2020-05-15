@@ -27,7 +27,9 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import functools
 import os
+import re
 
 from absl import logging
 import gin.tf
@@ -36,6 +38,7 @@ from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
+
 import numpy as np
 import six
 from six.moves import range
@@ -84,6 +87,7 @@ class UnexpectedSplitError(ValueError):
 @gin.configurable('benchmark')
 def get_datasets_and_restrictions(train_datasets='',
                                   eval_datasets='',
+                                  use_dumped_episodes=False,
                                   restrict_classes=None,
                                   restrict_num_per_class=None):
   """Gets the list of dataset names and possible restrictions on their classes.
@@ -91,6 +95,9 @@ def get_datasets_and_restrictions(train_datasets='',
   Args:
     train_datasets: A string of comma-separated dataset names for training.
     eval_datasets: A string of comma-separated dataset names for evaluation.
+    use_dumped_episodes: bool, if True `eval_datasets` are prefixed with
+      `dumped` to trigger evaluation on dumped episodes instead of on the fly
+      sampling.
     restrict_classes: If provided, a dict that maps dataset names to a dict that
       specifies for each of `TRAIN_SPLIT`, `VALID_SPLIT` and `TEST_SPLIT` the
       number of classes to restrict to. This can lead to some classes of a
@@ -112,7 +119,8 @@ def get_datasets_and_restrictions(train_datasets='',
 
   train_datasets = [d.strip() for d in train_datasets.split(',')]
   eval_datasets = [d.strip() for d in eval_datasets.split(',')]
-
+  if use_dumped_episodes:
+    eval_datasets = ['dumped_%s' % ds for ds in eval_datasets]
   return train_datasets, eval_datasets, restrict_classes, restrict_num_per_class
 
 
@@ -594,10 +602,11 @@ class Trainer(object):
      splits_to_contribute) = [], [], [], []
     seen_datasets = set()
 
+    eval_dataset_list = self.eval_dataset_list
     if self.is_training:
-      benchmark_datasets = self.train_dataset_list + self.eval_dataset_list
+      benchmark_datasets = self.train_dataset_list + eval_dataset_list
     else:
-      benchmark_datasets = self.eval_dataset_list
+      benchmark_datasets = eval_dataset_list
 
     if isinstance(records_root_dir, list):
       if len(records_root_dir) != len(benchmark_datasets):
@@ -666,11 +675,11 @@ class Trainer(object):
         data_spec.initialize(restricted_classes_per_split)
 
         # Log the applied restrictions.
-        tf.logging.info('Restrictions for dataset {}:'.format(dataset_name))
+        logging.info('Restrictions for dataset %s:', dataset_name)
         for split in list(splits):
           num_classes = data_spec.get_classes(get_split_enum(split))
-          tf.logging.info('\t split {} is restricted to {} classes'.format(
-              split, num_classes))
+          logging.info('\t split %s is restricted to %d classes', split,
+                       num_classes)
 
       # Add this dataset to the benchmark.
       logging.info('Adding dataset %s', data_spec.name)
@@ -897,6 +906,7 @@ class Trainer(object):
           '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
           'but received {}.'.format(learner_class))
 
+
   def _build_episode(self, split):
     """Builds an EpisodeDataset containing the next data for "split".
 
@@ -975,7 +985,6 @@ class Trainer(object):
           num_prefetch=num_prefetch,
           image_size=image_size,
           num_to_take=num_per_class)
-
     data_pipeline = apply_dataset_options(data_pipeline)
 
     iterator = data_pipeline.make_one_shot_iterator()
@@ -1151,7 +1160,6 @@ class Trainer(object):
 
     mean_acc = np.mean(accuracies)
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
-
     if not self.is_training:
       # Logging during training is handled by self.train() instead.
       logging.info('Accuracy on the meta-%s split: %f, +/- %f.\n', split,
