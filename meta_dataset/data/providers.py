@@ -114,12 +114,14 @@ class EpisodeDataset(
     return tf.one_hot(self.test_labels, self.way)
 
 
-class Batch(collections.namedtuple('Batch', 'images, labels')):
+class Batch(collections.namedtuple('Batch', 'images, labels, n_classes')):
   """Wraps an batch's data and facilitates creation of feed dict.
 
     Args:
       images: a Tensor of images of shape [self.batch_size] + image shape.
       labels: a Tensor of labels of shape [self.batch_size].
+      n_classes: a scalar int Tensor, the total number of available classes
+        (labels). Used to express targets as 1-hot vectors.
   """
 
   @property
@@ -127,11 +129,10 @@ class Batch(collections.namedtuple('Batch', 'images, labels')):
     """Compute the way of the episode.
 
     Returns:
-      way: An int constant tensor. The number of classes in the episode.
+      way: An int, the number of possible classes in the dataset.
     """
-    episode_classes, _ = tf.unique(self.labels)
-    return tf.size(episode_classes)
+    return self.n_classes
 
   @property
   def onehot_labels(self):
-    return tf.to_int32(tf.one_hot(self.labels, self.way))
+    return tf.one_hot(self.labels, self.way)

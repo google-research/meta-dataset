@@ -1057,8 +1057,22 @@ class Trainer(object):
 
     data_pipeline = apply_dataset_options(data_pipeline)
     iterator = data_pipeline.make_one_shot_iterator()
-    (images, class_ids), _ = iterator.get_next()
-    return providers.Batch(images=images, labels=class_ids)
+    (images, class_ids), dataset_index = iterator.get_next()
+
+    # The number of available classes for each dataset
+    all_n_classes = [
+        len(dataset_spec.get_classes(get_split_enum(split)))
+        for dataset_spec in dataset_spec_list
+    ]
+    if len(dataset_spec_list) == 1:
+      n_classes = all_n_classes[0]
+    elif gin.query_parameter('BatchSplitReaderGetReader.add_dataset_offset'):
+      # The total number of classes is the sum for all datasets
+      n_classes = sum(all_n_classes)
+    else:
+      # The number of classes is the one of the current dataset
+      n_classes = tf.convert_to_tensor(all_n_classes)[dataset_index]
+    return providers.Batch(images=images, labels=class_ids, n_classes=n_classes)
 
   def get_train_op(self, global_step):
     """Returns the operation that performs a training update."""
