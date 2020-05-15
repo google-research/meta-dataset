@@ -444,6 +444,9 @@ class Trainer(object):
     self.next_data = dict(
         zip(self.required_splits, map(self.build_data, self.required_splits)))
 
+    # Create the global step to pass to the learners.
+    global_step = tf.train.get_or_create_global_step()
+
     # Initialize the learners.
     self.learners = {}
     for split in self.required_splits:
@@ -458,12 +461,12 @@ class Trainer(object):
       self.learners[split] = self.create_learner(
           is_training=learner_is_training,
           learner_class=learner_class,
-          episode_or_batch=self.next_data[split],
           split=get_split_enum(split))
 
     # Build the prediction, loss and accuracy graphs for each learner.
-    predictions, losses, accuracies = zip(
-        *[self.build_learner(split) for split in self.required_splits])
+    predictions, losses, accuracies = zip(*[
+        self.build_learner(split, global_step) for split in self.required_splits
+    ])
     self.predictions = dict(zip(self.required_splits, predictions))
     self.losses = dict(zip(self.required_splits, losses))
     self.accuracies = dict(zip(self.required_splits, accuracies))
@@ -474,7 +477,6 @@ class Trainer(object):
     # Get an optimizer and the operation for meta-training.
     self.train_op = None
     if self.is_training:
-      global_step = tf.train.get_or_create_global_step()
       learning_rate = self.learning_rate
       if self.decay_learning_rate:
         learning_rate = tf.train.exponential_decay(
@@ -496,13 +498,23 @@ class Trainer(object):
     self.initialize_saver()
     self.create_summary_writer()
 
-  def build_learner(self, split):
+  def build_learner(self, split, global_step):
     """Compute predictions, losses and accuracies of the learner for split."""
+
+    # TODO(eringrant): Pass `global_step` and `summaries_collection` to
+    # `Learner.forward_pass` when the new interface is in use.
+    summaries_collection = '{}/learner_summaries'.format(split)
+    del global_step
+    del summaries_collection
+
     with tf.name_scope(split):
-      prediction = self.learners[split].forward_pass()
-      loss = self.learners[split].compute_loss()
-      accuracy = self.learners[split].compute_accuracy()
-    return prediction, loss, accuracy
+      data = self.next_data[split]
+      predictions = self.learners[split].forward_pass(data=data)
+      loss = self.learners[split].compute_loss(
+          predictions=predictions, onehot_labels=data.onehot_labels)
+      accuracy = self.learners[split].compute_accuracy(
+          predictions=predictions, labels=data.labels)
+      return predictions, loss, accuracy
 
   def set_way_shots_classes_logits_targets(self):
     """Sets the Tensors for the info about the learner's next episode."""
@@ -564,7 +576,7 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.summary_dir):
         tf.io.gfile.makedirs(self.summary_dir)
 
-  def create_learner(self, is_training, learner_class, episode_or_batch, split):
+  def create_learner(self, is_training, learner_class, split):
     """Instantiates a `Learner`."""
     if issubclass(learner_class, learner_lib.BatchLearner):
       logit_dim = self._get_num_total_classes(split)
@@ -580,7 +592,6 @@ class Trainer(object):
     return learner_class(
         is_training=is_training,
         logit_dim=logit_dim,
-        data=episode_or_batch,
     )
 
   def get_benchmark_specification(self, records_root_dir=None):

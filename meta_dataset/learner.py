@@ -1126,7 +1126,6 @@ class Learner(object):
       transductive_batch_norm,
       backprop_through_moments,
       embedding_fn,
-      data,
       weight_decay,
   ):
     """Initializes a Learner.
@@ -1146,28 +1145,55 @@ class Learner(object):
       backprop_through_moments: Whether to allow gradients to flow through the
         given support set moments. Only applies to non-transductive batch norm.
       embedding_fn: A string; the name of the function that embeds images.
-      data: An EpisodeDataset or Batch.
       weight_decay: coefficient for L2 regularization.
-
-    Returns:
-      A loss (potentially dependent on ops, e.g. for updating EMA), predictions.
     """
     self.is_training = is_training
     self.logit_dim = logit_dim
     self.transductive_batch_norm = transductive_batch_norm
     self.backprop_through_moments = backprop_through_moments
     self.embedding_fn = NAME_TO_EMBEDDING_NETWORK[embedding_fn]
-    self.data = data
     self.weight_decay = weight_decay
 
     if self.transductive_batch_norm:
       logging.info('Using transductive batch norm!')
 
-  def compute_loss(self):
-    """Returns a Tensor representing the loss."""
+  def compute_loss(self, onehot_labels, predictions):
+    """Computes the CE loss of `predictions` with respect to `onehot_labels`.
 
-  def forward_pass(self):
-    """Constructs the computational graph for this Learner's predictions."""
+    Args:
+      onehot_labels: A `tf.Tensor` containing the the class labels; each vector
+        along the class dimension should hold a valid probability distribution.
+      predictions: A `tf.Tensor` containing the the class predictions,
+        interpreted as unnormalized log probabilities.
+
+    Returns:
+       A `tf.Tensor` representing the average loss.
+    """
+    cross_entropy_loss = tf.losses.softmax_cross_entropy(
+        onehot_labels=onehot_labels, logits=predictions)
+    regularization = tf.reduce_sum(
+        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+    loss = cross_entropy_loss + self.weight_decay * regularization
+    return loss
+
+  def compute_accuracy(self, labels, predictions):
+    """Computes the accuracy of `predictions` with respect to `labels`.
+
+    Args:
+      labels: A `tf.Tensor` containing the the class labels; each vector along
+        the class dimension should hold a valid probability distribution.
+      predictions: A `tf.Tensor` containing the the class predictions,
+        interpreted as unnormalized log probabilities.
+
+    Returns:
+       A `tf.Tensor` representing the average accuracy.
+    """
+    correct = tf.equal(labels, tf.to_int32(tf.argmax(predictions, -1)))
+    return tf.reduce_mean(tf.cast(correct, tf.float32))
+
+  def forward_pass(self, data):
+    """Returns the (query if episodic) logits."""
+    raise NotImplementedError
 
 
 class EpisodicLearner(Learner):
@@ -1183,74 +1209,9 @@ class BatchLearner(Learner):
 
 
 @gin.configurable
-class RelationNetworkLearner(EpisodicLearner):
-  """A Relation Network."""
-
-  def forward_pass(self):
-    """Embeds all (training and testing) images of the episode."""
-    # Compute the support set's mean and var and use these as the moments for
-    # batch norm on the query set.
-    train_embeddings = self.embedding_fn(
-        self.data.train_images, self.is_training, keep_spatial_dims=True)
-    self.train_embeddings = train_embeddings['embeddings']
-    support_set_moments = None
-    if not self.transductive_batch_norm:
-      support_set_moments = train_embeddings['moments']
-    test_embeddings = self.embedding_fn(
-        self.data.test_images,
-        self.is_training,
-        moments=support_set_moments,
-        backprop_through_moments=self.backprop_through_moments,
-        keep_spatial_dims=True)
-    self.test_embeddings = test_embeddings['embeddings']
-    return self.test_embeddings
-
-  def compute_relations(self):
-    """Computes the relation score of each test example to each prototype."""
-    # [n_test, 21, 21, n_features].
-    test_embed_shape = self.test_embeddings.shape.as_list()
-    n_feature = test_embed_shape[3]
-    out_shape = test_embed_shape[1:3]
-    n_test = tf.shape(self.test_embeddings)[0]
-
-    # [n_test, num_clases, 21, 21, n_feature].
-    # It is okay one of the elements in the list to be tensor.
-    prototype_extended = tf.tile(
-        tf.expand_dims(self.prototypes, 0), [n_test, 1, 1, 1, 1])
-    # [num_clases, n_test, 21, 21, n_feature].
-    test_f_extended = tf.tile(
-        tf.expand_dims(self.test_embeddings, 1), [1, self.data.way, 1, 1, 1])
-    relation_pairs = tf.concat((prototype_extended, test_f_extended), 4)
-    # relation_pairs.shape.as_list()[-3:] == [-1] + out_shape + [n_feature*2]
-    relation_pairs = tf.reshape(relation_pairs,
-                                [-1] + out_shape + [n_feature * 2])
-    self.relationnet_dict = _relation_net(relation_pairs, 'relationnet')
-    relations = tf.reshape(self.relationnet_dict['output'], [-1, self.data.way])
-    return relations
-
-  def compute_loss(self):
-    """Returns the loss of the Prototypical Network."""
-
-    self.prototypes = compute_prototypes(self.train_embeddings,
-                                         self.data.onehot_train_labels)
-    self.test_logits = self.compute_relations()
-    mse_loss = tf.losses.mean_squared_error(self.data.onehot_test_labels,
-                                            self.test_logits)
-    regularization = tf.reduce_sum(
-        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    loss = mse_loss + self.weight_decay * regularization
-    return loss
-
-  def compute_accuracy(self):
-    """Computes the accuracy on the given episode."""
-    self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
-    correct = tf.equal(self.data.test_labels, self.test_predictions)
-    return tf.reduce_mean(tf.cast(correct, tf.float32))
-
-
-@gin.configurable
 class PrototypicalNetworkLearner(EpisodicLearner):
   """A Prototypical Network."""
+  keep_spatial_dims = False
 
   def __init__(self, **kwargs):
     super(PrototypicalNetworkLearner, self).__init__(**kwargs)
@@ -1258,60 +1219,63 @@ class PrototypicalNetworkLearner(EpisodicLearner):
     # output dimensionality.
     delattr(self, 'logit_dim')
 
-  def forward_pass(self):
-    """Embeds all (training and testing) images of the episode."""
+  def forward_pass(self, data):
+    """Embeds all (training and testing) images of the episode.
+
+    Args:
+      data: A `meta_dataset.providers.EpisodeDataset` containing the data for
+        the episode.
+
+    Returns:
+      The predictions for the query set within the episode.
+    """
     # Compute the support set's mean and var and use these as the moments for
     # batch norm on the query set.
-    train_embeddings = self.embedding_fn(self.data.train_images,
-                                         self.is_training)
-    self.train_embeddings = train_embeddings['embeddings']
+    train_embeddings_dict = self.embedding_fn(
+        data.train_images,
+        self.is_training,
+        keep_spatial_dims=self.keep_spatial_dims)
+    train_embeddings = train_embeddings_dict['embeddings']
     support_set_moments = None
     if not self.transductive_batch_norm:
-      support_set_moments = train_embeddings['moments']
-    test_embeddings = self.embedding_fn(
-        self.data.test_images,
+      support_set_moments = train_embeddings_dict['moments']
+    test_embeddings_dict = self.embedding_fn(
+        data.test_images,
         self.is_training,
         moments=support_set_moments,
+        keep_spatial_dims=self.keep_spatial_dims,
         backprop_through_moments=self.backprop_through_moments)
-    self.test_embeddings = test_embeddings['embeddings']
-    return self.test_embeddings
+    test_embeddings = test_embeddings_dict['embeddings']
 
-  def compute_logits(self):
-    """Computes the negative distances of each test point to each prototype."""
+    test_logits = self.compute_logits(
+        train_embeddings,
+        test_embeddings,
+        data.onehot_train_labels,
+    )
+
+    return test_logits
+
+  def compute_logits(self, support_embeddings, query_embeddings,
+                     onehot_support_labels):
+    """Computes the negative distances of each query point to each prototype."""
+
     # [num test images, 1, embedding size].
-    test_embeddings = tf.expand_dims(self.test_embeddings, 1)
+    query_embeddings = tf.expand_dims(query_embeddings, 1)
+
+    prototypes = compute_prototypes(support_embeddings, onehot_support_labels)
 
     # [1, num_clases, embedding_size].
-    prototypes = tf.expand_dims(self.prototypes, 0)
+    prototypes = tf.expand_dims(prototypes, 0)
 
     # Squared euclidean distances between each test embedding / prototype pair.
-    distances = tf.reduce_sum(tf.square(test_embeddings - prototypes), 2)
-    self.test_logits = -distances
-    return self.test_logits
-
-  def compute_loss(self):
-    """Returns the loss of the Prototypical Network."""
-    self.prototypes = compute_prototypes(self.train_embeddings,
-                                         self.data.onehot_train_labels)
-    self.test_logits = self.compute_logits()
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=self.data.test_labels, logits=self.test_logits)
-    cross_entropy_loss = tf.reduce_mean(loss)
-    regularization = tf.reduce_sum(
-        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    loss = cross_entropy_loss + self.weight_decay * regularization
-    return loss
-
-  def compute_accuracy(self):
-    """Computes the accuracy on the given episode."""
-    self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
-    correct = tf.equal(self.data.test_labels, self.test_predictions)
-    return tf.reduce_mean(tf.cast(correct, tf.float32))
+    distances = tf.reduce_sum(tf.square(query_embeddings - prototypes), 2)
+    return -distances
 
 
 @gin.configurable
 class MatchingNetworkLearner(PrototypicalNetworkLearner):
   """A Matching Network."""
+  keep_spatial_dims = False
 
   def __init__(self, exact_cosine_distance, **kwargs):
     """Initializes the Matching Networks instance.
@@ -1325,7 +1289,8 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
     self.exact_cosine_distance = exact_cosine_distance
     super(MatchingNetworkLearner, self).__init__(**kwargs)
 
-  def compute_logits(self):
+  def compute_logits(self, support_embeddings, query_embeddings,
+                     onehot_support_labels):
     """Computes the class logits.
 
     Probabilities are computed as a weighted sum of one-hot encoded training
@@ -1333,17 +1298,21 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
     proportional to the (potentially semi-normalized) cosine distance between
     the embeddings of the two examples.
 
+    Args:
+      support_embeddings: A Tensor of size [num_train_images, embedding dim].
+      query_embeddings: A Tensor of size [num_test_images, embedding dim].
+      onehot_support_labels: A Tensor of size [batch size, way].
+
     Returns:
-      The class logits as a [num_test_images, way] matrix.
+      The query set logits as a [num_test_images, way] matrix.
     """
     # Undocumented in the paper, but *very important*: *only* the support set
     # embeddings is L2-normalized, which means that the distance is not exactly
     # a cosine distance. For comparison we also allow for the actual cosine
     # distance to be computed, which is controlled with the
     # `exact_cosine_distance` instance attribute.
-    train_embeddings = tf.nn.l2_normalize(
-        self.train_embeddings, 1, epsilon=1e-3)
-    test_embeddings = self.test_embeddings
+    train_embeddings = tf.nn.l2_normalize(support_embeddings, 1, epsilon=1e-3)
+    test_embeddings = query_embeddings
     if self.exact_cosine_distance:
       test_embeddings = tf.nn.l2_normalize(test_embeddings, 1, epsilon=1e-3)
     # [num_test_images, num_train_images]
@@ -1352,20 +1321,59 @@ class MatchingNetworkLearner(PrototypicalNetworkLearner):
     attention = tf.nn.softmax(similarities)
 
     # [num_test_images, way]
-    probs = tf.matmul(attention,
-                      tf.cast(self.data.onehot_train_labels, tf.float32))
-    self.test_logits = tf.log(probs)
-    return self.test_logits
+    probs = tf.matmul(attention, tf.cast(onehot_support_labels, tf.float32))
+    return tf.log(probs)
 
-  def compute_loss(self):
-    """Returns the loss of the Matching Network."""
-    self.test_logits = self.compute_logits()
-    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=self.data.test_labels, logits=self.test_logits)
-    cross_entropy_loss = tf.reduce_mean(loss)
+
+@gin.configurable
+class RelationNetworkLearner(PrototypicalNetworkLearner):
+  """A Relation Network."""
+  keep_spatial_dims = True
+
+  def compute_logits(self, support_embeddings, query_embeddings,
+                     onehot_support_labels):
+    """Computes the relation score of each query example to each prototype."""
+    # [n_test, 21, 21, n_features].
+    test_embed_shape = query_embeddings.shape.as_list()
+    n_feature = test_embed_shape[3]
+    out_shape = test_embed_shape[1:3]
+    n_test = tf.shape(query_embeddings)[0]
+
+    # [n_test, num_clases, 21, 21, n_feature].
+    # It is okay one of the elements in the list to be tensor.
+    prototypes = compute_prototypes(support_embeddings, onehot_support_labels)
+
+    prototype_extended = tf.tile(
+        tf.expand_dims(prototypes, 0), [n_test, 1, 1, 1, 1])
+    # [num_clases, n_test, 21, 21, n_feature].
+    test_f_extended = tf.tile(
+        tf.expand_dims(query_embeddings, 1),
+        [1, tf.shape(onehot_support_labels)[-1], 1, 1, 1])
+    relation_pairs = tf.concat((prototype_extended, test_f_extended), 4)
+    # relation_pairs.shape.as_list()[-3:] == [-1] + out_shape + [n_feature*2]
+    relation_pairs = tf.reshape(relation_pairs,
+                                [-1] + out_shape + [n_feature * 2])
+    relationnet_dict = _relation_net(relation_pairs, 'relationnet')
+    way = tf.shape(onehot_support_labels)[-1]
+    relations = tf.reshape(relationnet_dict['output'], [-1, way])
+    return relations
+
+  def compute_loss(self, onehot_labels, predictions):
+    """Computes the MSE loss of `predictions` with respect to `onehot_labels`.
+
+    Args:
+      onehot_labels: A `tf.Tensor` containing the the class labels; each vector
+        along the class dimension should hold a valid probability distribution.
+      predictions: A `tf.Tensor` containing the the class predictions,
+        interpreted as unnormalized log probabilities.
+
+    Returns:
+       A `tf.Tensor` representing the average loss.
+    """
+    mse_loss = tf.losses.mean_squared_error(onehot_labels, predictions)
     regularization = tf.reduce_sum(
         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    loss = cross_entropy_loss + self.weight_decay * regularization
+    loss = mse_loss + self.weight_decay * regularization
     return loss
 
 
@@ -1522,34 +1530,43 @@ class BaselineLearner(BatchLearner):
 
     super(BaselineLearner, self).__init__(**kwargs)
 
-  def forward_pass(self):
+  def forward_pass(self, data):
     if self.is_training:
-      images = self.data.images
+      images = data.images
       embeddings_params_moments = self.embedding_fn(images, self.is_training)
-      self.train_embeddings = embeddings_params_moments['embeddings']
-      self.train_embeddings_var_dict = embeddings_params_moments['params']
+      train_embeddings = embeddings_params_moments['embeddings']
+      train_logits = self.forward_pass_fc(train_embeddings)
+      return train_logits
     else:
       train_embeddings_params_moments = self.embedding_fn(
-          self.data.train_images, self.is_training)
-      self.train_embeddings = train_embeddings_params_moments['embeddings']
-      self.train_embeddings_var_dict = train_embeddings_params_moments['params']
+          data.train_images, self.is_training)
+      train_embeddings = train_embeddings_params_moments['embeddings']
       support_set_moments = None
       if not self.transductive_batch_norm:
         support_set_moments = train_embeddings_params_moments['moments']
       test_embeddings = self.embedding_fn(
-          self.data.test_images,
+          data.test_images,
           self.is_training,
           moments=support_set_moments,
           backprop_through_moments=self.backprop_through_moments)
-      self.test_embeddings = test_embeddings['embeddings']
-      return self.test_embeddings
+      test_embeddings = test_embeddings['embeddings']
+
+      # TODO(eringrant): The `BaselineFinetuneLearner` subclass is not yet
+      # refactored to obey the interface of `Learner.compute_logits`.
+      if isinstance(self, BaselineFinetuneLearner):
+        test_logits = self.compute_logits(data)  # pylint: disable=no-value-for-parameter
+      else:
+        test_logits = self.compute_logits(train_embeddings, test_embeddings,
+                                          data.onehot_train_labels)
+
+      return test_logits
 
   def forward_pass_fc(self, embeddings):
     """Passes the provided embeddings through the fc layer to get the logits.
 
     Args:
       embeddings: A Tensor of the penultimate layer activations as computed by
-        self.forward_pass.
+        BaselineLearner.forward_pass.
 
     Returns:
       The fc layer activations.
@@ -1563,84 +1580,53 @@ class BaselineLearner(BatchLearner):
                                         self.use_weight_norm)
       return logits
 
-  def compute_logits(self):
-    """Returns the logits.
+  def compute_logits(self, support_embeddings, query_embeddings,
+                     onehot_support_labels):
+    """Computes the class logits for the episode.
+
+    Args:
+      support_embeddings: A Tensor of size [num_train_images, embedding dim].
+      query_embeddings: A Tensor of size [num_test_images, embedding dim].
+      onehot_support_labels: A Tensor of size [batch size, way].
+
+    Returns:
+      The query set logits as a [num_test_images, way] matrix.
 
     Raises:
       ValueError: Distance must be one of l2 or cosine.
     """
-    if self.is_training:
-      logits = self.forward_pass_fc(self.train_embeddings)
+
+    if self.knn_in_fc:
+      # Recompute the train and test embeddings that were originally computed
+      # in self.forward_pass() to be the fc layer activations.
+      support_embeddings = self.forward_pass_fc(support_embeddings)
+      query_embeddings = self.forward_pass_fc(query_embeddings)
+
+    # ------------------------ K-NN look up -------------------------------
+    # For each testing example in an episode, we use its embedding
+    # vector to look for the closest neighbor in all the training examples'
+    # embeddings from the same episode and then assign the training example's
+    # class label to the testing example as the predicted class label for it.
+    if self.distance == 'l2':
+      #  [1, num_support, embed_dims]
+      support_embeddings = tf.expand_dims(support_embeddings, axis=0)
+      #  [num_query, 1, embed_dims]
+      query_embeddings = tf.expand_dims(query_embeddings, axis=1)
+      #  [num_query, num_support]
+      distance = tf.norm(query_embeddings - support_embeddings, axis=2)
+    elif self.distance == 'cosine':
+      support_embeddings = tf.nn.l2_normalize(support_embeddings, axis=1)
+      query_embeddings = tf.nn.l2_normalize(query_embeddings, axis=1)
+      distance = -1 * tf.matmul(
+          query_embeddings, support_embeddings, transpose_b=True)
     else:
-      if self.knn_in_fc:
-        # Overwrite the train and test embeddings that were originally computed
-        # in self.forward_pass() to be the fc layer activations.
-        all_logits = self.forward_pass_fc(self.all_embeddings)
-        self.train_embeddings = all_logits[:self.num_train_images]
-        self.test_embeddings = all_logits[self.num_train_images:]
-
-      # ------------------------ K-NN look up -------------------------------
-      # For each testing example in an episode, we use its embedding
-      # vector to look for the closest neighbor in all the training examples'
-      # embeddings from the same episode and then assign the training example's
-      # class label to the testing example as the predicted class label for it.
-      if self.distance == 'l2':
-        #  [1, num_train, embed_dims]
-        train_embeddings = tf.expand_dims(self.train_embeddings, axis=0)
-        #  [num_test, 1, embed_dims]
-        test_embeddings = tf.expand_dims(self.test_embeddings, axis=1)
-        #  [num_test, num_train]
-        distance = tf.norm(test_embeddings - train_embeddings, axis=2)
-      elif self.distance == 'cosine':
-        train_embeddings = tf.nn.l2_normalize(self.train_embeddings, axis=1)
-        test_embeddings = tf.nn.l2_normalize(self.test_embeddings, axis=1)
-        distance = -1 * tf.matmul(
-            test_embeddings, train_embeddings, transpose_b=True)
-      else:
-        raise ValueError('Distance must be one of l2 or cosine.')
-      #  [num_test]
-      _, indices = tf.nn.top_k(-distance, k=1)
-      indices = tf.squeeze(indices, axis=1)
-      #  [num_test, num_classes]
-      self.test_logits = tf.gather(self.data.onehot_train_labels, indices)
-      logits = self.test_logits
-    return logits
-
-  def compute_loss(self):
-    """Computes the loss."""
-    if self.is_training:
-      self.train_logits = self.compute_logits()
-
-      # TODO(eringrant): Once cl/275672657 is submitted,
-      # `self.data.onehot_labels` can be used directly instead of the below
-      # computation.
-      labels = tf.cast(self.data.labels, tf.int64)
-      onehot_labels = tf.one_hot(labels, self.logit_dim)
-
-      with tf.name_scope('loss'):
-        cross_entropy = tf.losses.softmax_cross_entropy(
-            onehot_labels=onehot_labels, logits=self.train_logits)
-        cross_entropy = tf.reduce_mean(cross_entropy)
-        regularization = tf.reduce_sum(
-            tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-        loss = cross_entropy + self.weight_decay * regularization
-        return loss
-    else:
-      self.test_logits = self.compute_logits()
-      return tf.constant(0.0)
-
-  def compute_accuracy(self):
-    """Computes the accuracy on the given episode."""
-    if not self.is_training:
-      logits = self.test_logits
-      labels = self.data.test_labels
-    else:
-      logits = self.train_logits
-      labels = self.data.labels
-
-    predictions = tf.cast(tf.argmax(logits, 1), tf.int32)
-    correct = tf.equal(labels, predictions)
-    return tf.reduce_mean(tf.cast(correct, tf.float32))
+      raise ValueError('Distance must be one of l2 or cosine.')
+    #  [num_query]
+    _, indices = tf.nn.top_k(-distance, k=1)
+    indices = tf.squeeze(indices, axis=1)
+    #  [num_query, num_classes]
+    query_logits = tf.gather(onehot_support_labels, indices)
+    return query_logits
 
 
 @gin.configurable
@@ -1677,168 +1663,194 @@ class BaselineFinetuneLearner(BaselineLearner):
       self.finetune_opt = tf.train.AdamOptimizer(self.finetune_lr)
     super(BaselineFinetuneLearner, self).__init__(**kwargs)
 
-  def compute_logits(self):
-    """Computes the logits."""
-    logits = None
-    if self.is_training:
-      logits = self.forward_pass_fc(self.train_embeddings)
-    else:
-      # ------------------------ Finetuning -------------------------------
-      # Possibly make copies of embedding variables, if they will get modified.
-      # This is for making temporary-only updates to the embedding network
-      # which will not persist after the end of the episode.
-      make_copies = self.finetune_all_layers
-      (self.embedding_vars_keys, self.embedding_vars,
-       embedding_vars_copy_ops) = get_embeddings_vars_copy_ops(
-           self.train_embeddings_var_dict, make_copies)
-      embedding_vars_copy_op = tf.group(*embedding_vars_copy_ops)
+  def compute_logits(self, data):
+    """Computes the class logits for the episode.
 
-      # Compute the initial training loss (only for printing purposes). This
-      # line is also needed for adding the fc variables to the graph so that the
-      # tf.all_variables() line below detects them.
-      logits = self._fc_layer(self.train_embeddings)[:, 0:self.data.way]
-      finetune_loss = self._classification_loss(logits,
-                                                self.data.onehot_train_labels)
+    Args:
+      data: A `meta_dataset.providers.EpisodeDataset`.
 
-      # Decide which variables to finetune.
-      fc_vars, vars_to_finetune = [], []
-      for var in tf.trainable_variables():
-        if 'fc_finetune' in var.name:
-          fc_vars.append(var)
-          vars_to_finetune.append(var)
-      if self.finetune_all_layers:
-        vars_to_finetune.extend(self.embedding_vars)
-      self.vars_to_finetune = vars_to_finetune
-      logging.info('Finetuning will optimize variables: %s', vars_to_finetune)
+    Returns:
+      The query set logits as a [num_test_images, way] matrix.
 
-      for i in range(self.num_finetune_steps):
-        if i == 0:
-          # Randomly initialize the fc layer.
-          fc_reset = tf.variables_initializer(var_list=fc_vars)
-          # Adam related variables are created when minimize() is called.
-          # We create an unused op here to put all adam varariables under
-          # the 'adam_opt' namescope and create a reset op to reinitialize
-          # these variables before the first finetune step.
-          adam_reset = tf.no_op()
-          if self.finetune_with_adam:
-            with tf.variable_scope('adam_opt'):
-              unused_op = self.finetune_opt.minimize(
-                  finetune_loss, var_list=vars_to_finetune)
-            adam_reset = tf.variables_initializer(self.finetune_opt.variables())
-          with tf.control_dependencies(
-              [fc_reset, adam_reset, finetune_loss, embedding_vars_copy_op] +
-              vars_to_finetune):
-            print_op = tf.no_op()
-            if self.debug_log:
-              print_op = tf.print([
-                  'step: %d' % i, vars_to_finetune[0][0, 0], 'loss:',
-                  finetune_loss
-              ])
+    Raises:
+      ValueError: Distance must be one of l2 or cosine.
+    """
+    # ------------------------ Finetuning -------------------------------
+    # Possibly make copies of embedding variables, if they will get modified.
+    # This is for making temporary-only updates to the embedding network
+    # which will not persist after the end of the episode.
+    make_copies = self.finetune_all_layers
 
-            with tf.control_dependencies([print_op]):
-              # Get the operation for finetuning.
-              # (The logits and loss are returned just for printing).
-              logits, finetune_loss, finetune_op = self._get_finetune_op()
+    # TODO(eringrant): Reduce the number of times the embedding function graph
+    # is built with the same input.
+    train_embeddings_params_moments = self.embedding_fn(data.train_images,
+                                                        self.is_training)
+    train_embeddings = train_embeddings_params_moments['embeddings']
+    train_embeddings_var_dict = train_embeddings_params_moments['params']
 
-              if self.debug_log:
-                # Test logits are computed only for printing logs.
-                test_embeddings = self.embedding_fn(
-                    self.data.test_images,
-                    self.is_training,
-                    params=collections.OrderedDict(
-                        zip(self.embedding_vars_keys, self.embedding_vars)),
-                    reuse=True)['embeddings']
-                test_logits = (
-                    self._fc_layer(test_embeddings)[:, 0:self.data.way])
+    (embedding_vars_keys, embedding_vars,
+     embedding_vars_copy_ops) = get_embeddings_vars_copy_ops(
+         train_embeddings_var_dict, make_copies)
 
-        else:
-          with tf.control_dependencies([finetune_op, finetune_loss] +
-                                       vars_to_finetune):
-            print_op = tf.no_op()
-            if self.debug_log:
-              print_op = tf.print([
-                  'step: %d' % i, vars_to_finetune[0][0, 0], 'loss:',
-                  finetune_loss, 'accuracy:',
-                  self._compute_accuracy(logits, self.data.train_labels),
-                  'test accuracy:',
-                  self._compute_accuracy(test_logits, self.data.test_labels)
-              ])
+    embedding_vars_copy_op = tf.group(*embedding_vars_copy_ops)
 
-            with tf.control_dependencies([print_op]):
-              # Get the operation for finetuning.
-              # (The logits and loss are returned just for printing).
-              logits, finetune_loss, finetune_op = self._get_finetune_op()
+    # Compute the initial training loss (only for printing purposes). This
+    # line is also needed for adding the fc variables to the graph so that the
+    # tf.all_variables() line below detects them.
+    logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+    finetune_loss = self.compute_loss(
+        onehot_labels=data.onehot_train_labels,
+        predictions=logits,
+    )
 
-              if self.debug_log:
-                # Test logits are computed only for printing logs.
-                test_embeddings = self.embedding_fn(
-                    self.data.test_images,
-                    self.is_training,
-                    params=collections.OrderedDict(
-                        zip(self.embedding_vars_keys, self.embedding_vars)),
-                    reuse=True)['embeddings']
-                test_logits = (
-                    self._fc_layer(test_embeddings)[:, 0:self.data.way])
-
-      # Finetuning is now over, compute the test performance using the updated
-      # fc layer, and possibly the updated embedding network.
-      with tf.control_dependencies([finetune_op] + vars_to_finetune):
-        test_embeddings = self.embedding_fn(
-            self.data.test_images,
-            self.is_training,
-            params=collections.OrderedDict(
-                zip(self.embedding_vars_keys, self.embedding_vars)),
-            reuse=True)['embeddings']
-        test_logits = self._fc_layer(test_embeddings)[:, 0:self.data.way]
-
-        if self.debug_log:
-          # The train logits are computed only for printing.
-          train_embeddings = self.embedding_fn(
-              self.data.train_images,
-              self.is_training,
-              params=collections.OrderedDict(
-                  zip(self.embedding_vars_keys, self.embedding_vars)),
-              reuse=True)['embeddings']
-          logits = self._fc_layer(train_embeddings)[:, 0:self.data.way]
-
-        print_op = tf.no_op()
-        if self.debug_log:
-          print_op = tf.print([
-              'accuracy: ',
-              self._compute_accuracy(logits, self.data.train_labels),
-              'test accuracy: ',
-              self._compute_accuracy(test_logits, self.data.test_labels)
-          ])
-        with tf.control_dependencies([print_op]):
-          self.test_logits = self._fc_layer(test_embeddings)[:, 0:self.data.way]
-          logits = self.test_logits
-    return logits
-
-  def _get_finetune_op(self):
-    """Returns the operation for performing a finetuning step."""
+    # Decide which variables to finetune.
+    fc_vars, vars_to_finetune = [], []
+    for var in tf.trainable_variables():
+      if 'fc_finetune' in var.name:
+        fc_vars.append(var)
+        vars_to_finetune.append(var)
     if self.finetune_all_layers:
-      # Must re-do the forward pass because the embedding has changed.
-      train_embeddings = self.embedding_fn(
-          self.data.train_images,
+      vars_to_finetune.extend(embedding_vars)
+    logging.info('Finetuning will optimize variables: %s', vars_to_finetune)
+
+    for i in range(self.num_finetune_steps):
+      if i == 0:
+        # Randomly initialize the fc layer.
+        fc_reset = tf.variables_initializer(var_list=fc_vars)
+        # Adam related variables are created when minimize() is called.
+        # We create an unused op here to put all adam varariables under
+        # the 'adam_opt' namescope and create a reset op to reinitialize
+        # these variables before the first finetune step.
+        adam_reset = tf.no_op()
+        if self.finetune_with_adam:
+          with tf.variable_scope('adam_opt'):
+            unused_op = self.finetune_opt.minimize(
+                finetune_loss, var_list=vars_to_finetune)
+          adam_reset = tf.variables_initializer(self.finetune_opt.variables())
+        with tf.control_dependencies(
+            [fc_reset, adam_reset, finetune_loss, embedding_vars_copy_op] +
+            vars_to_finetune):
+          print_op = tf.no_op()
+          if self.debug_log:
+            print_op = tf.print([
+                'step: %d' % i, vars_to_finetune[0][0, 0], 'loss:',
+                finetune_loss
+            ])
+
+          with tf.control_dependencies([print_op]):
+            # Get the operation for finetuning.
+            # (The logits and loss are returned just for printing).
+            logits, finetune_loss, finetune_op = self._get_finetune_op(
+                data, embedding_vars_keys, embedding_vars, vars_to_finetune,
+                train_embeddings if not self.finetune_all_layers else None)
+
+            if self.debug_log:
+              # Test logits are computed only for printing logs.
+              test_embeddings = self.embedding_fn(
+                  data.test_images,
+                  self.is_training,
+                  params=collections.OrderedDict(
+                      zip(embedding_vars_keys, embedding_vars)),
+                  reuse=True)['embeddings']
+              test_logits = (self._fc_layer(test_embeddings)[:, 0:data.way])
+
+      else:
+        with tf.control_dependencies([finetune_op, finetune_loss] +
+                                     vars_to_finetune):
+          print_op = tf.no_op()
+          if self.debug_log:
+            print_op = tf.print([
+                'step: %d' % i,
+                vars_to_finetune[0][0, 0],
+                'loss:',
+                finetune_loss,
+                'accuracy:',
+                self.compute_accuracy(
+                    labels=data.train_labels, predictions=logits),
+                'test accuracy:',
+                self.compute_accuracy(
+                    labels=data.test_labels, predictions=test_logits),
+            ])
+
+          with tf.control_dependencies([print_op]):
+            # Get the operation for finetuning.
+            # (The logits and loss are returned just for printing).
+            logits, finetune_loss, finetune_op = self._get_finetune_op(
+                data, embedding_vars_keys, embedding_vars, vars_to_finetune,
+                train_embeddings if not self.finetune_all_layers else None)
+
+            if self.debug_log:
+              # Test logits are computed only for printing logs.
+              test_embeddings = self.embedding_fn(
+                  data.test_images,
+                  self.is_training,
+                  params=collections.OrderedDict(
+                      zip(embedding_vars_keys, embedding_vars)),
+                  reuse=True)['embeddings']
+              test_logits = (self._fc_layer(test_embeddings)[:, 0:data.way])
+
+    # Finetuning is now over, compute the test performance using the updated
+    # fc layer, and possibly the updated embedding network.
+    with tf.control_dependencies([finetune_op] + vars_to_finetune):
+      test_embeddings = self.embedding_fn(
+          data.test_images,
           self.is_training,
           params=collections.OrderedDict(
-              zip(self.embedding_vars_keys, self.embedding_vars)),
+              zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
-    else:
-      train_embeddings = self.train_embeddings
-    logits = self._fc_layer(train_embeddings)[:, 0:self.data.way]
-    finetune_loss = self._classification_loss(logits,
-                                              self.data.onehot_train_labels)
+      test_logits = self._fc_layer(test_embeddings)[:, 0:data.way]
 
+      if self.debug_log:
+        # The train logits are computed only for printing.
+        train_embeddings = self.embedding_fn(
+            data.train_images,
+            self.is_training,
+            params=collections.OrderedDict(
+                zip(embedding_vars_keys, embedding_vars)),
+            reuse=True)['embeddings']
+        logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+
+      print_op = tf.no_op()
+      if self.debug_log:
+        print_op = tf.print([
+            'accuracy:',
+            self.compute_accuracy(labels=data.train_labels, predictions=logits),
+            'test accuracy:',
+            self.compute_accuracy(
+                labels=data.test_labels, predictions=test_logits),
+        ])
+      with tf.control_dependencies([print_op]):
+        test_logits = self._fc_layer(test_embeddings)[:, 0:data.way]
+
+    return test_logits
+
+  def _get_finetune_op(self,
+                       data,
+                       embedding_vars_keys,
+                       embedding_vars,
+                       vars_to_finetune,
+                       train_embeddings=None):
+    """Returns the operation for performing a finetuning step."""
+    if train_embeddings is None:
+      train_embeddings = self.embedding_fn(
+          data.train_images,
+          self.is_training,
+          params=collections.OrderedDict(
+              zip(embedding_vars_keys, embedding_vars)),
+          reuse=True)['embeddings']
+    logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+    finetune_loss = self.compute_loss(
+        onehot_labels=data.onehot_train_labels,
+        predictions=logits,
+    )
     # Perform one step of finetuning.
     if self.finetune_with_adam:
       finetune_op = self.finetune_opt.minimize(
-          finetune_loss, var_list=self.vars_to_finetune)
+          finetune_loss, var_list=vars_to_finetune)
     else:
       # Apply vanilla gradient descent instead of Adam.
-      update_ops = gradient_descent_step(finetune_loss, self.vars_to_finetune,
-                                         True, False,
-                                         self.finetune_lr)['update_ops']
+      update_ops = gradient_descent_step(finetune_loss, vars_to_finetune, True,
+                                         False, self.finetune_lr)['update_ops']
       finetune_op = tf.group(*update_ops)
     return logits, finetune_loss, finetune_op
 
@@ -1850,24 +1862,6 @@ class BaselineFinetuneLearner(BaselineLearner):
                                         self.cosine_logits_multiplier,
                                         self.use_weight_norm)
     return logits
-
-  def _classification_loss(self, logits, onehot_labels):
-    """Computes softmax cross entropy loss."""
-    with tf.name_scope('finetuning_loss'):
-      cross_entropy = tf.losses.softmax_cross_entropy(
-          onehot_labels=onehot_labels, logits=logits)
-      cross_entropy = tf.reduce_mean(cross_entropy)
-      regularization = tf.reduce_sum(
-          tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-      loss = cross_entropy + self.weight_decay * regularization
-    return loss
-
-  def _compute_accuracy(self, logits, labels):
-    """Computes the accuracy on the given episode."""
-    predictions = tf.cast(tf.argmax(logits, 1), tf.int32)
-    correct = tf.equal(labels, predictions)
-    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-    return accuracy
 
 
 @gin.configurable
@@ -1958,19 +1952,20 @@ class MAMLLearner(EpisodicLearner):
       fc_bias = tf.pad(fc_bias, paddings, 'CONSTANT', constant_values=0)
     return fc_bias
 
-  def forward_pass(self):
+  def forward_pass(self, data):
     """Computes the test logits of MAML.
 
-    Computes the test logits of MAML on the query (test) set after running
-    meta update steps on the support (train) set.
+    Args:
+      data: An EpisodeDataset. Computes the test logits of MAML on the query
+        (test) set after running meta update steps on the support (train) set.
 
     Returns:
-      A `tf.Tensor` representing the unnormalized class probabilities.
+      The output logits for the query data in this episode.
     """
     # Have to use one-hot labels since sparse softmax doesn't allow
     # second derivatives.
     train_embeddings_ = self.embedding_fn(
-        self.data.train_images, self.is_training, reuse=tf.AUTO_REUSE)
+        data.train_images, self.is_training, reuse=tf.AUTO_REUSE)
     train_embeddings = train_embeddings_['embeddings']
     embedding_vars_dict = train_embeddings_['params']
 
@@ -2007,7 +2002,7 @@ class MAMLLearner(EpisodicLearner):
       updated_fc_vars = args[num_embedding_vars:num_embedding_vars +
                              num_fc_vars]
       train_embeddings = self.embedding_fn(
-          self.data.train_images,
+          data.train_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
@@ -2017,8 +2012,8 @@ class MAMLLearner(EpisodicLearner):
       train_logits = tf.matmul(train_embeddings,
                                updated_fc_weights) + updated_fc_bias
 
-      train_logits = train_logits[:, 0:self.data.way]
-      loss = tf.losses.softmax_cross_entropy(self.data.onehot_train_labels,
+      train_logits = train_logits[:, 0:data.way]
+      loss = tf.losses.softmax_cross_entropy(data.onehot_train_labels,
                                              train_logits)
 
       print_op = tf.no_op()
@@ -2051,14 +2046,14 @@ class MAMLLearner(EpisodicLearner):
 
     if self.proto_maml_fc_layer_init:
       train_embeddings = self.embedding_fn(
-          self.data.train_images,
+          data.train_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
 
       prototypes = compute_prototypes(train_embeddings,
-                                      self.data.onehot_train_labels)
+                                      data.onehot_train_labels)
       pmaml_fc_weights = self.proto_maml_fc_weights(
           prototypes, zero_pad_to_max_way=True)
       pmaml_fc_bias = self.proto_maml_fc_bias(
@@ -2089,14 +2084,14 @@ class MAMLLearner(EpisodicLearner):
     support_set_moments = None
     if not self.transductive_batch_norm:
       support_set_moments = self.embedding_fn(
-          self.data.train_images,
+          data.train_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
           reuse=True)['moments']
 
     test_embeddings = self.embedding_fn(
-        self.data.test_images,
+        data.test_images,
         self.is_training,
         params=collections.OrderedDict(
             zip(embedding_vars_keys, updated_embedding_vars)),
@@ -2104,20 +2099,7 @@ class MAMLLearner(EpisodicLearner):
         reuse=True,
         backprop_through_moments=self.backprop_through_moments)['embeddings']
 
-    self.test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
-                        updated_fc_bias)[:, 0:self.data.way]
-    return self.test_logits
+    test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
+                   updated_fc_bias)[:, 0:data.way]
 
-  def compute_loss(self):
-    loss = tf.losses.softmax_cross_entropy(self.data.onehot_test_labels,
-                                           self.test_logits)
-    regularization = tf.reduce_sum(
-        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    loss = loss + self.weight_decay * regularization
-    return loss
-
-  def compute_accuracy(self):
-    """Computes the accuracy on the given episode."""
-    self.test_predictions = tf.cast(tf.argmax(self.test_logits, 1), tf.int32)
-    correct = tf.equal(self.data.test_labels, self.test_predictions)
-    return tf.reduce_mean(tf.cast(correct, tf.float32))
+    return test_logits
