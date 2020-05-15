@@ -645,7 +645,7 @@ class Trainer(object):
       dataset_records_path = os.path.join(dataset_records_root, dataset_name)
       data_spec = dataset_spec_lib.load_dataset_spec(dataset_records_path)
       # Only ImageNet has a DAG ontology.
-      has_dag = (dataset_name == 'ilsvrc_2012')
+      has_dag = (dataset_name.startswith('ilsvrc_2012'))
       # Only Omniglot has a bi-level ontology.
       is_bilevel = (dataset_name == 'omniglot')
 
