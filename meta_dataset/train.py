@@ -48,6 +48,7 @@ from meta_dataset import data
 from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
 import tensorflow.compat.v1 as tf
+tf.disable_eager_execution()
 
 DEFAULT_SAVING_DIRECTORY = '/tmp/metadataset'
 
