@@ -409,8 +409,8 @@ class Trainer(object):
       else:
         eval_episode_config.num_ways = 2
 
-    self.num_train_classes = train_episode_config.num_ways
-    self.num_test_classes = eval_episode_config.num_ways
+    self.num_classes_train = train_episode_config.num_ways
+    self.num_classes_eval = eval_episode_config.num_ways
     self.num_support_train = train_episode_config.num_support
     self.num_query_train = train_episode_config.num_query
     self.num_support_eval = eval_episode_config.num_support
@@ -519,37 +519,37 @@ class Trainer(object):
     """Sets the Tensors for the info about the learner's next episode."""
     # The batch trainer receives episodes only for the valid and test splits.
     # Therefore for the train split there is no defined way and shots.
-    (way, shots, class_props, class_ids, test_logits,
-     test_targets) = [], [], [], [], [], []
+    (way, shots, class_props, class_ids, query_logits,
+     query_targets) = [], [], [], [], [], []
     for split in self.required_splits:
 
       if isinstance(self.next_data[split], providers.Batch):
-        (way_, shots_, class_props_, class_ids_, test_logits_,
-         test_targets_) = [None] * 6
+        (way_, shots_, class_props_, class_ids_, query_logits_,
+         query_targets_) = [None] * 6
       else:
         data = self.next_data[split]
         way_ = data.way
-        shots_ = data.train_shots
+        shots_ = data.support_shots
         class_ids_ = data.unique_class_ids
         class_props_ = None
         if self.eval_imbalance_dataset:
           class_props_ = compute_class_proportions(
               class_ids_, shots_, self.eval_imbalance_dataset_spec)
-        test_logits_ = self.predictions[split]
-        test_targets_ = self.next_data[split].test_labels
+        query_logits_ = self.predictions[split]
+        query_targets_ = self.next_data[split].query_labels
       way.append(way_)
       shots.append(shots_)
       class_props.append(class_props_)
       class_ids.append(class_ids_)
-      test_logits.append(test_logits_)
-      test_targets.append(test_targets_)
+      query_logits.append(query_logits_)
+      query_targets.append(query_targets_)
 
     self.way = dict(zip(self.required_splits, way))
     self.shots = dict(zip(self.required_splits, shots))
     self.class_props = dict(zip(self.required_splits, class_props))
     self.class_ids = dict(zip(self.required_splits, class_ids))
-    self.test_logits = dict(zip(self.required_splits, test_logits))
-    self.test_targets = dict(zip(self.required_splits, test_targets))
+    self.query_logits = dict(zip(self.required_splits, query_logits))
+    self.query_targets = dict(zip(self.required_splits, query_targets))
 
   def create_summary_writer(self):
     """Create summaries and writer."""
@@ -831,14 +831,14 @@ class Trainer(object):
     if split == TRAIN_SPLIT:
       return self._create_train_specification()
     else:
-      return self._create_held_out_specification(split)
+      return self._create_eval_specification(split)
 
   def _create_train_specification(self):
-    """Returns an EpisodeSpecification or BatchSpecification for training."""
+    """Returns a `BatchSpecification` or `EpisodeSpecification` for training."""
     if (issubclass(self.train_learner_class, learner_base.EpisodicLearner) or
         self.eval_split == TRAIN_SPLIT):
       return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
-                                                self.num_train_classes,
+                                                self.num_classes_train,
                                                 self.num_support_train,
                                                 self.num_query_train)
     elif issubclass(self.train_learner_class, learner_base.BatchLearner):
@@ -850,23 +850,23 @@ class Trainer(object):
           '`learner_base.BatchLearner` or `learner_base.EpisodicLearner`, '
           'but received {}.'.format(self.train_learner_class))
 
-  def _create_held_out_specification(self, split=TEST_SPLIT):
-    """Create an EpisodeSpecification for either validation or testing.
-
-    Note that testing is done episodically whether or not training was episodic.
-    This is why the different subclasses should not override this method.
+  def _create_eval_specification(self, split=TEST_SPLIT):
+    """Create an `EpisodeSpecification` for episodic evaluation.
 
     Args:
-      split: one of VALID_SPLIT or TEST_SPLIT
+      split: The split from which to generate the `EpisodeSpecification`.
 
     Returns:
-      an EpisodeSpecification.
+      An `EpisodeSpecification`.
 
     Raises:
-      ValueError: Invalid split.
+      ValueError: Invalid `split`.
     """
+    if split not in (VALID_SPLIT, TEST_SPLIT):
+      raise UnexpectedSplitError(
+          split, expected_splits=(VALID_SPLIT, TEST_SPLIT))
     split_enum = get_split_enum(split)
-    return learning_spec.EpisodeSpecification(split_enum, self.num_test_classes,
+    return learning_spec.EpisodeSpecification(split_enum, self.num_classes_eval,
                                               self.num_support_eval,
                                               self.num_query_eval)
 
@@ -918,13 +918,13 @@ class Trainer(object):
 
 
   def _build_episode(self, split):
-    """Builds an EpisodeDataset containing the next data for "split".
+    """Builds an Episode containing the next data for "split".
 
     Args:
       split: A string, either TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
 
     Returns:
-      An EpisodeDataset.
+      An Episode.
 
     Raises:
       UnexpectedSplitError: If split not as expected for this episode build.
@@ -1002,13 +1002,13 @@ class Trainer(object):
     (support_images, support_labels, support_class_ids, query_images,
      query_labels, query_class_ids) = episode
 
-    return providers.EpisodeDataset(
-        train_images=support_images,
-        test_images=query_images,
-        train_labels=support_labels,
-        test_labels=query_labels,
-        train_class_ids=support_class_ids,
-        test_class_ids=query_class_ids)
+    return providers.Episode(
+        support_images=support_images,
+        query_images=query_images,
+        support_labels=support_labels,
+        query_labels=query_labels,
+        support_class_ids=support_class_ids,
+        query_class_ids=query_class_ids)
 
   def _build_batch(self, split):
     """Builds a Batch object containing the next data for "split".
@@ -1017,7 +1017,7 @@ class Trainer(object):
       split: A string, either TRAIN_SPLIT, VALID_SPLIT, or TEST_SPLIT.
 
     Returns:
-      An EpisodeDataset.
+      An Episode.
     """
     shuffle_buffer_size = self.data_config.shuffle_buffer_size
     read_buffer_size_bytes = self.data_config.read_buffer_size_bytes
@@ -1200,7 +1200,7 @@ class Trainer(object):
     """Returns summaries of way / shot / classes/ logits / targets."""
     evaluation_summaries = []
     for split in self.required_splits:
-      if isinstance(self.next_data[split], providers.EpisodeDataset):
+      if isinstance(self.next_data[split], providers.Episode):
         evaluation_summaries.extend(self._add_eval_summaries_split(split))
     return evaluation_summaries
 
@@ -1212,10 +1212,10 @@ class Trainer(object):
                                               self.shots[split])
     classes_summary = tf.summary.tensor_summary('%s_class_ids' % split,
                                                 self.class_ids[split])
-    logits_summary = tf.summary.tensor_summary('%s_test_logits' % split,
-                                               self.test_logits[split])
-    targets_summary = tf.summary.tensor_summary('%s_test_targets' % split,
-                                                self.test_targets[split])
+    logits_summary = tf.summary.tensor_summary('%s_query_logits' % split,
+                                               self.query_logits[split])
+    targets_summary = tf.summary.tensor_summary('%s_query_targets' % split,
+                                                self.query_targets[split])
     if self.eval_imbalance_dataset:
       class_props_summary = tf.summary.tensor_summary('%s_class_props' % split,
                                                       self.class_props[split])

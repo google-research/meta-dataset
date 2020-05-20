@@ -288,32 +288,32 @@ class BaselineLearner(BatchLearner):
     if self.is_training:
       images = data.images
       embeddings_params_moments = self.embedding_fn(images, self.is_training)
-      train_embeddings = embeddings_params_moments['embeddings']
-      train_logits = self.forward_pass_fc(train_embeddings)
-      return train_logits
+      support_embeddings = embeddings_params_moments['embeddings']
+      support_logits = self.forward_pass_fc(support_embeddings)
+      return support_logits
     else:
-      train_embeddings_params_moments = self.embedding_fn(
-          data.train_images, self.is_training)
-      train_embeddings = train_embeddings_params_moments['embeddings']
+      support_embeddings_params_moments = self.embedding_fn(
+          data.support_images, self.is_training)
+      support_embeddings = support_embeddings_params_moments['embeddings']
       support_set_moments = None
       if not self.transductive_batch_norm:
-        support_set_moments = train_embeddings_params_moments['moments']
-      test_embeddings = self.embedding_fn(
-          data.test_images,
+        support_set_moments = support_embeddings_params_moments['moments']
+      query_embeddings = self.embedding_fn(
+          data.query_images,
           self.is_training,
           moments=support_set_moments,
           backprop_through_moments=self.backprop_through_moments)
-      test_embeddings = test_embeddings['embeddings']
+      query_embeddings = query_embeddings['embeddings']
 
       # TODO(eringrant): The `BaselineFinetuneLearner` subclass is not yet
       # refactored to obey the interface of `Learner.compute_logits`.
       if self.obeys_compute_logits_interface:
-        test_logits = self.compute_logits(train_embeddings, test_embeddings,
-                                          data.onehot_train_labels)
+        query_logits = self.compute_logits(support_embeddings, query_embeddings,
+                                           data.onehot_support_labels)
       else:
-        test_logits = self.compute_logits(data)  # pylint: disable=no-value-for-parameter
+        query_logits = self.compute_logits(data)  # pylint: disable=no-value-for-parameter
 
-      return test_logits
+      return query_logits
 
   def forward_pass_fc(self, embeddings):
     """Passes the provided embeddings through the fc layer to get the logits.
@@ -339,12 +339,12 @@ class BaselineLearner(BatchLearner):
     """Computes the class logits for the episode.
 
     Args:
-      support_embeddings: A Tensor of size [num_train_images, embedding dim].
-      query_embeddings: A Tensor of size [num_test_images, embedding dim].
+      support_embeddings: A Tensor of size [num_support_images, embedding dim].
+      query_embeddings: A Tensor of size [num_query_images, embedding dim].
       onehot_support_labels: A Tensor of size [batch size, way].
 
     Returns:
-      The query set logits as a [num_test_images, way] matrix.
+      The query set logits as a [num_query_images, way] matrix.
 
     Raises:
       ValueError: Distance must be one of l2 or cosine.

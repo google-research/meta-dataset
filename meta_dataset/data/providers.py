@@ -57,37 +57,37 @@ def compute_unique_class_ids(class_ids):
   return tf.unique(class_ids)[0]
 
 
-class EpisodeDataset(
+class Episode(
     collections.namedtuple(
-        'EpisodeDataset', 'train_images, test_images, '
-        'train_labels, test_labels, train_class_ids, test_class_ids')):
+        'Episode', 'support_images, query_images, '
+        'support_labels, query_labels, support_class_ids, query_class_ids')):
   """Wraps an episode's data and facilitates creation of feed dict.
 
     Args:
-      train_images: A Tensor of images for training.
-      test_images: A Tensor of images for testing.
-      train_labels: A 1D Tensor, the matching training labels (numbers between 0
+      support_images: A Tensor of images for fitting an episodic model.
+      query_images: A Tensor of images for evaluating an episodic model.
+      support_labels: A 1D Tensor, the matching support labels (numbers between
+        0 and K-1, with K the number of classes involved in the episode).
+      query_labels: A 1D Tensor, the matching query labels (numbers between 0
         and K-1, with K the number of classes involved in the episode).
-      test_labels: A 1D Tensor, the matching testing labels (numbers between 0
-        and K-1, with K the number of classes involved in the episode).
-      train_class_ids: A 1D Tensor, the matching training class ids (numbers
+      support_class_ids: A 1D Tensor, the matching support class ids (numbers
         between 0 and N-1, with N the number of classes in the full dataset).
-      test_class_ids: A 1D Tensor, the matching testing class ids (numbers
+      query_class_ids: A 1D Tensor, the matching query class ids (numbers
         between 0 and N-1, with N the number of classes in the full dataset).
   """
 
   @property
   def unique_class_ids(self):
     return compute_unique_class_ids(
-        tf.concat((self.train_class_ids, self.test_class_ids), -1))
+        tf.concat((self.support_class_ids, self.query_class_ids), -1))
 
   @property
-  def train_shots(self):
-    return compute_shot(self.way, self.train_labels)
+  def support_shots(self):
+    return compute_shot(self.way, self.support_labels)
 
   @property
-  def test_shots(self):
-    return compute_shot(self.way, self.test_labels)
+  def query_shots(self):
+    return compute_shot(self.way, self.query_labels)
 
   # TODO(evcu) We should probably calculate way from unique labels, not
   # class_ids.
@@ -98,20 +98,20 @@ class EpisodeDataset(
   @property
   def labels(self):
     """Return query labels to provide an episodic/batch-agnostic API."""
-    return self.test_labels
+    return self.query_labels
 
   @property
   def onehot_labels(self):
     """Return one-hot query labels to provide an episodic/batch-agnostic API."""
-    return self.onehot_test_labels
+    return self.onehot_query_labels
 
   @property
-  def onehot_train_labels(self):
-    return tf.one_hot(self.train_labels, self.way)
+  def onehot_support_labels(self):
+    return tf.one_hot(self.support_labels, self.way)
 
   @property
-  def onehot_test_labels(self):
-    return tf.one_hot(self.test_labels, self.way)
+  def onehot_query_labels(self):
+    return tf.one_hot(self.query_labels, self.way)
 
 
 class Batch(collections.namedtuple('Batch', 'images, labels, n_classes')):

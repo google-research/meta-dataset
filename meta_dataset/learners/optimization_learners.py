@@ -189,10 +189,10 @@ class BaselineFinetuneLearner(base.BaselineLearner):
     """Computes the class logits for the episode.
 
     Args:
-      data: A `meta_dataset.providers.EpisodeDataset`.
+      data: A `meta_dataset.providers.Episode`.
 
     Returns:
-      The query set logits as a [num_test_images, way] matrix.
+      The query set logits as a [num_query_images, way] matrix.
 
     Raises:
       ValueError: Distance must be one of l2 or cosine.
@@ -205,22 +205,22 @@ class BaselineFinetuneLearner(base.BaselineLearner):
 
     # TODO(eringrant): Reduce the number of times the embedding function graph
     # is built with the same input.
-    train_embeddings_params_moments = self.embedding_fn(data.train_images,
-                                                        self.is_training)
-    train_embeddings = train_embeddings_params_moments['embeddings']
-    train_embeddings_var_dict = train_embeddings_params_moments['params']
+    support_embeddings_params_moments = self.embedding_fn(
+        data.support_images, self.is_training)
+    support_embeddings = support_embeddings_params_moments['embeddings']
+    support_embeddings_var_dict = support_embeddings_params_moments['params']
 
     (embedding_vars_keys, embedding_vars,
      embedding_vars_copy_ops) = get_embeddings_vars_copy_ops(
-         train_embeddings_var_dict, make_copies)
+         support_embeddings_var_dict, make_copies)
     embedding_vars_copy_op = tf.group(*embedding_vars_copy_ops)
 
     # Compute the initial training loss (only for printing purposes). This
     # line is also needed for adding the fc variables to the graph so that the
     # tf.all_variables() line below detects them.
-    logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+    logits = self._fc_layer(support_embeddings)[:, 0:data.way]
     finetune_loss = self.compute_loss(
-        onehot_labels=data.onehot_train_labels,
+        onehot_labels=data.onehot_support_labels,
         predictions=logits,
     )
 
@@ -263,17 +263,17 @@ class BaselineFinetuneLearner(base.BaselineLearner):
             # (The logits and loss are returned just for printing).
             logits, finetune_loss, finetune_op = self._get_finetune_op(
                 data, embedding_vars_keys, embedding_vars, vars_to_finetune,
-                train_embeddings if not self.finetune_all_layers else None)
+                support_embeddings if not self.finetune_all_layers else None)
 
             if self.debug_log:
               # Test logits are computed only for printing logs.
-              test_embeddings = self.embedding_fn(
-                  data.test_images,
+              query_embeddings = self.embedding_fn(
+                  data.query_images,
                   self.is_training,
                   params=collections.OrderedDict(
                       zip(embedding_vars_keys, embedding_vars)),
                   reuse=True)['embeddings']
-              test_logits = (self._fc_layer(test_embeddings)[:, 0:data.way])
+              query_logits = (self._fc_layer(query_embeddings)[:, 0:data.way])
 
       else:
         with tf.control_dependencies([finetune_op, finetune_loss] +
@@ -287,10 +287,10 @@ class BaselineFinetuneLearner(base.BaselineLearner):
                 finetune_loss,
                 'accuracy:',
                 self.compute_accuracy(
-                    labels=data.train_labels, predictions=logits),
-                'test accuracy:',
+                    labels=data.support_labels, predictions=logits),
+                'query accuracy:',
                 self.compute_accuracy(
-                    labels=data.test_labels, predictions=test_logits),
+                    labels=data.query_labels, predictions=query_logits),
             ])
 
           with tf.control_dependencies([print_op]):
@@ -298,70 +298,71 @@ class BaselineFinetuneLearner(base.BaselineLearner):
             # (The logits and loss are returned just for printing).
             logits, finetune_loss, finetune_op = self._get_finetune_op(
                 data, embedding_vars_keys, embedding_vars, vars_to_finetune,
-                train_embeddings if not self.finetune_all_layers else None)
+                support_embeddings if not self.finetune_all_layers else None)
 
             if self.debug_log:
               # Test logits are computed only for printing logs.
-              test_embeddings = self.embedding_fn(
-                  data.test_images,
+              query_embeddings = self.embedding_fn(
+                  data.query_images,
                   self.is_training,
                   params=collections.OrderedDict(
                       zip(embedding_vars_keys, embedding_vars)),
                   reuse=True)['embeddings']
-              test_logits = (self._fc_layer(test_embeddings)[:, 0:data.way])
+              query_logits = (self._fc_layer(query_embeddings)[:, 0:data.way])
 
-    # Finetuning is now over, compute the test performance using the updated
+    # Finetuning is now over, compute the query performance using the updated
     # fc layer, and possibly the updated embedding network.
     with tf.control_dependencies([finetune_op] + vars_to_finetune):
-      test_embeddings = self.embedding_fn(
-          data.test_images,
+      query_embeddings = self.embedding_fn(
+          data.query_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
-      test_logits = self._fc_layer(test_embeddings)[:, 0:data.way]
+      query_logits = self._fc_layer(query_embeddings)[:, 0:data.way]
 
       if self.debug_log:
         # The train logits are computed only for printing.
-        train_embeddings = self.embedding_fn(
-            data.train_images,
+        support_embeddings = self.embedding_fn(
+            data.support_images,
             self.is_training,
             params=collections.OrderedDict(
                 zip(embedding_vars_keys, embedding_vars)),
             reuse=True)['embeddings']
-        logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+        logits = self._fc_layer(support_embeddings)[:, 0:data.way]
 
       print_op = tf.no_op()
       if self.debug_log:
         print_op = tf.print([
             'accuracy:',
-            self.compute_accuracy(labels=data.train_labels, predictions=logits),
-            'test accuracy:',
             self.compute_accuracy(
-                labels=data.test_labels, predictions=test_logits),
+                labels=data.support_labels, predictions=logits),
+            'query accuracy:',
+            self.compute_accuracy(
+                labels=data.query_labels, predictions=query_logits),
         ])
       with tf.control_dependencies([print_op]):
-        test_logits = self._fc_layer(test_embeddings)[:, 0:data.way]
+        query_logits = self._fc_layer(query_embeddings)[:, 0:data.way]
 
-    return test_logits
+    return query_logits
 
   def _get_finetune_op(self,
                        data,
                        embedding_vars_keys,
                        embedding_vars,
                        vars_to_finetune,
-                       train_embeddings=None):
+                       support_embeddings=None):
     """Returns the operation for performing a finetuning step."""
-    if train_embeddings is None:
-      train_embeddings = self.embedding_fn(
-          data.train_images,
+    if support_embeddings is None:
+      support_embeddings = self.embedding_fn(
+          data.support_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
-    logits = self._fc_layer(train_embeddings)[:, 0:data.way]
+    logits = self._fc_layer(support_embeddings)[:, 0:data.way]
     finetune_loss = self.compute_loss(
-        onehot_labels=data.onehot_train_labels,
+        onehot_labels=data.onehot_support_labels,
         predictions=logits,
     )
     # Perform one step of finetuning.
@@ -394,18 +395,18 @@ class OptimizationLearner(base.EpisodicLearner):
 class MAMLLearner(OptimizationLearner):
   """Model-Agnostic Meta Learner."""
 
-  def __init__(self, num_update_steps, additional_test_update_steps,
-               first_order, alpha, train_batch_norm, debug, zero_fc_layer,
+  def __init__(self, num_update_steps, additional_evaluation_update_steps,
+               first_order, alpha, adapt_batch_norm, debug, zero_fc_layer,
                proto_maml_fc_layer_init, **kwargs):
     """Initializes a baseline learner.
 
     Args:
       num_update_steps: The number of inner-loop steps to take.
-      additional_test_update_steps: The number of additional inner-loop steps to
-        take on meta test and meta validation set.
+      additional_evaluation_update_steps: The number of additional inner-loop
+        steps to take on meta test and meta validation set.
       first_order: If True, ignore second-order gradients (faster).
       alpha: The inner-loop learning rate.
-      train_batch_norm: If True, train batch norm during meta training.
+      adapt_batch_norm: If True, adapt batch norm parameters in the inner loop.
       debug: If True, print out debug logs.
       zero_fc_layer: Whether to use zero fc layer initialization.
       proto_maml_fc_layer_init: Whether to use ProtoNets equivalent fc layer
@@ -431,9 +432,9 @@ class MAMLLearner(OptimizationLearner):
 
     self.alpha = alpha
     self.num_update_steps = num_update_steps
-    self.additional_test_update_steps = additional_test_update_steps
+    self.additional_evaluation_update_steps = additional_evaluation_update_steps
     self.first_order = first_order
-    self.train_batch_norm = train_batch_norm
+    self.adapt_batch_norm = adapt_batch_norm
     self.debug_log = debug
     self.zero_fc_layer = zero_fc_layer
     self.proto_maml_fc_layer_init = proto_maml_fc_layer_init
@@ -482,21 +483,21 @@ class MAMLLearner(OptimizationLearner):
     """Computes the test logits of MAML.
 
     Args:
-      data: An EpisodeDataset. Computes the test logits of MAML on the query
-        (test) set after running meta update steps on the support (train) set.
+      data: An Episode. Computes the test logits of MAML on the query (test) set
+        after running meta update steps on the support (train) set.
 
     Returns:
       The output logits for the query data in this episode.
     """
     # Have to use one-hot labels since sparse softmax doesn't allow
     # second derivatives.
-    train_embeddings_ = self.embedding_fn(
-        data.train_images, self.is_training, reuse=tf.AUTO_REUSE)
-    train_embeddings = train_embeddings_['embeddings']
-    embedding_vars_dict = train_embeddings_['params']
+    support_embeddings_ = self.embedding_fn(
+        data.support_images, self.is_training, reuse=tf.AUTO_REUSE)
+    support_embeddings = support_embeddings_['embeddings']
+    embedding_vars_dict = support_embeddings_['params']
 
     with tf.variable_scope('linear_classifier', reuse=tf.AUTO_REUSE):
-      embedding_depth = train_embeddings.shape.as_list()[-1]
+      embedding_depth = support_embeddings.shape.as_list()[-1]
       fc_weights = functional_backbones.weight_variable(
           [embedding_depth, self.logit_dim])
       fc_bias = functional_backbones.bias_variable([self.logit_dim])
@@ -520,7 +521,7 @@ class MAMLLearner(OptimizationLearner):
       del args
       num_steps = self.num_update_steps
       if not self.is_training:
-        num_steps += self.additional_test_update_steps
+        num_steps += self.additional_evaluation_update_steps
       return step < num_steps
 
     def _body(step, *args):
@@ -528,20 +529,20 @@ class MAMLLearner(OptimizationLearner):
       updated_embedding_vars = args[0:num_embedding_vars]
       updated_fc_vars = args[num_embedding_vars:num_embedding_vars +
                              num_fc_vars]
-      train_embeddings = self.embedding_fn(
-          data.train_images,
+      support_embeddings = self.embedding_fn(
+          data.support_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
           reuse=True)['embeddings']
 
       updated_fc_weights, updated_fc_bias = updated_fc_vars
-      train_logits = tf.matmul(train_embeddings,
-                               updated_fc_weights) + updated_fc_bias
+      support_logits = tf.matmul(support_embeddings,
+                                 updated_fc_weights) + updated_fc_bias
 
-      train_logits = train_logits[:, 0:data.way]
-      loss = tf.losses.softmax_cross_entropy(data.onehot_train_labels,
-                                             train_logits)
+      support_logits = support_logits[:, 0:data.way]
+      loss = tf.losses.softmax_cross_entropy(data.onehot_support_labels,
+                                             support_logits)
 
       print_op = tf.no_op()
       if self.debug_log:
@@ -550,10 +551,10 @@ class MAMLLearner(OptimizationLearner):
       with tf.control_dependencies([print_op]):
         updated_embedding_vars = gradient_descent_step(
             loss, updated_embedding_vars, self.first_order,
-            self.train_batch_norm, self.alpha, False)['updated_vars']
+            self.adapt_batch_norm, self.alpha, False)['updated_vars']
         updated_fc_vars = gradient_descent_step(loss, updated_fc_vars,
                                                 self.first_order,
-                                                self.train_batch_norm,
+                                                self.adapt_batch_norm,
                                                 self.alpha,
                                                 False)['updated_vars']
 
@@ -572,15 +573,15 @@ class MAMLLearner(OptimizationLearner):
       fc_vars_init_ops = fc_vars_copy_ops
 
     if self.proto_maml_fc_layer_init:
-      train_embeddings = self.embedding_fn(
-          data.train_images,
+      support_embeddings = self.embedding_fn(
+          data.support_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, embedding_vars)),
           reuse=True)['embeddings']
 
-      prototypes = metric_learners.compute_prototypes(train_embeddings,
-                                                      data.onehot_train_labels)
+      prototypes = metric_learners.compute_prototypes(
+          support_embeddings, data.onehot_support_labels)
       pmaml_fc_weights = self.proto_maml_fc_weights(
           prototypes, zero_pad_to_max_way=True)
       pmaml_fc_bias = self.proto_maml_fc_bias(
@@ -611,14 +612,14 @@ class MAMLLearner(OptimizationLearner):
     support_set_moments = None
     if not self.transductive_batch_norm:
       support_set_moments = self.embedding_fn(
-          data.train_images,
+          data.support_images,
           self.is_training,
           params=collections.OrderedDict(
               zip(embedding_vars_keys, updated_embedding_vars)),
           reuse=True)['moments']
 
-    test_embeddings = self.embedding_fn(
-        data.test_images,
+    query_embeddings = self.embedding_fn(
+        data.query_images,
         self.is_training,
         params=collections.OrderedDict(
             zip(embedding_vars_keys, updated_embedding_vars)),
@@ -626,7 +627,7 @@ class MAMLLearner(OptimizationLearner):
         reuse=True,
         backprop_through_moments=self.backprop_through_moments)['embeddings']
 
-    test_logits = (tf.matmul(test_embeddings, updated_fc_weights) +
-                   updated_fc_bias)[:, 0:data.way]
+    query_logits = (tf.matmul(query_embeddings, updated_fc_weights) +
+                    updated_fc_bias)[:, 0:data.way]
 
-    return test_logits
+    return query_logits

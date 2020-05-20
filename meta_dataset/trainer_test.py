@@ -119,7 +119,7 @@ class TrainerTest(tf.test.TestCase):
 
     # Get the next train / valid / test episodes.
     train_episode = trainer_instance.next_data[trainer.TRAIN_SPLIT]
-    self.assertIsInstance(train_episode, providers.EpisodeDataset)
+    self.assertIsInstance(train_episode, providers.Episode)
 
     # This isn't really a test. It just checks that things don't crash...
     print(

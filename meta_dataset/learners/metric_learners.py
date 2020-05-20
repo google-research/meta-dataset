@@ -100,37 +100,37 @@ class MetricLearner(learner_base.EpisodicLearner):
     """Embeds all (training and testing) images of the episode.
 
     Args:
-      data: A `meta_dataset.providers.EpisodeDataset` containing the data for
-        the episode.
+      data: A `meta_dataset.providers.Episode` containing the data for the
+        episode.
 
     Returns:
       The predictions for the query set within the episode.
     """
     # Compute the support set's mean and var and use these as the moments for
     # batch norm on the query set.
-    train_embeddings_dict = self.embedding_fn(
-        data.train_images,
+    support_embeddings_dict = self.embedding_fn(
+        data.support_images,
         self.is_training,
         keep_spatial_dims=self.keep_spatial_dims)
-    train_embeddings = train_embeddings_dict['embeddings']
+    support_embeddings = support_embeddings_dict['embeddings']
     support_set_moments = None
     if not self.transductive_batch_norm:
-      support_set_moments = train_embeddings_dict['moments']
-    test_embeddings_dict = self.embedding_fn(
-        data.test_images,
+      support_set_moments = support_embeddings_dict['moments']
+    query_embeddings_dict = self.embedding_fn(
+        data.query_images,
         self.is_training,
         moments=support_set_moments,
         keep_spatial_dims=self.keep_spatial_dims,
         backprop_through_moments=self.backprop_through_moments)
-    test_embeddings = test_embeddings_dict['embeddings']
+    query_embeddings = query_embeddings_dict['embeddings']
 
-    test_logits = self.compute_logits(
-        train_embeddings,
-        test_embeddings,
-        data.onehot_train_labels,
+    query_logits = self.compute_logits(
+        support_embeddings,
+        query_embeddings,
+        data.onehot_support_labels,
     )
 
-    return test_logits
+    return query_logits
 
   def compute_logits(self, support_embeddings, query_embeddings,
                      onehot_support_labels):
@@ -186,28 +186,27 @@ class MatchingNetworkLearner(MetricLearner):
     the embeddings of the two examples.
 
     Args:
-      support_embeddings: A Tensor of size [num_train_images, embedding dim].
-      query_embeddings: A Tensor of size [num_test_images, embedding dim].
+      support_embeddings: A Tensor of size [num_support_images, embedding dim].
+      query_embeddings: A Tensor of size [num_query_images, embedding dim].
       onehot_support_labels: A Tensor of size [batch size, way].
 
     Returns:
-      The query set logits as a [num_test_images, way] matrix.
+      The query set logits as a [num_query_images, way] matrix.
     """
     # Undocumented in the paper, but *very important*: *only* the support set
     # embeddings is L2-normalized, which means that the distance is not exactly
     # a cosine distance. For comparison we also allow for the actual cosine
     # distance to be computed, which is controlled with the
     # `exact_cosine_distance` instance attribute.
-    train_embeddings = tf.nn.l2_normalize(support_embeddings, 1, epsilon=1e-3)
-    test_embeddings = query_embeddings
+    support_embeddings = tf.nn.l2_normalize(support_embeddings, 1, epsilon=1e-3)
     if self.exact_cosine_distance:
-      test_embeddings = tf.nn.l2_normalize(test_embeddings, 1, epsilon=1e-3)
-    # [num_test_images, num_train_images]
+      query_embeddings = tf.nn.l2_normalize(query_embeddings, 1, epsilon=1e-3)
+    # [num_query_images, num_support_images]
     similarities = tf.matmul(
-        test_embeddings, train_embeddings, transpose_b=True)
+        query_embeddings, support_embeddings, transpose_b=True)
     attention = tf.nn.softmax(similarities)
 
-    # [num_test_images, way]
+    # [num_query_images, way]
     probs = tf.matmul(attention, tf.cast(onehot_support_labels, tf.float32))
     return tf.log(probs)
 
@@ -221,9 +220,9 @@ class RelationNetworkLearner(MetricLearner):
                      onehot_support_labels):
     """Computes the relation score of each query example to each prototype."""
     # [n_test, 21, 21, n_features].
-    test_embed_shape = query_embeddings.shape.as_list()
-    n_feature = test_embed_shape[3]
-    out_shape = test_embed_shape[1:3]
+    query_embed_shape = query_embeddings.shape.as_list()
+    n_feature = query_embed_shape[3]
+    out_shape = query_embed_shape[1:3]
     n_test = tf.shape(query_embeddings)[0]
 
     # [n_test, num_clases, 21, 21, n_feature].
@@ -233,10 +232,10 @@ class RelationNetworkLearner(MetricLearner):
     prototype_extended = tf.tile(
         tf.expand_dims(prototypes, 0), [n_test, 1, 1, 1, 1])
     # [num_clases, n_test, 21, 21, n_feature].
-    test_f_extended = tf.tile(
+    query_f_extended = tf.tile(
         tf.expand_dims(query_embeddings, 1),
         [1, tf.shape(onehot_support_labels)[-1], 1, 1, 1])
-    relation_pairs = tf.concat((prototype_extended, test_f_extended), 4)
+    relation_pairs = tf.concat((prototype_extended, query_f_extended), 4)
     # relation_pairs.shape.as_list()[-3:] == [-1] + out_shape + [n_feature*2]
     relation_pairs = tf.reshape(relation_pairs,
                                 [-1] + out_shape + [n_feature * 2])

@@ -10,7 +10,7 @@ Trainer.checkpoint_to_restore = ''
 # Model hypers.
 MAMLLearner.first_order = True
 MAMLLearner.alpha = 0.05602373320602529
-MAMLLearner.additional_test_update_steps = 5
+MAMLLearner.additional_evaluation_update_steps = 5
 MAMLLearner.num_update_steps = 10
 
 # Data hypers.

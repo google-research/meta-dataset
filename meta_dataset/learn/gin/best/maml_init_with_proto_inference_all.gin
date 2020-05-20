@@ -9,7 +9,7 @@ Trainer.checkpoint_to_restore = '/path/to/checkpoints/baseline_imagenet_resnet_b
 # Model hypers.
 MAMLLearner.first_order = True
 MAMLLearner.alpha = 0.061445396411177286
-MAMLLearner.additional_test_update_steps = 0
+MAMLLearner.additional_evaluation_update_steps = 0
 MAMLLearner.num_update_steps = 1
 
 # Data hypers.

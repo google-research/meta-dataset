@@ -21,7 +21,7 @@ select between them, and the common logic to extract support / query sets if
 needed, decode the example strings, and resize the images.
 """
 # TODO(lamblinp): Organize the make_*_pipeline functions into classes, and
-# make them output Batch or EpisodeDataset objects directly.
+# make them output Batch or Episode objects directly.
 # TODO(lamblinp): Update variable names to be more consistent
 # - target, class_idx, label
 
