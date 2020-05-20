@@ -1,4 +1,4 @@
-include 'meta_dataset/learn/gin/models/learner_config.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @RelationNetworkLearner
 Trainer.eval_learner_class = @RelationNetworkLearner
 Learner.embedding_fn = 'relationnet_embedding'

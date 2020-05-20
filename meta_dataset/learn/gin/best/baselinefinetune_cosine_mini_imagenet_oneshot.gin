@@ -1,6 +1,6 @@
 include 'meta_dataset/learn/gin/setups/mini_imagenet_five_way_five_shot.gin'
 EpisodeDescriptionConfig.num_support = 1  # Change 5-shot to 1-shot.
-include 'meta_dataset/learn/gin/models/baselinefinetune_cosine_config.gin'
+include 'meta_dataset/learn/gin/learners/baselinefinetune_cosine_config.gin'
 
 Learner.embedding_fn = 'wide_resnet'
 DataConfig.image_height = 84

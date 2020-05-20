@@ -1,4 +1,4 @@
-include 'meta_dataset/learn/gin/models/baseline_config.gin'
+include 'meta_dataset/learn/gin/learners/baseline_config.gin'
 Trainer.train_learner_class = @BaselineFinetuneLearner
 Trainer.eval_learner_class = @BaselineFinetuneLearner
 Learner.weight_decay = 1e-4

@@ -1,4 +1,4 @@
-include 'meta_dataset/learn/gin/models/learner_config.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @MAMLLearner
 Trainer.eval_learner_class = @MAMLLearner
 Learner.embedding_fn = 'four_layer_convnet'

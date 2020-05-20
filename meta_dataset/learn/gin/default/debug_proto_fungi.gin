@@ -6,7 +6,7 @@ benchmark.datasets = 'fungi'
 include 'meta_dataset/learn/gin/setups/data_config.gin'
 include 'meta_dataset/learn/gin/setups/trainer_config_debug.gin'
 include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'
-include 'meta_dataset/learn/gin/models/prototypical_config.gin'
+include 'meta_dataset/learn/gin/learners/prototypical_config.gin'
 Trainer.data_config = @DataConfig()
 
 # Total number of updates is 100, do not checkpoint or validate during profiling.

@@ -1,5 +1,5 @@
 include 'meta_dataset/learn/gin/setups/all.gin'
-include 'meta_dataset/learn/gin/models/baselinefinetune_config.gin'
+include 'meta_dataset/learn/gin/learners/baselinefinetune_config.gin'
 BatchSplitReaderGetReader.add_dataset_offset = True
 
 # Backbone hypers.

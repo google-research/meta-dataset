@@ -1,5 +1,5 @@
 include 'meta_dataset/learn/gin/setups/imagenet.gin'
-include 'meta_dataset/learn/gin/models/learner_config.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @BaselineLearner
 Trainer.eval_learner_class = @MAMLLearner
 # The following line is what makes this proto-MAML.

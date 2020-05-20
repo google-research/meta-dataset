@@ -1,6 +1,6 @@
 include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
 EpisodeDescriptionConfig.num_support = 1
 
-include 'meta_dataset/learn/gin/models/baselinefinetune_cosine_config.gin'
+include 'meta_dataset/learn/gin/learners/baselinefinetune_cosine_config.gin'
 Trainer.learning_rate = 1e-4
 Trainer.decay_learning_rate = True

@@ -1,6 +1,6 @@
 include 'meta_dataset/learn/gin/setups/all.gin'
 
-include 'meta_dataset/learn/gin/models/relationnet_config.gin'
+include 'meta_dataset/learn/gin/learners/relationnet_config.gin'
 
 # There are more parameters than usual, so allow more updates.
 Trainer.num_updates = 100000
