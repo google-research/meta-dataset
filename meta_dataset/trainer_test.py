@@ -23,11 +23,11 @@ from __future__ import print_function
 from absl import flags
 
 import gin.tf
-from meta_dataset import learner as learner_lib
 from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import decoder
 from meta_dataset.data import providers
+from meta_dataset.learners import metric_learners
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -84,8 +84,8 @@ class TrainerTest(tf.test.TestCase):
     )
 
     trainer_instance = trainer.Trainer(
-        train_learner_class=learner_lib.PrototypicalNetworkLearner,
-        eval_learner_class=learner_lib.PrototypicalNetworkLearner,
+        train_learner_class=metric_learners.PrototypicalNetworkLearner,
+        eval_learner_class=metric_learners.PrototypicalNetworkLearner,
         is_training=True,
         train_dataset_list=['mini_imagenet'],
         eval_dataset_list=['mini_imagenet'],

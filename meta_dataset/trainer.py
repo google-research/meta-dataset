@@ -33,12 +33,11 @@ import re
 
 from absl import logging
 import gin.tf
-from meta_dataset import learner as learner_lib
 from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
-
+from meta_dataset.learners import base as learner_base
 import numpy as np
 import six
 from six.moves import range
@@ -578,16 +577,16 @@ class Trainer(object):
 
   def create_learner(self, is_training, learner_class, split):
     """Instantiates a `Learner`."""
-    if issubclass(learner_class, learner_lib.BatchLearner):
+    if issubclass(learner_class, learner_base.BatchLearner):
       logit_dim = self._get_num_total_classes(split)
-    elif issubclass(learner_class, learner_lib.EpisodicLearner):
+    elif issubclass(learner_class, learner_base.EpisodicLearner):
       logit_dim = (
           self.train_episode_config.max_ways
           if is_training else self.eval_episode_config.max_ways)
     else:
       raise ValueError(
           'The specified `learner_class` should be a subclass of '
-          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          '`learner_base.BatchLearner` or `learner_base.EpisodicLearner`, '
           'but received {}.'.format(learner_class))
     return learner_class(
         is_training=is_training,
@@ -836,19 +835,19 @@ class Trainer(object):
 
   def _create_train_specification(self):
     """Returns an EpisodeSpecification or BatchSpecification for training."""
-    if (issubclass(self.train_learner_class, learner_lib.EpisodicLearner) or
+    if (issubclass(self.train_learner_class, learner_base.EpisodicLearner) or
         self.eval_split == TRAIN_SPLIT):
       return learning_spec.EpisodeSpecification(learning_spec.Split.TRAIN,
                                                 self.num_train_classes,
                                                 self.num_support_train,
                                                 self.num_query_train)
-    elif issubclass(self.train_learner_class, learner_lib.BatchLearner):
+    elif issubclass(self.train_learner_class, learner_base.BatchLearner):
       return learning_spec.BatchSpecification(learning_spec.Split.TRAIN,
                                               self.batch_size)
     else:
       raise ValueError(
           'The specified `learner_class` should be a subclass of '
-          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          '`learner_base.BatchLearner` or `learner_base.EpisodicLearner`, '
           'but received {}.'.format(self.train_learner_class))
 
   def _create_held_out_specification(self, split=TEST_SPLIT):
@@ -905,16 +904,16 @@ class Trainer(object):
     learner_class = (
         self.train_learner_class
         if split == TRAIN_SPLIT else self.eval_learner_class)
-    if (issubclass(learner_class, learner_lib.BatchLearner) and
+    if (issubclass(learner_class, learner_base.BatchLearner) and
         split != self.eval_split):
       return self._build_batch(split)
-    elif (issubclass(learner_class, learner_lib.EpisodicLearner) or
+    elif (issubclass(learner_class, learner_base.EpisodicLearner) or
           split == self.eval_split):
       return self._build_episode(split)
     else:
       raise ValueError(
           'The `Learner` for `split` should be a subclass of '
-          '`learner_lib.BatchLearner` or `learner_lib.EpisodicLearner`, '
+          '`learner_base.BatchLearner` or `learner_base.EpisodicLearner`, '
           'but received {}.'.format(learner_class))
 
 
@@ -1178,7 +1177,7 @@ class Trainer(object):
           [self.accuracies[split], self.evaluation_summaries])
       accuracies.append(acc)
       # Write complete summaries during evaluation, but not training.
-      # Otherwise, validaation summaries become too big.
+      # Otherwise, validation summaries become too big.
       if not self.is_training and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
     logging.info('Done.')
