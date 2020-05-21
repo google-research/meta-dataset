@@ -240,6 +240,18 @@ def is_backbone_variable(variable, only_if=lambda x: True):
   return False
 
 
+def restore_or_log_informative_error(saver, sess, checkpoint_to_restore):
+  """Attempt to restore from `checkpoint_to_restore` in `sess` using `saver`."""
+  try:
+    saver.restore(sess, checkpoint_to_restore)
+  except tf.errors.NotFoundError as e:
+    logging.error('Tried to restore from checkpoint %s but failed.',
+                  checkpoint_to_restore)
+    raise e
+  else:
+    logging.info('Restored from checkpoint %s.', checkpoint_to_restore)
+
+
 # TODO(eringrant): Split the current `Trainer` class into `Trainer` and
 # `Evaluator` classes to partition the constructor arguments into meaningful
 # groups.
@@ -790,11 +802,8 @@ class Trainer(object):
           raise ValueError(
               'Checkpoint not restored, since there is no Saver created. This '
               'is likely due to no parameters being available. ')
-        self.saver.restore(self.sess, latest_checkpoint)
-        logging.info('Restored latest checkpoint from training: %s',
-                     latest_checkpoint)
-        logging.info('(Provided `checkpoint_to_restore` overriden: %s)',
-                     self.checkpoint_to_restore)
+        restore_or_log_informative_error(self.saver, self.sess,
+                                         latest_checkpoint)
 
       elif self.checkpoint_to_restore:
         logging.info('No training checkpoints found.')
@@ -806,7 +815,8 @@ class Trainer(object):
         ]
         backbone_saver = tf.train.Saver(
             var_list=backbone_vars_to_reload, max_to_keep=1)
-        backbone_saver.restore(self.sess, self.checkpoint_to_restore)
+        restore_or_log_informative_error(backbone_saver, self.sess,
+                                         self.checkpoint_to_restore)
         logging.info(
             'Restored only vars %s from provided `checkpoint_to_restore`: %s',
             [var.name for var in backbone_vars_to_reload],
@@ -818,10 +828,9 @@ class Trainer(object):
 
     elif self.checkpoint_to_restore:
       # For evaluation, we restore more than the backbone (embedding function)
-      # variables from the provided checkpoint.
-      self.saver.restore(self.sess, self.checkpoint_to_restore)
-      logging.info('Restored checkpoint for evaluation: %s',
-                   self.checkpoint_to_restore)
+      # variables from the provided checkpoint, so we use `self.saver`.
+      restore_or_log_informative_error(self.saver, self.sess,
+                                       self.checkpoint_to_restore)
 
     else:
       logging.info(
