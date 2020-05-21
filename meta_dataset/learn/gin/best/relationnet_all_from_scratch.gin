@@ -10,6 +10,7 @@ Trainer.checkpoint_to_restore = ''
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
+Trainer.decay_learning_rate = True
 Trainer.decay_every = 2500
 Trainer.decay_rate = 0.9197652570309498
 Trainer.learning_rate = 0.002748105034397538

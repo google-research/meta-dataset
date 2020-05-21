@@ -8,6 +8,7 @@ include 'meta_dataset/learn/gin/best_v2/pretrained_wide_resnet.gin'
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
+Trainer.decay_learning_rate = True
 Trainer.decay_every = 100
 Trainer.decay_rate = 0.7426809516243701
 Trainer.learning_rate = 0.0009325756201058525

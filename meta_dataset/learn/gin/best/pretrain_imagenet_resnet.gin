@@ -16,6 +16,7 @@ BaselineLearner.use_weight_norm = False
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
+Trainer.num_updates = 50000
 Trainer.decay_every = 1000
 Trainer.decay_rate = 0.9967524905880909
 Trainer.learning_rate = 0.00375640851370052
