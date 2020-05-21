@@ -8,15 +8,15 @@ Trainer.pretrained_source = 'scratch'
 
 # Model hypers.
 BaselineLearner.knn_distance = 'cosine'
-BaselineLearner.cosine_classifier = True
-BaselineLearner.cosine_logits_multiplier = 1
-BaselineLearner.use_weight_norm = True
+BaselineLearner.cosine_classifier = False
+BaselineLearner.cosine_logits_multiplier = 10
+BaselineLearner.use_weight_norm = False
 
 # Data hypers.
 DataConfig.image_height = 126
 
 # Training hypers (not needed for eval).
-Trainer.decay_every = 100
-Trainer.decay_rate = 0.5082121576573064
-Trainer.learning_rate = 0.007084776688116927
-Learner.weight_decay = 0.000005078192976503067
+Trainer.decay_every = 10000
+Trainer.decay_rate = 0.7294597641152971
+Trainer.learning_rate = 0.007634189137886614
+Learner.weight_decay = 0.000007138118976497546
