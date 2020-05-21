@@ -170,6 +170,8 @@ def get_paths_to_events(root_dir,
   """
   params_dir = os.path.join(root_dir, 'params')
   summary_dir = os.path.join(root_dir, 'summaries')
+  logging.info('Looking for parameters in params_dir: %s', params_dir)
+  logging.info('Looking for summaries in summary_dir: %s', summary_dir)
 
   def get_variant_architecture(name):
     """Return the architecture of the given variant if recorded; o/w None."""
@@ -370,7 +372,7 @@ def main(argv):
   ]
   # Perform model selection for each provided experiment root.
   for root_experiment_dir in experiment_paths:
-    stars_string = '**************************************\n'
+    stars_string = '\n**************************************\n'
     architecture_string = ''
     if FLAGS.restrict_to_architectures:
       architecture_string = ' out of the {} variants'.format(
