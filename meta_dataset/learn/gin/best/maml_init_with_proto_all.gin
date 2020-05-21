@@ -2,9 +2,7 @@ include 'meta_dataset/learn/gin/setups/all.gin'
 include 'meta_dataset/learn/gin/learners/maml_init_with_proto_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'resnet'
-Trainer.pretrained_source = 'imagenet'
-Trainer.checkpoint_to_restore = '/path/to/checkpoints/baseline_imagenet_resnet_best/model_27500.ckpt'
+include 'meta_dataset/learn/gin/best_v2/pretrained_resnet.gin'
 
 # Model hypers.
 MAMLLearner.first_order = True

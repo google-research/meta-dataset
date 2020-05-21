@@ -2,9 +2,7 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/baselinefinetune_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'wide_resnet'
-Trainer.checkpoint_to_restore = '/path/to/checkpoints/baseline_imagenet_wide_resnet_best/model_46000.ckpt'
-Trainer.pretrained_source = 'imagenet'
+include 'meta_dataset/learn/gin/best_v2/pretrained_wide_resnet.gin'
 
 # Model hypers.
 BaselineLearner.cosine_classifier = False

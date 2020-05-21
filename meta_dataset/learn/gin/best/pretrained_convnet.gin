@@ -1,0 +1,4 @@
+# Best pre-trained convnet. Update the path to the checkpoint.
+Learner.embedding_fn = 'four_layer_convnet'
+Trainer.pretrained_checkpoint = '/path/to/checkpoints/pretrain_imagenet_convnet/model_42500.ckpt'
+Trainer.pretrained_source = 'imagenet'
