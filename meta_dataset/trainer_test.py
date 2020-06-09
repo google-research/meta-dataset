@@ -21,15 +21,15 @@ from __future__ import division
 from __future__ import print_function
 
 from absl import flags
-
 import gin.tf
+from meta_dataset import learners
 from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import decoder
 from meta_dataset.data import providers
-from meta_dataset.learners import metric_learners
 import numpy as np
 import tensorflow.compat.v1 as tf
+
 
 tf.flags.DEFINE_string('records_root_dir', '',
                        'Root directory containing a subdirectory per dataset.')
@@ -84,8 +84,8 @@ class TrainerTest(tf.test.TestCase):
     )
 
     trainer_instance = trainer.Trainer(
-        train_learner_class=metric_learners.PrototypicalNetworkLearner,
-        eval_learner_class=metric_learners.PrototypicalNetworkLearner,
+        train_learner_class=learners.PrototypicalNetworkLearner,
+        eval_learner_class=learners.PrototypicalNetworkLearner,
         is_training=True,
         train_dataset_list=['mini_imagenet'],
         eval_dataset_list=['mini_imagenet'],

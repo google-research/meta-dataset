@@ -45,12 +45,10 @@ from absl import logging
 import gin
 import gin.tf
 from meta_dataset import data
+from meta_dataset import learners  # pylint: disable=unused-import
 from meta_dataset import trainer
 # pylint: disable=unused-import
 from meta_dataset.data import config
-from meta_dataset.learners import base as learner_base
-from meta_dataset.learners import metric_learners
-from meta_dataset.learners import optimization_learners
 # pylint: enable=unused-import
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()

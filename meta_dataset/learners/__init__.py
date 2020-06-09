@@ -13,4 +13,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Lint as: python2, python3
+"""Module containing (meta-)Learners."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+from meta_dataset.learners.base import BaselineLearner
+from meta_dataset.learners.base import BatchLearner
+from meta_dataset.learners.base import EpisodicLearner
+from meta_dataset.learners.base import Learner
+from meta_dataset.learners.metric_learners import MatchingNetworkLearner
+from meta_dataset.learners.metric_learners import MetricLearner
+from meta_dataset.learners.metric_learners import PrototypicalNetworkLearner
+from meta_dataset.learners.metric_learners import RelationNetworkLearner
+from meta_dataset.learners.optimization_learners import BaselineFinetuneLearner
+from meta_dataset.learners.optimization_learners import MAMLLearner
+from meta_dataset.learners.optimization_learners import OptimizationLearner
+
+__all__ = [
+    'BaselineFinetuneLearner',
+    'BatchLearner',
+    'BaselineLearner',
+    'EpisodicLearner',
+    'Learner',
+    'MAMLLearner',
+    'MatchingNetworkLearner',
+    'MetricLearner',
+    'OptimizationLearner',
+    'PrototypicalNetworkLearner',
+    'RelationNetworkLearner',
+]
