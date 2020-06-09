@@ -1,4 +1,4 @@
 # Best pre-trained wide resnet. Update the path to the checkpoint.
 Learner.embedding_fn = 'wide_resnet'
-Trainer.pretrained_checkpoint = '/path/to/checkpoints/pretrain_imagenet_wide_resnet/model_46000.ckpt'
+Trainer.checkpoint_to_restore = '/path/to/checkpoints/pretrain_imagenet_wide_resnet/model_46000.ckpt'
 Trainer.pretrained_source = 'imagenet'
