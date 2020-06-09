@@ -42,7 +42,6 @@ import os
 
 from absl import app
 from absl import logging
-import gin
 import gin.tf
 from meta_dataset import data
 from meta_dataset import learners  # pylint: disable=unused-import
