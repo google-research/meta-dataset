@@ -590,11 +590,11 @@ class Trainer(object):
   def create_learner(self, is_training, learner_class, split):
     """Instantiates a `Learner`."""
     if issubclass(learner_class, learners.BatchLearner):
-      logit_dim = self._get_num_total_classes(split)
+      logit_dim = self._get_logit_dim(
+          split, is_batch_learner=True, is_training=is_training)
     elif issubclass(learner_class, learners.EpisodicLearner):
-      logit_dim = (
-          self.train_episode_config.max_ways
-          if is_training else self.eval_episode_config.max_ways)
+      logit_dim = self._get_logit_dim(
+          split, is_batch_learner=False, is_training=is_training)
     else:
       raise ValueError('The specified `learner_class` should be a subclass of '
                        '`learners.BatchLearner` or `learners.EpisodicLearner`, '
@@ -1168,33 +1168,35 @@ class Trainer(object):
       self.valid_acc = valid_acc
       self.valid_ci = valid_ci
 
-
-# TODO(evcu) Improve this so that if the eval_only loads a global_step, it is
-# used at logging instead of value 0.
-
+  # TODO(evcu) Improve this so that if the eval_only loads a global_step, it is
+  # used at logging instead of value 0.
   def evaluate(self, split, step=0):
     """Returns performance metrics across num_eval_trials episodes / batches."""
     num_eval_trials = self.num_eval_episodes
     logging.info('Performing evaluation of the %s split using %d episodes...',
                  split, num_eval_trials)
     accuracies = []
+    total_samples = 0
     for eval_trial_num in range(num_eval_trials):
+      # Following is used to normalize accuracies.
       acc, summaries = self.sess.run(
           [self.accuracies[split], self.evaluation_summaries])
-      accuracies.append(acc)
       # Write complete summaries during evaluation, but not training.
       # Otherwise, validation summaries become too big.
       if not self.is_training and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
+      accuracies.append(np.mean(acc))
+      total_samples += 1
+
     logging.info('Done.')
 
-    mean_acc = np.mean(accuracies)
+    mean_acc = np.sum(accuracies) / total_samples
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
+
     if not self.is_training:
       # Logging during training is handled by self.train() instead.
       logging.info('Accuracy on the meta-%s split: %f, +/- %f.\n', split,
                    mean_acc, ci_acc)
-
     mean_acc_summary = tf.Summary()
     mean_acc_summary.value.add(tag='mean %s acc' % split, simple_value=mean_acc)
     ci_acc_summary = tf.Summary()
@@ -1233,9 +1235,24 @@ class Trainer(object):
     split_eval_summaries.append(targets_summary)
     return split_eval_summaries
 
-  def _get_num_total_classes(self, split):
-    """Returns the total number of classes in a split of the benchmark."""
-    total_classes = 0
-    for dataset_spec in self.benchmark_spec.dataset_spec_list:
-      total_classes += len(dataset_spec.get_classes(split))
+  def _get_logit_dim(self, split, is_batch_learner, is_training):
+    """Returns the total number of logits needed.
+
+    Args:
+      split: string, one of TRAIN_SPLIT, VALID_SPLIT, TEST_SPLIT.
+      is_batch_learner: bool, if True the logit count is obtained from dataset
+        spec. If False, `max_ways` is used for episodic dataset.
+      is_training: bool, used to decide number of logits.
+
+    Returns:
+      int, total number of logits needed.
+    """
+    if is_batch_learner:
+      total_classes = 0
+      for dataset_spec in self.benchmark_spec.dataset_spec_list:
+        total_classes += len(dataset_spec.get_classes(split))
+    else:
+      total_classes = (
+          self.train_episode_config.max_ways
+          if is_training else self.eval_episode_config.max_ways)
     return total_classes

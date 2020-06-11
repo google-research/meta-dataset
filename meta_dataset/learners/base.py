@@ -105,10 +105,11 @@ class Learner(object):
         interpreted as unnormalized log probabilities.
 
     Returns:
-       A `tf.Tensor` representing the average accuracy.
+       A `tf.Tensor` of ones and zeros representing the individual accuracies.
+         Use tf.reduce_mean(result) to obtain average accuracy.
     """
     correct = tf.equal(labels, tf.to_int32(tf.argmax(predictions, -1)))
-    return tf.reduce_mean(tf.cast(correct, tf.float32))
+    return tf.cast(correct, tf.float32)
 
   def forward_pass(self, data):
     """Returns the (query if episodic) logits."""
