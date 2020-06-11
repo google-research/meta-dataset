@@ -6,6 +6,9 @@ import meta_dataset.data.config
 EpisodeDescriptionConfig.min_ways = 5
 EpisodeDescriptionConfig.max_ways_upper_bound = 50
 EpisodeDescriptionConfig.max_num_query = 10
+# For weak shot experiments where we have missing class data.
+# This should not affect any other experiements.
+EpisodeDescriptionConfig.min_examples_in_class = 0
 EpisodeDescriptionConfig.max_support_set_size = 500
 EpisodeDescriptionConfig.max_support_size_contrib_per_class = 100
 EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
