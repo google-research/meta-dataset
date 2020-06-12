@@ -1250,9 +1250,15 @@ class Trainer(object):
       int, total number of logits needed.
     """
     if is_batch_learner:
+      # Get the total number of classes in this split, across all datasets
+      # contributing to this split.
       total_classes = 0
-      for dataset_spec in self.benchmark_spec.dataset_spec_list:
-        total_classes += len(dataset_spec.get_classes(split))
+      for dataset_spec, dataset_splits in zip(
+          self.benchmark_spec.dataset_spec_list,
+          self.benchmark_spec.splits_to_contribute):
+        if any(
+            get_split_enum(ds_split) == split for ds_split in dataset_splits):
+          total_classes += len(dataset_spec.get_classes(split))
     else:
       total_classes = (
           self.train_episode_config.max_ways
