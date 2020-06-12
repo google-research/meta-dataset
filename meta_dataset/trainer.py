@@ -972,6 +972,14 @@ class Trainer(object):
     for dataset_spec in dataset_spec_list:
       num_per_class.append(self.get_num_to_take(dataset_spec.name, split))
 
+    if split == TRAIN_SPLIT:
+      # The learner for the training split should only be in training mode if
+      # the evaluation split is not the training split.
+      gin_scope_name = ('train'
+                        if self.eval_split != TRAIN_SPLIT else 'evaluation')
+    else:
+      gin_scope_name = 'evaluation'
+
     # TODO(lamblinp): pass specs directly to the pipeline builder.
     # TODO(lamblinp): move the special case directly in make_..._pipeline
     if len(dataset_spec_list) == 1:
@@ -979,36 +987,39 @@ class Trainer(object):
       use_dag_ontology = has_dag_ontology[0]
       if self.eval_finegrainedness or self.eval_imbalance_dataset:
         use_dag_ontology = False
-      data_pipeline = pipeline.make_one_source_episode_pipeline(
-          dataset_spec_list[0],
-          use_dag_ontology=use_dag_ontology,
-          use_bilevel_ontology=has_bilevel_ontology[0],
-          split=dataset_split,
-          episode_descr_config=episode_descr_config,
-          shuffle_buffer_size=shuffle_buffer_size,
-          read_buffer_size_bytes=read_buffer_size_bytes,
-          num_prefetch=num_prefetch,
-          image_size=image_size,
-          num_to_take=num_per_class[0])
-    else:
-      data_pipeline = pipeline.make_multisource_episode_pipeline(
-          dataset_spec_list,
-          use_dag_ontology_list=has_dag_ontology,
-          use_bilevel_ontology_list=has_bilevel_ontology,
-          split=dataset_split,
-          episode_descr_config=episode_descr_config,
-          shuffle_buffer_size=shuffle_buffer_size,
-          read_buffer_size_bytes=read_buffer_size_bytes,
-          num_prefetch=num_prefetch,
-          image_size=image_size,
-          num_to_take=num_per_class)
-    data_pipeline = apply_dataset_options(data_pipeline)
 
+      with gin.config_scope(gin_scope_name):
+        data_pipeline = pipeline.make_one_source_episode_pipeline(
+            dataset_spec_list[0],
+            use_dag_ontology=use_dag_ontology,
+            use_bilevel_ontology=has_bilevel_ontology[0],
+            split=dataset_split,
+            episode_descr_config=episode_descr_config,
+            shuffle_buffer_size=shuffle_buffer_size,
+            read_buffer_size_bytes=read_buffer_size_bytes,
+            num_prefetch=num_prefetch,
+            image_size=image_size,
+            num_to_take=num_per_class[0])
+
+    else:
+      with gin.config_scope(gin_scope_name):
+        data_pipeline = pipeline.make_multisource_episode_pipeline(
+            dataset_spec_list,
+            use_dag_ontology_list=has_dag_ontology,
+            use_bilevel_ontology_list=has_bilevel_ontology,
+            split=dataset_split,
+            episode_descr_config=episode_descr_config,
+            shuffle_buffer_size=shuffle_buffer_size,
+            read_buffer_size_bytes=read_buffer_size_bytes,
+            num_prefetch=num_prefetch,
+            image_size=image_size,
+            num_to_take=num_per_class)
+
+    data_pipeline = apply_dataset_options(data_pipeline)
     iterator = data_pipeline.make_one_shot_iterator()
     episode, _ = iterator.get_next()
     (support_images, support_labels, support_class_ids, query_images,
      query_labels, query_class_ids) = episode
-
     return providers.Episode(
         support_images=support_images,
         query_images=query_images,
