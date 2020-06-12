@@ -569,7 +569,8 @@ class Trainer(object):
     standard_summaries = []
     for split in self.required_splits:
       loss_summary = tf.summary.scalar('%s_loss' % split, self.losses[split])
-      acc_summary = tf.summary.scalar('%s_acc' % split, self.accuracies[split])
+      acc_summary = tf.summary.scalar('%s_acc' % split,
+                                      tf.reduce_mean(self.accuracies[split]))
       standard_summaries.append(loss_summary)
       standard_summaries.append(acc_summary)
 
@@ -1130,6 +1131,7 @@ class Trainer(object):
           self.train_op, self.losses[TRAIN_SPLIT], self.accuracies[TRAIN_SPLIT],
           updated_global_step
       ])
+      train_acc = np.mean(train_acc)
 
       # Maybe validate, depending on the global step's value.
       self.maybe_evaluate(global_step)
