@@ -108,8 +108,13 @@ class EpisodeDescriptionConfig(object):
     Args:
       num_ways: Integer, fixes the number of classes ("ways") to be used in each
         episode. None leads to variable way.
-      num_support: Integer, fixes the number of examples for each class in the
-        support set.
+      num_support: An integer, a tuple of two integers, or None. In the first
+        case, the number of examples per class in the support set. In the
+        second case, the range from which to sample the number of examples per
+        class in the support set. Both of these cases would yield class-balanced
+        episodes, i.e. all classes have the same number of support examples.
+        Finally, if None, the number of support examples will vary both within
+        each episode (introducing class imbalance) and across episodes.
       num_query: Integer, fixes the number of examples for each class in the
         query set.
       min_ways: Integer, the minimum value when sampling ways.

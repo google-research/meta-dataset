@@ -441,9 +441,18 @@ class EpisodeDescriptionSampler(object):
           images_per_class, max_num_query=self.max_num_query)
 
     if self.num_support is not None:
-      if any(self.num_support + num_query > images_per_class):
-        raise ValueError('Some classes have not enough examples.')
-      num_support_per_class = [self.num_support for _ in class_ids]
+      if isinstance(self.num_support, int):
+        if any(self.num_support + num_query > images_per_class):
+          raise ValueError('Some classes do not have enough examples.')
+        num_support = self.num_support
+      else:
+        start, end = self.num_support
+        if any(end + num_query > images_per_class):
+          raise ValueError('The range provided for uniform sampling of the '
+                           'number of support examples per class is not valid: '
+                           'some classes do not have enough examples.')
+        num_support = RNG.randint(low=start, high=end + 1)
+      num_support_per_class = [num_support for _ in class_ids]
     else:
       num_remaining_per_class = images_per_class - num_query
       support_set_size = sample_support_set_size(
@@ -488,8 +497,11 @@ class EpisodeDescriptionSampler(object):
 
     if self.num_support is None:
       support_chunk_size = self.max_support_set_size
-    else:
+    elif isinstance(self.num_support, int):
       support_chunk_size = max_num_ways * self.num_support
+    else:
+      largest_num_support_per_class = self.num_support[1]
+      support_chunk_size = max_num_ways * largest_num_support_per_class
 
     if self.num_query is None:
       max_num_query = self.max_num_query
