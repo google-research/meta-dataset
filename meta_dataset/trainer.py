@@ -197,7 +197,7 @@ def get_split_enum(split):
 
 
 OPTIMIZER_KEYWORDS = ('Adam:', 'Adam_1:')
-EMBEDDING_KEYWORDS = ('conv', 'resnet')
+EMBEDDING_KEYWORDS = ('conv', 'resnet', 'fully_connected')
 
 
 def is_backbone_variable(variable, only_if=lambda x: True):
