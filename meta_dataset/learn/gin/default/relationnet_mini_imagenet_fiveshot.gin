@@ -2,6 +2,5 @@ include 'meta_dataset/learn/gin/setups/mini_imagenet.gin'
 include 'meta_dataset/learn/gin/learners/relationnet_config.gin'
 
 Trainer.learning_rate = 1e-3
-Trainer.decay_learning_rate = True
 Trainer.decay_every = 100000
 Trainer.decay_rate = 0.5

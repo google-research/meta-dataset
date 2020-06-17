@@ -1,6 +1,7 @@
 include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @MAMLLearner
 Trainer.eval_learner_class = @MAMLLearner
+Trainer.decay_learning_rate = True
 Learner.embedding_fn = 'four_layer_convnet'
 Learner.weight_decay = 1e-4
 MAMLLearner.num_update_steps = 5

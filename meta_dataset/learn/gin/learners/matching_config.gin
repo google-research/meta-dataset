@@ -1,6 +1,7 @@
 include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @MatchingNetworkLearner
 Trainer.eval_learner_class = @MatchingNetworkLearner
+Trainer.decay_learning_rate = True
 Learner.embedding_fn = 'four_layer_convnet'
 Learner.weight_decay = 1e-4
 MatchingNetworkLearner.exact_cosine_distance = False

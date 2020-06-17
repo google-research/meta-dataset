@@ -3,4 +3,3 @@ EpisodeDescriptionConfig.num_support = 5
 
 include 'meta_dataset/learn/gin/learners/maml_config.gin'
 Trainer.learning_rate = 1e-4
-Trainer.decay_learning_rate = True
