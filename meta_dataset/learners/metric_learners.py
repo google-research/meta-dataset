@@ -26,8 +26,6 @@ from meta_dataset.learners import base as learner_base
 from meta_dataset.models import functional_backbones
 import tensorflow.compat.v1 as tf
 
-FLAGS = tf.flags.FLAGS
-
 
 def _compute_prototypes(embeddings, labels):
   """Computes class prototypes over the last dimension of embeddings.

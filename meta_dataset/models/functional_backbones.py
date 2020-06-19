@@ -29,8 +29,6 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-FLAGS = tf.flags.FLAGS
-
 
 def conv2d(x, w, stride=1, b=None, padding='SAME'):
   """conv2d returns a 2d convolution layer with full stride."""

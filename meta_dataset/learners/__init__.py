@@ -20,10 +20,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from meta_dataset.learners.base import BaselineLearner
 from meta_dataset.learners.base import BatchLearner
 from meta_dataset.learners.base import EpisodicLearner
 from meta_dataset.learners.base import Learner
+from meta_dataset.learners.baseline_learners import BaselineLearner
 from meta_dataset.learners.metric_learners import MatchingNetworkLearner
 from meta_dataset.learners.metric_learners import MetricLearner
 from meta_dataset.learners.metric_learners import PrototypicalNetworkLearner

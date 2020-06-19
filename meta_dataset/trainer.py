@@ -364,6 +364,8 @@ class Trainer(object):
       data_config: A DataConfig, the data configuration.
 
     Raises:
+      RuntimeError: If requested to meta-learn the initialization of the linear
+          layer weights but they are unexpectedly omitted from saving/restoring.
       UnexpectedSplitError: If split configuration is not as expected.
     """
     # pyformat: enable
@@ -432,7 +434,9 @@ class Trainer(object):
     self.eval_episode_config = eval_episode_config
 
     self.data_config = data_config
-    # Get the image shape.
+
+    # TODO(eringrant): Adapt these image-specific expectations to feature
+    # inputs.
     self.image_shape = [data_config.image_height] * 2 + [3]
 
     # Create the benchmark specification.
@@ -469,10 +473,24 @@ class Trainer(object):
       else:
         learner_is_training = False
         learner_class = self.eval_learner_class
-      self.learners[split] = self.create_learner(
+      learner = self.create_learner(
           is_training=learner_is_training,
           learner_class=learner_class,
           split=get_split_enum(split))
+
+      if (isinstance(learner, learners.MAMLLearner) and
+          not learner.zero_fc_layer and not learner.proto_maml_fc_layer_init):
+        if 'linear_classifier' in FLAGS.omit_from_saving_and_reloading:
+          raise ValueError('The linear layer is requested to be meta-learned '
+                           'since both `MAMLLearner.zero_fc_layer` and '
+                           '`MAMLLearner.proto_maml_fc_layer_init` are False, '
+                           'but the `linear_classifier` tags is found in '
+                           'FLAGS.omit_from_saving_and_reloading so they will '
+                           'not be properly restored. Please exclude these '
+                           'weights from omit_from_saving_and_reloading for '
+                           'this setting to work as expected.')
+
+      self.learners[split] = learner
 
     # Build the prediction, loss and accuracy graphs for each learner.
     predictions, losses, accuracies = zip(*[
@@ -603,6 +621,7 @@ class Trainer(object):
     return learner_class(
         is_training=is_training,
         logit_dim=logit_dim,
+        input_shape=self.image_shape,
     )
 
   def get_benchmark_specification(self, records_root_dir=None):

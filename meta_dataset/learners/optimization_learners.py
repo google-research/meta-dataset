@@ -24,15 +24,14 @@ from __future__ import print_function
 import collections
 from absl import logging
 import gin.tf
-from meta_dataset.learners import base
+from meta_dataset.learners import base as learner_base
+from meta_dataset.learners import baseline_learners
 from meta_dataset.learners import metric_learners
 from meta_dataset.models import functional_backbones
 import six
 from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
-
-FLAGS = tf.flags.FLAGS
 
 
 def get_embeddings_vars_copy_ops(embedding_vars_dict, make_copies):
@@ -148,7 +147,7 @@ def gradient_descent_step(loss,
 
 
 @gin.configurable
-class BaselineFinetuneLearner(base.BaselineLearner):
+class BaselineFinetuneLearner(baseline_learners.BaselineLearner):
   """A Baseline Network with test-time finetuning."""
 
   # TODO(eringrant): Remove this attribute when the `BaselineFinetuneLearner`
@@ -379,15 +378,14 @@ class BaselineFinetuneLearner(base.BaselineLearner):
   def _fc_layer(self, embedding):
     """The fully connected layer to be finetuned."""
     with tf.variable_scope('fc_finetune', reuse=tf.AUTO_REUSE):
-      logits = base.linear_classifier_logits(embedding, self.logit_dim,
-                                             self.cosine_classifier,
-                                             self.cosine_logits_multiplier,
-                                             self.use_weight_norm)
+      logits = baseline_learners.linear_classifier_logits(
+          embedding, self.logit_dim, self.cosine_classifier,
+          self.cosine_logits_multiplier, self.use_weight_norm)
     return logits
 
 
 @gin.configurable
-class OptimizationLearner(base.EpisodicLearner):
+class OptimizationLearner(learner_base.EpisodicLearner):
   pass
 
 
@@ -395,9 +393,16 @@ class OptimizationLearner(base.EpisodicLearner):
 class MAMLLearner(OptimizationLearner):
   """Model-Agnostic Meta Learner."""
 
-  def __init__(self, num_update_steps, additional_evaluation_update_steps,
-               first_order, alpha, adapt_batch_norm, debug, zero_fc_layer,
-               proto_maml_fc_layer_init, **kwargs):
+  def __init__(self,
+               num_update_steps,
+               additional_evaluation_update_steps,
+               first_order,
+               alpha,
+               adapt_batch_norm,
+               zero_fc_layer,
+               proto_maml_fc_layer_init,
+               debug=False,
+               **kwargs):
     """Initializes a baseline learner.
 
     Args:
@@ -407,29 +412,12 @@ class MAMLLearner(OptimizationLearner):
       first_order: If True, ignore second-order gradients (faster).
       alpha: The inner-loop learning rate.
       adapt_batch_norm: If True, adapt batch norm parameters in the inner loop.
-      debug: If True, print out debug logs.
       zero_fc_layer: Whether to use zero fc layer initialization.
       proto_maml_fc_layer_init: Whether to use ProtoNets equivalent fc layer
         initialization.
-      **kwargs: Keyword arguments common to all EpisodicLearners.
-
-    Raises:
-      ValueError: The embedding function must be MAML-compatible.
-      RuntimeError: Requested to meta-learn the initialization of the linear
-        layer weights but they are unexpectedly omitted from saving/restoring.
+      debug: If True, print out debug logs.
+      **kwargs: Keyword arguments common to all `OptimizationLearner`.
     """
-    if not zero_fc_layer and not proto_maml_fc_layer_init:
-      # So the linear classifier weights initialization is meta-learned.
-      if 'linear_classifier' in FLAGS.omit_from_saving_and_reloading:
-        raise RuntimeError('The linear layer is requested to be meta-learned '
-                           'since both zero_fc_layer and '
-                           'proto_maml_fc_layer_init are False, but the '
-                           'linear_classifier weights are found in '
-                           'FLAGS.omit_from_saving_and_reloading so they will '
-                           'not be properly restored. Please exclude these '
-                           'weights from omit_from_saving_and_reloading for '
-                           'this setting to work as expected.')
-
     self.alpha = alpha
     self.num_update_steps = num_update_steps
     self.additional_evaluation_update_steps = additional_evaluation_update_steps
@@ -438,10 +426,6 @@ class MAMLLearner(OptimizationLearner):
     self.debug_log = debug
     self.zero_fc_layer = zero_fc_layer
     self.proto_maml_fc_layer_init = proto_maml_fc_layer_init
-
-    logging.info('alpha: %s, num_update_steps: %d', self.alpha,
-                 self.num_update_steps)
-
     super(MAMLLearner, self).__init__(**kwargs)
 
   def proto_maml_fc_weights(self, prototypes, zero_pad_to_max_way=False):
