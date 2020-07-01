@@ -219,9 +219,9 @@ def is_backbone_variable(variable, only_if=lambda x: True):
   is_embedding_var = any(
       keyword in variable.name for keyword in EMBEDDING_KEYWORDS)
 
-  # We exclude 'relationnet*' variables as they are not present in a pretrained
+  # We exclude 'relation*' variables as they are not present in a pretrained
   # checkpoint.
-  is_relationnet_var = variable.name.startswith('relationnet')
+  is_relationnet_var = variable.name.startswith('relation')
 
   # We exclude optimizer variables, as the episodic finetuning procedure is a
   # different optimization problem than the original training objective.

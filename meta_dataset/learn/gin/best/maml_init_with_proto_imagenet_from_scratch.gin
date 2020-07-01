@@ -2,7 +2,9 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/maml_init_with_proto_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'resnet'
+
+Learner.embedding_fn = @resnet
+
 Trainer.pretrained_source = 'scratch'
 Trainer.checkpoint_to_restore = ''
 
@@ -20,4 +22,4 @@ Trainer.decay_learning_rate = True
 Trainer.decay_every = 5000
 Trainer.decay_rate = 0.6431136271727287
 Trainer.learning_rate = 0.0007181155997029211
-Learner.weight_decay = 0.00003630199690303937
+weight_decay = 0.00003630199690303937

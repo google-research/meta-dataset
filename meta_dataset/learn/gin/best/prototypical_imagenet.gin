@@ -12,4 +12,4 @@ Trainer.decay_learning_rate = True
 Trainer.decay_every = 500
 Trainer.decay_rate = 0.915193802145601
 Trainer.learning_rate = 0.0012064626897259694
-Learner.weight_decay = 0.0000885787420909229
+weight_decay = 0.0000885787420909229

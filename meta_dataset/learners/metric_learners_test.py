@@ -16,6 +16,8 @@
 # Lint as: python3
 """Tests for `meta_dataset.learners.metric_learners`."""
 
+import gin
+
 from meta_dataset.learners import base_test
 from meta_dataset.learners import metric_learners
 
@@ -25,6 +27,9 @@ tf.disable_eager_execution()
 metric_learner_kwargs = {
     **base_test.VALID_LEARNER_INIT_ARGS,
 }
+
+gin.bind_parameter('relationnet_convnet.weight_decay', 0.01)
+gin.bind_parameter('relation_module.weight_decay', 0.01)
 
 
 class CosineMatchingNetworkLearnerTest(base_test.TestEpisodicLearner):

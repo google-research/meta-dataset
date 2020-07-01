@@ -16,6 +16,8 @@
 # Lint as: python3
 """Tests for `meta_dataset.learners.baseline_learners`."""
 
+import gin.tf
+
 from meta_dataset.learners import base_test
 from meta_dataset.learners import baseline_learners
 
@@ -28,6 +30,8 @@ BASELINE_ARGS = {
     'knn_in_fc': False,
     'knn_distance': 'l2',
 }
+
+gin.bind_parameter('linear_classifier.weight_decay', 0.01)
 
 
 class BaselineTest(base_test.TestBatchLearner):

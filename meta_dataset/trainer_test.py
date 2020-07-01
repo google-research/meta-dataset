@@ -27,9 +27,10 @@ from meta_dataset import trainer
 from meta_dataset.data import config
 from meta_dataset.data import decoder
 from meta_dataset.data import providers
+from meta_dataset.models import functional_backbones
 import numpy as np
 import tensorflow.compat.v1 as tf
-
+tf.disable_eager_execution()
 
 tf.flags.DEFINE_string('records_root_dir', '',
                        'Root directory containing a subdirectory per dataset.')
@@ -47,13 +48,13 @@ class TrainerTest(tf.test.TestCase):
   def test_trainer(self):
     # PrototypicalNetworkLearner is built automatically and this test does not
     # have the opportunity to pass values to its constructor except through gin.
-    gin.bind_parameter('PrototypicalNetworkLearner.weight_decay', 1e-4)
     gin.bind_parameter('PrototypicalNetworkLearner.backprop_through_moments',
                        True)
     gin.bind_parameter('PrototypicalNetworkLearner.transductive_batch_norm',
                        False)
     gin.bind_parameter('PrototypicalNetworkLearner.embedding_fn',
-                       'four_layer_convnet')
+                       functional_backbones.four_layer_convnet)
+    gin.bind_parameter('four_layer_convnet.weight_decay', 1e-4)
 
     # Values that can't be passed directly to EpisodeDescriptionConfig
     gin.bind_parameter('process_episode.support_decoder',

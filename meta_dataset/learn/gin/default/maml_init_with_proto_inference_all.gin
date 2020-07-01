@@ -5,7 +5,7 @@ Trainer.train_learner_class = @BaselineLearner
 Trainer.eval_learner_class = @MAMLLearner
 # The following line is what makes this proto-MAML.
 MAMLLearner.proto_maml_fc_layer_init = True
-Learner.weight_decay = 1e-4
+weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
 MAMLLearner.debug = False
 

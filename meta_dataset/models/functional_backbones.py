@@ -29,6 +29,51 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
+OPTIMIZER_KEYWORDS = ('adam', 'power', 'global_step',
+                      'data_dependent_init_done')
+EMBEDDING_KEYWORDS = ('conv', 'resnet', 'fully_connected')
+HEAD_CLASSIFIER_KEYWORDS = ('fc',)
+
+
+def is_backbone_variable(variable_name, only_if=lambda x: True):
+  """Returns True if `variable_name` refers to a backbone variable.
+
+  Args:
+    variable_name: A string; the name of a `tf.Variable` that will be checked to
+      determine whether the variable belongs to the backbone (embedding
+      function) of a `Learner`.
+    only_if: A callable that returns `True` when the name of a `tf.Variable`
+      satisfies some condition; by default `only_if` returns `True` for any
+      argument.
+
+  Returns:
+    `True` if the `tf.Variable` to which `variable_name` refers belongs to a
+    backbone (embedding function) and `only_if(variable_name)` is also
+    satisfied.
+  """
+  variable_name = variable_name.lower()
+
+  # We restore all embedding variables.
+  is_embedding_var = any(
+      keyword in variable_name for keyword in EMBEDDING_KEYWORDS)
+
+  # We exclude all head classifier variables.
+  is_head_classifier_var = any(
+      keyword in variable_name for keyword in HEAD_CLASSIFIER_KEYWORDS)
+
+  # We exclude 'relation*' variables as they are not present in a pretrained
+  # checkpoint.
+  is_relationnet_var = variable_name.startswith('relation')
+
+  # We exclude optimizer variables, as the episodic finetuning procedure is a
+  # different optimization problem than the original training objective.
+  is_optimizer_var = any(
+      keyword in variable_name for keyword in OPTIMIZER_KEYWORDS)
+
+  return (only_if(variable_name) and is_embedding_var and
+          not is_head_classifier_var and not is_relationnet_var and
+          not is_optimizer_var)
+
 
 def conv2d(x, w, stride=1, b=None, padding='SAME'):
   """conv2d returns a 2d convolution layer with full stride."""
@@ -117,11 +162,14 @@ def bn(x, params=None, moments=None, backprop_through_moments=True):
     return output, params, moments
 
 
-def weight_variable(shape):
+def weight_variable(shape, weight_decay):
   """weight_variable generates a weight variable of a given shape."""
   initial = tf.initializers.truncated_normal(stddev=0.1)
   return tf.get_variable(
-      'weight', shape=shape, initializer=initial, regularizer=tf.nn.l2_loss)
+      'weight',
+      shape=shape,
+      initializer=initial,
+      regularizer=tf.keras.regularizers.L2(weight_decay))
 
 
 def bias_variable(shape):
@@ -130,14 +178,16 @@ def bias_variable(shape):
   return tf.get_variable('bias', shape=shape, initializer=initial)
 
 
-def dense(x, output_size, activation_fn=tf.nn.relu, params=None):
+def dense(x, output_size, weight_decay, activation_fn=tf.nn.relu, params=None):
   """Fully connected layer implementation.
 
   Args:
     x: tf.Tensor, input.
     output_size: int, number features in  the fully connected layer.
+    weight_decay: float, scaling constant for L2 weight decay on weight
+      variables.
     activation_fn: function, to process pre-activations, namely x*w+b.
-    params: None or a dict containing the values of the wieght and bias params.
+    params: None or a dict containing the values of the weight and bias params.
       If None, default variables are used.
 
   Returns:
@@ -154,7 +204,7 @@ def dense(x, output_size, activation_fn=tf.nn.relu, params=None):
     w_name = scope_name + '/kernel'
     b_name = scope_name + '/bias'
     if params is None:
-      w = weight_variable([input_size, output_size])
+      w = weight_variable([input_size, output_size], weight_decay)
       b = bias_variable([output_size])
     else:
       w = params[w_name]
@@ -166,13 +216,20 @@ def dense(x, output_size, activation_fn=tf.nn.relu, params=None):
   return x, params
 
 
-def conv(x, conv_size, depth, stride, padding='SAME', params=None):
+def conv(x,
+         conv_size,
+         depth,
+         stride,
+         weight_decay,
+         padding='SAME',
+         params=None):
   """A block that performs convolution."""
   params_keys, params_vars = [], []
   scope_name = tf.get_variable_scope().name
   input_depth = x.get_shape().as_list()[-1]
   if params is None:
-    w_conv = weight_variable([conv_size[0], conv_size[1], input_depth, depth])
+    w_conv = weight_variable([conv_size[0], conv_size[1], input_depth, depth],
+                             weight_decay)
   else:
     w_conv = params[scope_name + '/kernel']
 
@@ -189,6 +246,7 @@ def conv_bn(x,
             conv_size,
             depth,
             stride,
+            weight_decay,
             padding='SAME',
             params=None,
             moments=None,
@@ -197,7 +255,7 @@ def conv_bn(x,
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []
   x, conv_params = conv(
-      x, conv_size, depth, stride, padding=padding, params=params)
+      x, conv_size, depth, stride, weight_decay, padding=padding, params=params)
   params_keys.extend(conv_params.keys())
   params_vars.extend(conv_params.values())
 
@@ -219,7 +277,8 @@ def conv_bn(x,
 
 def bottleneck(x,
                depth,
-               stride=1,
+               stride,
+               weight_decay,
                params=None,
                moments=None,
                use_project=False,
@@ -233,6 +292,7 @@ def bottleneck(x,
         x, [3, 3],
         depth[0],
         stride,
+        weight_decay,
         params=params,
         moments=moments,
         backprop_through_moments=backprop_through_moments)
@@ -248,6 +308,7 @@ def bottleneck(x,
         h, [3, 3],
         depth[1],
         stride=1,
+        weight_decay=weight_decay,
         params=params,
         moments=moments,
         backprop_through_moments=backprop_through_moments)
@@ -266,6 +327,7 @@ def bottleneck(x,
             x, [1, 1],
             depth[1],
             stride,
+            weight_decay,
             params=params,
             moments=moments,
             backprop_through_moments=backprop_through_moments)
@@ -282,6 +344,7 @@ def bottleneck(x,
 
 def _resnet(x,
             is_training,
+            weight_decay,
             scope,
             reuse=tf.AUTO_REUSE,
             params=None,
@@ -317,6 +380,7 @@ def _resnet(x,
           x, [7, 7],
           64,
           2,
+          weight_decay,
           params=params,
           moments=moments,
           backprop_through_moments=backprop_through_moments)
@@ -334,6 +398,7 @@ def _resnet(x,
       x, bottleneck_params, bottleneck_moments = bottleneck(
           x, (depth, depth),
           output_stride,
+          weight_decay,
           params=params,
           moments=moments,
           use_project=use_project,
@@ -346,7 +411,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 64, params, moments, stride=1)
+              x, i, 64, 1, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -356,7 +421,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 128, params, moments)
+              x, i, 128, 1, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -366,7 +431,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 256, params, moments)
+              x, i, 256, 1, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -376,7 +441,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 512, params, moments)
+              x, i, 512, 1, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -392,8 +457,10 @@ def _resnet(x,
     return return_dict
 
 
+@gin.configurable('resnet', whitelist=['weight_decay'])
 def resnet(x,
            is_training,
+           weight_decay,
            params=None,
            moments=None,
            reuse=tf.AUTO_REUSE,
@@ -401,9 +468,11 @@ def resnet(x,
            backprop_through_moments=True,
            use_bounded_activation=False,
            keep_spatial_dims=False):
+  """ResNet embedding function."""
   return _resnet(
       x,
       is_training,
+      weight_decay,
       scope,
       reuse=reuse,
       params=params,
@@ -415,7 +484,8 @@ def resnet(x,
 
 def wide_resnet_block(x,
                       depth,
-                      stride=1,
+                      stride,
+                      weight_decay,
                       params=None,
                       moments=None,
                       use_project=False,
@@ -437,7 +507,8 @@ def wide_resnet_block(x,
 
     out_1 = relu(bn_1, use_bounded_activation=use_bounded_activation)
 
-    h_1, conv_params = conv(out_1, [3, 3], depth, stride, params=params)
+    h_1, conv_params = conv(
+        out_1, [3, 3], depth, stride, weight_decay, params=params)
     params_keys.extend(conv_params.keys())
     params_vars.extend(conv_params.values())
   with tf.variable_scope('conv2'):
@@ -453,7 +524,12 @@ def wide_resnet_block(x,
 
     out_2 = relu(bn_2, use_bounded_activation=use_bounded_activation)
 
-    h_2, conv_params = conv(out_2, [3, 3], depth, stride=1, params=params)
+    h_2, conv_params = conv(
+        out_2, [3, 3],
+        depth,
+        stride=1,
+        weight_decay=weight_decay,
+        params=params)
     params_keys.extend(conv_params.keys())
     params_vars.extend(conv_params.values())
 
@@ -464,7 +540,8 @@ def wide_resnet_block(x,
   with tf.variable_scope('identity'):
     if use_project:
       with tf.variable_scope('projection_conv'):
-        x, conv_params = conv(out_1, [1, 1], depth, stride, params=params)
+        x, conv_params = conv(
+            out_1, [1, 1], depth, stride, weight_decay, params=params)
         params_keys.extend(conv_params.keys())
         params_vars.extend(conv_params.values())
 
@@ -483,6 +560,7 @@ def _wide_resnet(x,
                  scope,
                  n,
                  k,
+                 weight_decay,
                  reuse=tf.AUTO_REUSE,
                  params=None,
                  moments=None,
@@ -507,7 +585,7 @@ def _wide_resnet(x,
 
   with tf.variable_scope(scope, reuse=reuse):
     with tf.variable_scope('conv1'):
-      x, conv_params = conv(x, [3, 3], 16, 1, params=params)
+      x, conv_params = conv(x, [3, 3], 16, 1, weight_decay, params=params)
       _update_params_lists(conv_params, params_keys, params_vars)
 
     def _wide_resnet_block(x, depths, stride, use_project, moments):
@@ -515,7 +593,8 @@ def _wide_resnet(x,
       x, block_params, block_moments = wide_resnet_block(
           x,
           depths,
-          stride=stride,
+          stride,
+          weight_decay,
           params=params,
           moments=moments,
           use_project=use_project,
@@ -589,8 +668,10 @@ def _wide_resnet(x,
     return return_dict
 
 
+@gin.configurable('wide_resnet', whitelist=['weight_decay'])
 def wide_resnet(x,
                 is_training,
+                weight_decay,
                 params=None,
                 moments=None,
                 reuse=tf.AUTO_REUSE,
@@ -598,9 +679,11 @@ def wide_resnet(x,
                 backprop_through_moments=True,
                 use_bounded_activation=False,
                 keep_spatial_dims=False):
+  """A WideResNet embedding function."""
   return _wide_resnet(
       x,
       is_training,
+      weight_decay,
       scope,
       2,
       2,
@@ -614,6 +697,7 @@ def wide_resnet(x,
 
 def _four_layer_convnet(inputs,
                         scope,
+                        weight_decay,
                         reuse=tf.AUTO_REUSE,
                         params=None,
                         moments=None,
@@ -634,6 +718,7 @@ def _four_layer_convnet(inputs,
             layer, [3, 3],
             depth,
             stride=1,
+            weight_decay=weight_decay,
             params=params,
             moments=moments,
             backprop_through_moments=backprop_through_moments)
@@ -663,14 +748,68 @@ def _four_layer_convnet(inputs,
     return return_dict
 
 
-def relation_net(inputs,
-                 scope,
-                 reuse=tf.AUTO_REUSE,
-                 params=None,
-                 moments=None,
-                 depth_multiplier=1.0,
-                 backprop_through_moments=True,
-                 use_bounded_activation=False):
+@gin.configurable('four_layer_convnet', whitelist=['weight_decay'])
+def four_layer_convnet(inputs,
+                       is_training,
+                       weight_decay,
+                       params=None,
+                       moments=None,
+                       depth_multiplier=1.0,
+                       reuse=tf.AUTO_REUSE,
+                       scope='four_layer_convnet',
+                       backprop_through_moments=True,
+                       use_bounded_activation=False,
+                       keep_spatial_dims=False):
+  """Embeds inputs using a standard four-layer convnet.
+
+  Args:
+    inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
+    is_training: Whether we are in the training phase.
+    weight_decay: float, scaling constant for L2 weight decay on weight
+      variables.
+    params: None will create new params (or reuse from scope), otherwise an
+      ordered dict of convolutional kernels and biases such that
+      params['kernel_0'] stores the kernel of the first convolutional layer,
+      etc.
+    moments: A dict of the means and vars of the different layers to use for
+      batch normalization. If not provided, the mean and var are computed based
+      on the given inputs.
+    depth_multiplier: The depth multiplier for the convnet channels.
+    reuse: Whether to reuse the network's weights.
+    scope: An optional scope for the tf operations.
+    backprop_through_moments: Whether to allow gradients to flow through the
+      given support set moments. Only applies to non-transductive batch norm.
+    use_bounded_activation: Whether to enable bounded activation. This is useful
+      for post-training quantization.
+    keep_spatial_dims: bool, if True the spatial dimensions are kept.
+
+  Returns:
+    A 2D Tensor, where each row is the embedding of an input in inputs.
+  """
+  del is_training
+  return _four_layer_convnet(
+      inputs,
+      scope,
+      weight_decay=weight_decay,
+      reuse=reuse,
+      params=params,
+      moments=moments,
+      depth_multiplier=depth_multiplier,
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation,
+      keep_spatial_dims=keep_spatial_dims)
+
+
+@gin.configurable('relation_module', whitelist=['weight_decay'])
+def relation_module(inputs,
+                    weight_decay,
+                    scope='relation_module',
+                    reuse=tf.AUTO_REUSE,
+                    params=None,
+                    moments=None,
+                    depth_multiplier=1.0,
+                    backprop_through_moments=True,
+                    use_bounded_activation=False):
   """A 2-layer-convnet architecture with fully connected layers."""
   model_params_keys, model_params_vars = [], []
   moments_keys, moments_vars = [], []
@@ -683,7 +822,8 @@ def relation_net(inputs,
         layer, conv_bn_params, conv_bn_moments = conv_bn(
             layer, [3, 3],
             depth,
-            stride=1,
+            1,
+            weight_decay,
             params=params,
             moments=moments,
             backprop_through_moments=backprop_through_moments)
@@ -703,12 +843,14 @@ def relation_net(inputs,
     relu_activation_fn = functools.partial(
         relu, use_bounded_activation=use_bounded_activation)
     with tf.variable_scope('layer_2_fc', reuse=reuse):
-      layer, dense_params = dense(layer, 8, activation_fn=relu_activation_fn)
+      layer, dense_params = dense(
+          layer, 8, weight_decay, activation_fn=relu_activation_fn)
       tf.logging.info('Output layer_2_fc: %s' % layer.shape)
       model_params_keys.extend(dense_params.keys())
       model_params_vars.extend(dense_params.values())
     with tf.variable_scope('layer_3_fc', reuse=reuse):
-      output, dense_params = dense(layer, 1, activation_fn=tf.nn.sigmoid)
+      output, dense_params = dense(
+          layer, 1, weight_decay, activation_fn=tf.nn.sigmoid)
       tf.logging.info('Output layer_3_fc: %s' % output.shape)
       model_params_keys.extend(dense_params.keys())
       model_params_vars.extend(dense_params.values())
@@ -721,17 +863,19 @@ def relation_net(inputs,
     return return_dict
 
 
-def relationnet_embedding(inputs,
-                          is_training,
-                          params=None,
-                          moments=None,
-                          depth_multiplier=1.0,
-                          reuse=tf.AUTO_REUSE,
-                          scope='relationnet_convnet',
-                          backprop_through_moments=True,
-                          use_bounded_activation=False,
-                          keep_spatial_dims=False):
-  """A 4-layer-convnet architecture for relationnet embedding.
+@gin.configurable('relationnet_convnet', whitelist=['weight_decay'])
+def relationnet_convnet(inputs,
+                        is_training,
+                        weight_decay,
+                        params=None,
+                        moments=None,
+                        depth_multiplier=1.0,
+                        reuse=tf.AUTO_REUSE,
+                        scope='relationnet_convnet',
+                        backprop_through_moments=True,
+                        use_bounded_activation=False,
+                        keep_spatial_dims=False):
+  """A 4-layer-convnet architecture for RelationNet embedding.
 
   This is almost like the `four_layer_convnet` embedding function except
   for the following differences: (1) no padding for the first 3 layers, (2) no
@@ -744,6 +888,8 @@ def relationnet_embedding(inputs,
   Args:
     inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
     is_training: Whether we are in the training phase.
+    weight_decay: float, scaling constant for L2 weight decay on weight
+      variables.
     params: None will create new params (or reuse from scope), otherwise an
       ordered dict of convolutional kernels and biases such that
       params['kernel_0'] stores the kernel of the first convolutional layer,
@@ -781,6 +927,7 @@ def relationnet_embedding(inputs,
             layer, [3, 3],
             depth,
             stride=1,
+            weight_decay=weight_decay,
             padding='VALID' if i < 3 else 'SAME',
             params=params,
             moments=moments,
@@ -809,60 +956,16 @@ def relationnet_embedding(inputs,
     return return_dict
 
 
-def four_layer_convnet(inputs,
-                       is_training,
-                       params=None,
-                       moments=None,
-                       depth_multiplier=1.0,
-                       reuse=tf.AUTO_REUSE,
-                       scope='four_layer_convnet',
-                       backprop_through_moments=True,
-                       use_bounded_activation=False,
-                       keep_spatial_dims=False):
-  """Embeds inputs using a standard four-layer convnet.
-
-  Args:
-    inputs: Tensors of shape [None, ] + image shape, e.g. [15, 84, 84, 3]
-    is_training: Whether we are in the training phase.
-    params: None will create new params (or reuse from scope), otherwise an
-      ordered dict of convolutional kernels and biases such that
-      params['kernel_0'] stores the kernel of the first convolutional layer,
-      etc.
-    moments: A dict of the means and vars of the different layers to use for
-      batch normalization. If not provided, the mean and var are computed based
-      on the given inputs.
-    depth_multiplier: The depth multiplier for the convnet channels.
-    reuse: Whether to reuse the network's weights.
-    scope: An optional scope for the tf operations.
-    backprop_through_moments: Whether to allow gradients to flow through the
-      given support set moments. Only applies to non-transductive batch norm.
-    use_bounded_activation: Whether to enable bounded activation. This is useful
-      for post-training quantization.
-    keep_spatial_dims: bool, if True the spatial dimensions are kept.
-
-  Returns:
-    A 2D Tensor, where each row is the embedding of an input in inputs.
-  """
-  del is_training
-  return _four_layer_convnet(
-      inputs,
-      scope,
-      reuse=reuse,
-      params=params,
-      moments=moments,
-      depth_multiplier=depth_multiplier,
-      backprop_through_moments=backprop_through_moments,
-      use_bounded_activation=use_bounded_activation,
-      keep_spatial_dims=keep_spatial_dims)
-
-
 @gin.configurable(
-    'fully_connected_network', whitelist=[
+    'fully_connected_network',
+    whitelist=[
         'n_hidden_units',
         'use_batchnorm',
+        'weight_decay',
     ])
 def fully_connected_network(inputs,
                             is_training,
+                            weight_decay,
                             params=None,
                             moments=None,
                             n_hidden_units=(64,),
@@ -881,6 +984,8 @@ def fully_connected_network(inputs,
     inputs: Tensor of shape [None, num_features], where `num_features` is the
       number of input features.
     is_training: not used.
+    weight_decay: float, scaling constant for L2 weight decay on weight
+      variables.
     params: None will create new params (or reuse from scope), otherwise an
       ordered dict of fully connected weights and biases such that
       params['weight_0'] stores the kernel of the first fully-connected layer,
@@ -909,7 +1014,11 @@ def fully_connected_network(inputs,
     for i, n_unit in enumerate(n_hidden_units):
       with tf.variable_scope('layer_%d' % i, reuse=reuse):
         layer, dense_params = dense(
-            layer, n_unit, activation_fn=activation_fn, params=params)
+            layer,
+            n_unit,
+            weight_decay,
+            activation_fn=activation_fn,
+            params=params)
         model_params_keys.extend(dense_params.keys())
         model_params_vars.extend(dense_params.values())
         if use_batchnorm:
@@ -932,12 +1041,3 @@ def fully_connected_network(inputs,
       'moments': moments
   }
   return return_dict
-
-
-NAME_TO_EMBEDDING_NETWORK = {
-    'resnet': resnet,
-    'relationnet_embedding': relationnet_embedding,
-    'four_layer_convnet': four_layer_convnet,
-    'fully_connected_network': fully_connected_network,
-    'wide_resnet': wide_resnet,
-}

@@ -12,7 +12,7 @@ Trainer.decay_learning_rate = True
 Trainer.decay_every = 10000
 Trainer.decay_rate = 0.9714872833376629
 Trainer.learning_rate = 0.002670412664551181
-Learner.weight_decay = 0.000013646011503835137
+weight_decay = 0.000013646011503835137
 
 # Baseline hypers (just for the record).
 BaselineLearner.cosine_logits_multiplier = 1

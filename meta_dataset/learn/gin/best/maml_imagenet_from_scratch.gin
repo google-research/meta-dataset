@@ -2,10 +2,10 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/maml_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'four_layer_convnet'
+Learner.embedding_fn = @four_layer_convnet
+
 Trainer.pretrained_source = 'scratch'
 Trainer.checkpoint_to_restore = ''
-
 
 # Model hypers.
 MAMLLearner.first_order = True
@@ -21,4 +21,4 @@ Trainer.decay_learning_rate = True
 Trainer.decay_every = 5000
 Trainer.decay_rate = 0.9153310958769965
 Trainer.learning_rate = 0.00012385665511953882
-Learner.weight_decay = 0.0006858703351826797
+weight_decay = 0.0006858703351826797

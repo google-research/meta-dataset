@@ -21,6 +21,8 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import functools
+from meta_dataset.models import functional_backbones
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -38,9 +40,9 @@ VALID_ABSTRACT_LEARNER_INIT_ARGS = {
 }
 
 VALID_LEARNER_INIT_ARGS = {
-    **VALID_ABSTRACT_LEARNER_INIT_ARGS,
-    'embedding_fn': 'four_layer_convnet',
-    'weight_decay': 1.0,
+    **VALID_ABSTRACT_LEARNER_INIT_ARGS, 'embedding_fn':
+        functools.partial(
+            functional_backbones.four_layer_convnet, weight_decay=0.01)
 }
 
 # TODO(eringrant): Right now some `Learner` (`MatchingNetworkLearner`)

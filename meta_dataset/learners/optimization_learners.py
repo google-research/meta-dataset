@@ -28,6 +28,7 @@ from meta_dataset.learners import base as learner_base
 from meta_dataset.learners import baseline_learners
 from meta_dataset.learners import metric_learners
 from meta_dataset.models import functional_backbones
+from meta_dataset.models import functional_classifiers
 import six
 from six.moves import range
 from six.moves import zip
@@ -378,7 +379,7 @@ class BaselineFinetuneLearner(baseline_learners.BaselineLearner):
   def _fc_layer(self, embedding):
     """The fully connected layer to be finetuned."""
     with tf.variable_scope('fc_finetune', reuse=tf.AUTO_REUSE):
-      logits = baseline_learners.linear_classifier_logits(
+      logits = functional_classifiers.linear_classifier(
           embedding, self.logit_dim, self.cosine_classifier,
           self.cosine_logits_multiplier, self.use_weight_norm)
     return logits
@@ -401,6 +402,7 @@ class MAMLLearner(OptimizationLearner):
                adapt_batch_norm,
                zero_fc_layer,
                proto_maml_fc_layer_init,
+               classifier_weight_decay,
                debug=False,
                **kwargs):
     """Initializes a baseline learner.
@@ -415,6 +417,8 @@ class MAMLLearner(OptimizationLearner):
       zero_fc_layer: Whether to use zero fc layer initialization.
       proto_maml_fc_layer_init: Whether to use ProtoNets equivalent fc layer
         initialization.
+      classifier_weight_decay: Scalar weight decay coefficient for
+        regularization of the linear classifier layer.
       debug: If True, print out debug logs.
       **kwargs: Keyword arguments common to all `OptimizationLearner`.
     """
@@ -426,6 +430,7 @@ class MAMLLearner(OptimizationLearner):
     self.debug_log = debug
     self.zero_fc_layer = zero_fc_layer
     self.proto_maml_fc_layer_init = proto_maml_fc_layer_init
+    self.classifier_weight_decay = classifier_weight_decay
     super(MAMLLearner, self).__init__(**kwargs)
 
   def proto_maml_fc_weights(self, prototypes, zero_pad_to_max_way=False):
@@ -480,10 +485,13 @@ class MAMLLearner(OptimizationLearner):
     support_embeddings = support_embeddings_['embeddings']
     embedding_vars_dict = support_embeddings_['params']
 
+    # TODO(eringrant): Refactor to make use of
+    # `functional_backbones.linear_classifier`, which allows Gin-configuration.
     with tf.variable_scope('linear_classifier', reuse=tf.AUTO_REUSE):
       embedding_depth = support_embeddings.shape.as_list()[-1]
       fc_weights = functional_backbones.weight_variable(
-          [embedding_depth, self.logit_dim])
+          [embedding_depth, self.logit_dim],
+          weight_decay=self.classifier_weight_decay)
       fc_bias = functional_backbones.bias_variable([self.logit_dim])
 
     # A list of variable names, a list of corresponding Variables, and a list

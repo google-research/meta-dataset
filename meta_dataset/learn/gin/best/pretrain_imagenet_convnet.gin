@@ -2,7 +2,8 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/baseline_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'four_layer_convnet'
+Learner.embedding_fn = @four_layer_convnet
+
 Trainer.checkpoint_to_restore = ''
 Trainer.pretrained_source = 'scratch'
 
@@ -20,4 +21,4 @@ Trainer.num_updates = 50000
 Trainer.decay_every = 1000
 Trainer.decay_rate = 0.9105573818947892
 Trainer.learning_rate = 0.008644114436633987
-Learner.weight_decay = 0.000005171477829794739
+weight_decay = 0.000005171477829794739

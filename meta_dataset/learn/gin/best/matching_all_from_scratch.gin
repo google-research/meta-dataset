@@ -2,7 +2,8 @@ include 'meta_dataset/learn/gin/setups/all.gin'
 include 'meta_dataset/learn/gin/learners/matching_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'four_layer_convnet'
+Learner.embedding_fn = @four_layer_convnet
+
 Trainer.pretrained_source = 'scratch'
 Trainer.checkpoint_to_restore = ''
 
@@ -14,4 +15,4 @@ Trainer.decay_learning_rate = True
 Trainer.decay_every = 2500
 Trainer.decay_rate = 0.9197652570309498
 Trainer.learning_rate = 0.002748105034397538
-Learner.weight_decay = 0.0000013254789476822292
+weight_decay = 0.0000013254789476822292

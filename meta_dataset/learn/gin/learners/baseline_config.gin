@@ -1,8 +1,10 @@
 include 'meta_dataset/learn/gin/learners/learner_config.gin'
 Trainer.train_learner_class = @BaselineLearner
 Trainer.eval_learner_class = @BaselineLearner
-Learner.embedding_fn = 'four_layer_convnet'
-Learner.weight_decay = 1e-4
+
+Learner.embedding_fn = @four_layer_convnet
+weight_decay = 1e-4
+
 BaselineLearner.knn_in_fc = False
 BaselineLearner.knn_distance = 'l2'
 BaselineLearner.cosine_classifier = False

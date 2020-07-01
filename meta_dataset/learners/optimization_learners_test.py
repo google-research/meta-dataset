@@ -16,6 +16,8 @@
 # Lint as: python3
 """Tests for `meta_dataset.learners.optimization_learners`."""
 
+import gin.tf
+
 from meta_dataset.learners import base_test
 from meta_dataset.learners import optimization_learners
 
@@ -31,6 +33,8 @@ BASELINE_FINETUNE_ARGS = {
     'use_weight_norm': False,
     'is_training': False,
 }
+
+gin.bind_parameter('MAMLLearner.classifier_weight_decay', 0.01)
 
 
 class BaselineFinetuneTest():

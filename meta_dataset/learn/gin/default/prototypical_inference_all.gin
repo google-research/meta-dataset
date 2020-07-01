@@ -3,7 +3,7 @@ include 'meta_dataset/learn/gin/learners/learner_config.gin'
 BatchSplitReaderGetReader.add_dataset_offset = True
 Trainer.train_learner_class = @BaselineLearner
 Trainer.eval_learner_class = @PrototypicalNetworkLearner
-Learner.weight_decay = 1e-4
+weight_decay = 1e-4
 BaselineLearner.knn_in_fc = False
 
 BaselineLearner.transductive_batch_norm = False

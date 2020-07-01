@@ -1,3 +1,15 @@
+# Backbone regularization settings.
+linear_classifier.weight_decay = %weight_decay
+fully_connected_network.weight_decay = %weight_decay
+four_layer_convnet.weight_decay = %weight_decay
+relationnet_convnet.weight_decay = %weight_decay
+relation_module.weight_decay = %weight_decay
+resnet.weight_decay = %weight_decay
+wide_resnet.weight_decay = %weight_decay
+MAMLLearner.classifier_weight_decay = %weight_decay
+weight_decay = 0.001
+
+# Training settings.
 Trainer.checkpoint_to_restore = ''
 Trainer.learning_rate = 1e-4
 Trainer.decay_learning_rate = False

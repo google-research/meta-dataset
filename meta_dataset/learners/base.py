@@ -23,7 +23,6 @@ from __future__ import print_function
 
 from absl import logging
 import gin.tf
-from meta_dataset.models import functional_backbones
 import tensorflow.compat.v1 as tf
 
 
@@ -38,7 +37,6 @@ class Learner(object):
       transductive_batch_norm,
       backprop_through_moments,
       embedding_fn,
-      weight_decay,
       input_shape,
   ):
     """Initializes a Learner.
@@ -59,7 +57,6 @@ class Learner(object):
       backprop_through_moments: Whether to allow gradients to flow through the
         given support set moments. Only applies to non-transductive batch norm.
       embedding_fn: A string; the name of the function that embeds images.
-      weight_decay: coefficient for L2 regularization.
       input_shape: A Tensor corresponding to `[batch_size] + example_shape`.
     """
     self.is_training = is_training
@@ -67,12 +64,10 @@ class Learner(object):
     self.input_shape = input_shape
     self.transductive_batch_norm = transductive_batch_norm
     self.backprop_through_moments = backprop_through_moments
-    self.embedding_fn = functional_backbones.NAME_TO_EMBEDDING_NETWORK[
-        embedding_fn]
-    self.weight_decay = weight_decay
 
     if self.transductive_batch_norm:
       logging.info('Using transductive batch norm!')
+    self.embedding_fn = embedding_fn
 
   def compute_loss(self, onehot_labels, predictions):
     """Computes the CE loss of `predictions` with respect to `onehot_labels`.
@@ -90,8 +85,7 @@ class Learner(object):
         onehot_labels=onehot_labels, logits=predictions)
     regularization = tf.reduce_sum(
         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-    loss = cross_entropy_loss + self.weight_decay * regularization
-    return loss
+    return cross_entropy_loss + regularization
 
   def compute_accuracy(self, labels, predictions):
     """Computes the accuracy of `predictions` with respect to `labels`.

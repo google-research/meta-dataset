@@ -2,7 +2,9 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/baseline_config.gin'
 
 # Backbone hypers.
-Learner.embedding_fn = 'wide_resnet'
+Learner.embedding_fn = @wide_resnet
+weight_decay = 0.000007138118976497546
+
 Trainer.checkpoint_to_restore = ''
 Trainer.pretrained_source = 'scratch'
 
@@ -19,4 +21,3 @@ DataConfig.image_height = 126
 Trainer.decay_every = 10000
 Trainer.decay_rate = 0.7294597641152971
 Trainer.learning_rate = 0.007634189137886614
-Learner.weight_decay = 0.000007138118976497546
