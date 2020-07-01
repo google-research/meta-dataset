@@ -43,12 +43,14 @@ import os
 from absl import app
 from absl import logging
 import gin.tf
+# TODO(lamblinp): Better organize module imports for exposure of Gin
+# configurables.
 from meta_dataset import data
 from meta_dataset import learners  # pylint: disable=unused-import
 from meta_dataset import trainer
-# pylint: disable=unused-import
-from meta_dataset.data import config
-# pylint: enable=unused-import
+from meta_dataset.data import config  # pylint: disable=unused-import
+
+
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
 
