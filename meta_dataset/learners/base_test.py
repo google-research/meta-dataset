@@ -23,6 +23,7 @@ from __future__ import print_function
 import collections
 import functools
 from meta_dataset.models import functional_backbones
+
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -51,6 +52,16 @@ VALID_LEARNER_INIT_ARGS = {
 # behavior.
 
 # TODO(eringrant): Test feature (embeddding function-less) representations.
+
+
+class MockEmbedding(reparameterizable_backbones.ConvNet):
+
+  def __init__(self):
+    super().__init__(
+        output_dim=None,
+        keep_spatial_dims=False,
+        num_filters_per_layer=(64, 64, 64, 64),
+    )
 
 
 class MockEpisode(

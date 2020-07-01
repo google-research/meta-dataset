@@ -65,7 +65,8 @@ class BaselineLearner(learner_base.BatchLearner):
 
     super(BaselineLearner, self).__init__(**kwargs)
 
-  def forward_pass(self, data):
+  def forward_pass(self, data, global_step=None, summaries_collection=None):
+    del global_step, summaries_collection  # Unused.
     if self.is_training:
       images = data.images
       embeddings_params_moments = self.embedding_fn(images, self.is_training)

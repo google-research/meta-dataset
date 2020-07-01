@@ -21,7 +21,6 @@ from __future__ import division
 
 from __future__ import print_function
 
-from absl import logging
 import gin.tf
 import tensorflow.compat.v1 as tf
 
@@ -48,26 +47,24 @@ class Learner(object):
     details).
 
     Args:
-      is_training: Whether the learning is in training mode.
+      is_training: Whether the `Learner` is in training (as opposed to
+        evaluation) mode.
       logit_dim: An integer; the maximum dimensionality of output predictions.
       transductive_batch_norm: Whether to batch-normalize in the transductive
         setting, where means and variances for normalization are computed from
         each of the support and query sets (rather than using the support set
         statistics for normalization of both the support and query set).
       backprop_through_moments: Whether to allow gradients to flow through the
-        given support set moments. Only applies to non-transductive batch norm.
-      embedding_fn: A string; the name of the function that embeds images.
+        support set moments; only applies to non-transductive batch norm.
+      embedding_fn: A function that embeds examples.
       input_shape: A Tensor corresponding to `[batch_size] + example_shape`.
     """
     self.is_training = is_training
     self.logit_dim = logit_dim
-    self.input_shape = input_shape
     self.transductive_batch_norm = transductive_batch_norm
     self.backprop_through_moments = backprop_through_moments
-
-    if self.transductive_batch_norm:
-      logging.info('Using transductive batch norm!')
     self.embedding_fn = embedding_fn
+    self.input_shape = input_shape
 
   def compute_loss(self, onehot_labels, predictions):
     """Computes the CE loss of `predictions` with respect to `onehot_labels`.
@@ -103,7 +100,7 @@ class Learner(object):
     correct = tf.equal(labels, tf.to_int32(tf.argmax(predictions, -1)))
     return tf.cast(correct, tf.float32)
 
-  def forward_pass(self, data):
+  def forward_pass(self, data, global_step, summaries_collection):
     """Returns the (query if episodic) logits."""
     raise NotImplementedError('Abstract method.')
 

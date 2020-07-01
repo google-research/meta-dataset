@@ -60,6 +60,9 @@ if not ENABLE_DATA_OPTIMIZATIONS:
   # optimizations to apply.
   TF_DATA_OPTIONS.experimental_optimization.apply_default_optimizations = False
 
+# Objective labels for hyperparameter optimization.
+ACC_MEAN_FORMAT_STRING = '%s_acc/mean'
+ACC_CI95_FORMAT_STRING = '%s_acc/ci95'
 
 # TODO(eringrant): Use `learning_spec.Split.TRAIN`, `learning_spec.Split.VALID`,
 # and `learning_spec.Split.TEST` instead of string constants, and replace all
@@ -470,13 +473,20 @@ class Trainer(object):
         # the evaluation split is not the training split.
         learner_is_training = self.eval_split != TRAIN_SPLIT
         learner_class = self.train_learner_class
+        tied_learner = None
       else:
         learner_is_training = False
         learner_class = self.eval_learner_class
+        # Share parameters between the training and evaluation `Learner`s.
+        tied_learner = (
+            self.learners[TRAIN_SPLIT]
+            if TRAIN_SPLIT in self.required_splits else None)
+
       learner = self.create_learner(
           is_training=learner_is_training,
           learner_class=learner_class,
-          split=get_split_enum(split))
+          split=get_split_enum(split),
+          tied_learner=tied_learner)
 
       if (isinstance(learner, learners.MAMLLearner) and
           not learner.zero_fc_layer and not learner.proto_maml_fc_layer_init):
@@ -529,21 +539,17 @@ class Trainer(object):
 
   def build_learner(self, split, global_step):
     """Compute predictions, losses and accuracies of the learner for split."""
-
-    # TODO(eringrant): Pass `global_step` and `summaries_collection` to
-    # `Learner.forward_pass` when the new interface is in use.
-    summaries_collection = '{}/learner_summaries'.format(split)
-    del global_step
-    del summaries_collection
-
     with tf.name_scope(split):
       data = self.next_data[split]
-      predictions = self.learners[split].forward_pass(data=data)
+      predictions = self.learners[split].forward_pass(
+          data,
+          global_step,
+          summaries_collection='{}/learner_summaries'.format(split))
       loss = self.learners[split].compute_loss(
           predictions=predictions, onehot_labels=data.onehot_labels)
       accuracy = self.learners[split].compute_accuracy(
           predictions=predictions, labels=data.labels)
-      return predictions, loss, accuracy
+    return predictions, loss, accuracy
 
   def set_way_shots_classes_logits_targets(self):
     """Sets the Tensors for the info about the learner's next episode."""
@@ -583,21 +589,21 @@ class Trainer(object):
 
   def create_summary_writer(self):
     """Create summaries and writer."""
-    # Add summaries for the losses / accuracies of the different learners.
-    standard_summaries = []
+
+    # Add summaries for the losses / accuracies of the learner.
+    # TODO(eringrant): Rewrite to allow TF2.0 summaries.
+    self.standard_summaries = []
     for split in self.required_splits:
-      loss_summary = tf.summary.scalar('%s_loss' % split, self.losses[split])
-      acc_summary = tf.summary.scalar('%s_acc' % split,
-                                      tf.reduce_mean(self.accuracies[split]))
-      standard_summaries.append(loss_summary)
-      standard_summaries.append(acc_summary)
+      learner_summaries = tf.get_collection(
+          '{}/learner_summaries'.format(split))
+      if learner_summaries:
+        with tf.name_scope(split):
+          self.standard_summaries.append(tf.summary.merge(learner_summaries))
+    if self.standard_summaries:
+      self.standard_summaries = tf.summary.merge(self.standard_summaries)
 
-    # Add summaries for the way / shot / logits / targets of the learners.
-    evaluation_summaries = self.add_eval_summaries()
-
-    # All summaries.
-    self.standard_summaries = tf.summary.merge(standard_summaries)
-    self.evaluation_summaries = tf.summary.merge(evaluation_summaries)
+    # Add summaries for the way / shot / logits / targets of the learner.
+    self.evaluation_summaries = tf.summary.merge(self.add_eval_summaries())
 
     # Get a writer.
     self.summary_writer = None
@@ -606,8 +612,12 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.summary_dir):
         tf.io.gfile.makedirs(self.summary_dir)
 
-  def create_learner(self, is_training, learner_class, split):
-    """Instantiates a `Learner`."""
+  def create_learner(self,
+                     is_training,
+                     learner_class,
+                     split,
+                     tied_learner=None):
+    """Instantiates `learner_class`, tying weights to `tied_learner`."""
     if issubclass(learner_class, learners.BatchLearner):
       logit_dim = self._get_logit_dim(
           split, is_batch_learner=True, is_training=is_training)
@@ -618,6 +628,7 @@ class Trainer(object):
       raise ValueError('The specified `learner_class` should be a subclass of '
                        '`learners.BatchLearner` or `learners.EpisodicLearner`, '
                        'but received {}.'.format(learner_class))
+
     return learner_class(
         is_training=is_training,
         logit_dim=logit_dim,
@@ -927,7 +938,7 @@ class Trainer(object):
     return num_to_take
 
   def build_data(self, split):
-    """Builds the data for the learner for `split`."""
+    """Builds an episode or batch containing the next data for `split`."""
     learner_class = (
         self.train_learner_class
         if split == TRAIN_SPLIT else self.eval_learner_class)
@@ -1123,11 +1134,14 @@ class Trainer(object):
 
   def get_train_op(self, global_step):
     """Returns the operation that performs a training update."""
-    # UPDATE_OPS picks up batch_norm updates.
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
+      trainable_variables = getattr(self.learners[TRAIN_SPLIT],
+                                    'trainable_variables', None)
       train_op = self.optimizer.minimize(
-          self.losses[TRAIN_SPLIT], global_step=global_step)
+          loss=self.losses[TRAIN_SPLIT],
+          global_step=global_step,
+          var_list=trainable_variables)
     return train_op
 
   def get_updated_global_step(self):
@@ -1175,8 +1189,8 @@ class Trainer(object):
         logging.info(message)
 
         # Update summaries.
-        summaries = self.sess.run(self.standard_summaries)
-        if self.summary_writer:
+        if self.summary_writer and self.standard_summaries:
+          summaries = self.sess.run(self.standard_summaries)
           self.summary_writer.add_summary(summaries, global_step)
 
       if should_save and global_step % self.checkpoint_every == 0:
@@ -1229,10 +1243,13 @@ class Trainer(object):
       # Logging during training is handled by self.train() instead.
       logging.info('Accuracy on the meta-%s split: %f, +/- %f.\n', split,
                    mean_acc, ci_acc)
-    mean_acc_summary = tf.Summary()
-    mean_acc_summary.value.add(tag='mean %s acc' % split, simple_value=mean_acc)
-    ci_acc_summary = tf.Summary()
-    ci_acc_summary.value.add(tag='%s acc CI' % split, simple_value=ci_acc)
+
+    with tf.name_scope('trainer_metrics'):
+      with tf.name_scope(split):
+        mean_acc_summary = tf.Summary()
+        mean_acc_summary.value.add(tag='mean acc', simple_value=mean_acc)
+        ci_acc_summary = tf.Summary()
+        ci_acc_summary.value.add(tag='acc CI', simple_value=ci_acc)
 
     return mean_acc, ci_acc, mean_acc_summary, ci_acc_summary
 
