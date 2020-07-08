@@ -391,7 +391,7 @@ def _resnet(x,
 
       x = relu(x, use_bounded_activation=use_bounded_activation)
 
-    def _bottleneck(x, i, depth, params, moments, stride=2):
+    def _bottleneck(x, i, depth, stride, params, moments):
       """Wrapper for bottleneck."""
       output_stride = stride if i == 0 else 1
       use_project = True if i == 0 else False
@@ -421,7 +421,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 128, 1, params, moments)
+              x, i, 128, 2, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -431,7 +431,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 256, 1, params, moments)
+              x, i, 256, 2, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
@@ -441,7 +441,7 @@ def _resnet(x,
       for i in range(2):
         with tf.variable_scope('bottleneck_%d' % i):
           x, bottleneck_params, bottleneck_moments = _bottleneck(
-              x, i, 512, 1, params, moments)
+              x, i, 512, 2, params, moments)
           params_keys.extend(bottleneck_params.keys())
           params_vars.extend(bottleneck_params.values())
           moments_keys.extend(bottleneck_moments.keys())
