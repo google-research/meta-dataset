@@ -532,6 +532,10 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.checkpoint_dir):
         tf.io.gfile.makedirs(self.checkpoint_dir)
 
+    # Dummy variables so that logging works even if called before evaluation.
+    self.valid_acc = np.nan
+    self.valid_ci = np.nan
+
     # Initialize a Session.
     self.initialize_session()
     self.initialize_saver()
@@ -1155,10 +1159,6 @@ class Trainer(object):
     logging.info('Starting training from global_step: %d', global_step)
     updated_global_step = self.get_updated_global_step()
 
-    # Dummy variables so that logging works even if called before evaluation.
-    self.valid_acc = np.nan
-    self.valid_ci = np.nan
-
     should_save = self.checkpoint_dir is not None
     if should_save and global_step == 0:
       # Save the initialization weights.
@@ -1166,8 +1166,10 @@ class Trainer(object):
           self.sess, os.path.join(self.checkpoint_dir, 'model_0.ckpt'))
       logging.info('Model initialization saved: %s', save_path)
 
-    # Compute the initial validation performance before starting the training.
-    self.maybe_evaluate(global_step)
+    # Compute the initial validation performance before starting the training,
+    # unless train() has already been called on this object.
+    if np.isnan([self.valid_acc, self.valid_ci]).any():
+      self.maybe_evaluate(global_step)
 
     while global_step < self.num_updates:
       # Perform the next update.

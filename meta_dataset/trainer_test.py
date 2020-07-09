@@ -20,13 +20,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
+import os
+import textwrap
+
 from absl import flags
+from absl.testing import parameterized
 import gin.tf
 from meta_dataset import learners
 from meta_dataset import trainer
 from meta_dataset.data import config
+from meta_dataset.data import dataset_spec
 from meta_dataset.data import decoder
+from meta_dataset.data import learning_spec
 from meta_dataset.data import providers
+from meta_dataset.data import test_utils
 from meta_dataset.models import functional_backbones
 import numpy as np
 import tensorflow.compat.v1 as tf
@@ -129,6 +137,204 @@ class TrainerTest(tf.test.TestCase):
             trainer_instance.losses[trainer.TRAIN_SPLIT],
             trainer_instance.accuracies[trainer.TRAIN_SPLIT]
         ]))
+
+
+class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
+  """Integration test for the whole procedure driven by the Trainer."""
+
+  # Number of total examples (also way)
+  NUM_EXAMPLES = 5
+  FEAT_SIZE = 64
+
+  # Spec for all-way 1-shot dummy dataset. valid classes and examples are the
+  # same as train, to force over-fitting.
+  DATASET_SPEC = dataset_spec.DatasetSpecification(
+      name=None,
+      classes_per_split={
+          learning_spec.Split.TRAIN: NUM_EXAMPLES,
+          learning_spec.Split.VALID: NUM_EXAMPLES,
+          learning_spec.Split.TEST: 0
+      },
+      images_per_class=dict(enumerate([2] * NUM_EXAMPLES * 2)),
+      class_names=dict(
+          enumerate(['%d' % i for i in range(NUM_EXAMPLES)] +
+                    ['%d_v' % i for i in range(NUM_EXAMPLES)])),
+      path=None,
+      file_pattern='{}.tfrecords')
+
+  BASE_GIN_CONFIG = textwrap.dedent("""\
+      DataConfig.image_height = None
+      DataConfig.shuffle_buffer_size = 0
+      DataConfig.read_buffer_size_bytes = 1048576  # 1024 ** 2
+      DataConfig.num_prefetch = 0
+
+      process_episode.support_decoder = @FeatureDecoder()
+      process_episode.query_decoder = @FeatureDecoder()
+      process_batch.batch_decoder = @FeatureDecoder()
+      FeatureDecoder.feat_len = {feat_len}
+
+      EpisodeDescriptionConfig.min_ways = None
+      EpisodeDescriptionConfig.max_ways_upper_bound = None
+      EpisodeDescriptionConfig.max_num_query = None
+      EpisodeDescriptionConfig.max_support_set_size = None
+      EpisodeDescriptionConfig.max_support_size_contrib_per_class = None
+      EpisodeDescriptionConfig.min_log_weight = None
+      EpisodeDescriptionConfig.max_log_weight = None
+      EpisodeDescriptionConfig.ignore_dag_ontology = False
+      EpisodeDescriptionConfig.ignore_bilevel_ontology = False
+
+      Trainer.batch_size = 10
+      Trainer.checkpoint_every = 1000
+      Trainer.validate_every = 1
+      Trainer.log_every = 1
+      Trainer.num_updates = 20
+      Trainer.num_eval_episodes = 1
+      Trainer.learning_rate = 1e-3
+      Trainer.decay_learning_rate = False
+      Trainer.decay_every = None
+      Trainer.decay_rate = None
+      Trainer.checkpoint_to_restore = None
+      Trainer.eval_finegrainedness = False
+      Trainer.eval_finegrainedness_split = None
+      Trainer.eval_imbalance_dataset = False
+      Trainer.eval_split = 'valid'
+      Trainer.experiment_name = 'test_episodic_overfit'
+      Trainer.omit_from_saving_and_reloading = ''
+      Trainer.pretrained_source = ''
+      Trainer.restrict_classes = {{}}
+      Trainer.restrict_num_per_class = {{}}
+      Trainer.summary_dir = None
+
+      Learner.backprop_through_moments = True
+      Learner.embedding_fn = @fully_connected_network
+      Learner.transductive_batch_norm = False
+
+      fully_connected_network.n_hidden_units = (64,)
+      fully_connected_network.weight_decay = 0
+      """).format(feat_len=FEAT_SIZE)
+
+  # Defaults for different Learners
+  baseline_config = textwrap.dedent("""\
+      BaselineLearner.knn_in_fc = False
+      BaselineLearner.knn_distance = 'l2'
+      BaselineLearner.cosine_classifier = False
+      BaselineLearner.cosine_logits_multiplier = 1
+      BaselineLearner.use_weight_norm = False
+      linear_classifier.weight_decay = 0
+      Trainer.num_updates = 50
+      """)
+
+  baselinefinetune_config = '\n'.join((
+      baseline_config,
+      'BaselineFinetuneLearner.num_finetune_steps = 20',
+      'BaselineFinetuneLearner.finetune_lr = 1e-3',
+      'BaselineFinetuneLearner.finetune_all_layers = False',
+      'BaselineFinetuneLearner.finetune_with_adam = True',
+      'Trainer.num_updates = 100',
+  ))
+
+  proto_config = ''
+
+  matching_config = 'MatchingNetworkLearner.exact_cosine_distance = False'
+
+  maml_config = textwrap.dedent("""\
+      MAMLLearner.adapt_batch_norm = False
+      MAMLLearner.classifier_weight_decay = 0
+      MAMLLearner.debug = False
+      MAMLLearner.first_order = True
+      MAMLLearner.additional_evaluation_update_steps = 0
+      MAMLLearner.alpha = 0.1
+      MAMLLearner.num_update_steps = 5
+      MAMLLearner.proto_maml_fc_layer_init = False
+      MAMLLearner.zero_fc_layer = True
+      """)
+
+  proto_maml_config = '\n'.join(
+      (maml_config, 'MAMLLearner.proto_maml_fc_layer_init = True'))
+
+  # TODO(lamblinp): RelationNetworkLearner expect a backbone with spatial
+  # dimensions, and cannot be tested with a fully connected one.
+
+  def setUp(self):
+    super(TrainerIntegrationTest, self).setUp()
+    self.rng = np.random.RandomState(20200505)
+
+    # Set up tests by creating random dummy examples to train on.
+    self.temp_dir = self.get_temp_dir()
+    dataset_dir = os.path.join(self.temp_dir, 'dummy')
+    tf.io.gfile.mkdir(dataset_dir)
+    for example_idx in range(self.NUM_EXAMPLES):
+      # Write the same random 2 examples (one support and one query) twice each:
+      # - In a meta-train class (example_idx)
+      # - In a meta-validation class (example_idx + NUM_EXAMPLES)
+      dummy_features = self.rng.randn(2, self.FEAT_SIZE).astype(np.float32)
+      for class_offset in (0, self.NUM_EXAMPLES):
+        class_idx = example_idx + class_offset
+        tfrecord_path = os.path.join(
+            dataset_dir, self.DATASET_SPEC.file_pattern.format(class_idx))
+        test_utils.write_feature_records(
+            features=dummy_features, label=class_idx, output_path=tfrecord_path)
+    # Record DATASET_SPEC as well, as it will be loaded by Trainer.
+    with tf.io.gfile.GFile(os.path.join(dataset_dir, 'dataset_spec.json'),
+                           'w') as f:
+      json.dump(self.DATASET_SPEC.to_dict(), f, indent=2)
+
+  @parameterized.named_parameters(
+      ('Baseline', learners.BaselineLearner, baseline_config),
+      ('BaselineFinetune', learners.BaselineFinetuneLearner,
+       baselinefinetune_config, 0.8, 20),
+      ('ProtoNets', learners.PrototypicalNetworkLearner, proto_config),
+      ('MatchingNets', learners.MatchingNetworkLearner, matching_config),
+      ('MAML', learners.MAMLLearner, maml_config),
+      ('ProtoMAML', learners.MAMLLearner, proto_maml_config))
+  def test_episodic_overfit(self,
+                            learner_class,
+                            learner_config,
+                            threshold=1.,
+                            attempts=1):
+    """Test that error goes down when training on a single episode.
+
+    This can help check that the trained model and the evaluated one share
+    the trainable parameters correctly.
+
+    Args:
+      learner_class: A subclass of Learner.
+      learner_config: A string, the Learner-specific gin configuration string.
+      threshold: A float (default 1.), the performance to reach at least once.
+      attempts: An int (default 1), how many of the last steps should be checked
+        when looking for a validation value reaching the threshold (default 1).
+    """
+    gin_config = '\n'.join((self.BASE_GIN_CONFIG, learner_config))
+    gin.parse_config(gin_config)
+
+    episode_config = config.EpisodeDescriptionConfig(
+        num_ways=self.NUM_EXAMPLES, num_support=1, num_query=1)
+
+    trainer_instance = trainer.Trainer(
+        train_learner_class=learner_class,
+        eval_learner_class=learner_class,
+        is_training=True,
+        train_dataset_list=['dummy'],
+        eval_dataset_list=['dummy'],
+        records_root_dir=self.temp_dir,
+        checkpoint_dir=os.path.join(self.temp_dir, 'checkpoints'),
+        train_episode_config=episode_config,
+        eval_episode_config=episode_config,
+        data_config=config.DataConfig(),
+        # BEGIN GOOGLE_INTERNAL
+        real_episodes=False,
+        real_episodes_results_dir='',
+        # END GOOGLE_INTERNAL
+    )
+    # Train 1 update at a time for the last `attempts - 1` steps.
+    trainer_instance.num_updates -= (attempts - 1)
+    trainer_instance.train()
+    valid_accs = [trainer_instance.valid_acc]
+    for _ in range(attempts - 1):
+      trainer_instance.num_updates += 1
+      trainer_instance.train()
+      valid_accs.append(trainer_instance.valid_acc)
+    self.assertGreaterEqual(max(valid_accs), threshold)
 
 
 if __name__ == '__main__':
