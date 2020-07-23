@@ -6,3 +6,5 @@ Trainer.validate_every = 500
 Trainer.log_every = 100
 Learner.transductive_batch_norm = False
 Learner.backprop_through_moments = True
+
+
