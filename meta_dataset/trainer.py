@@ -38,6 +38,7 @@ from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
+from meta_dataset.models import functional_backbones
 import numpy as np
 import six
 from six.moves import range
@@ -197,50 +198,6 @@ def get_split_enum(split):
   else:
     raise UnexpectedSplitError(split)
   return split_enum
-
-
-OPTIMIZER_KEYWORDS = ('Adam:', 'Adam_1:')
-EMBEDDING_KEYWORDS = ('conv', 'resnet', 'fully_connected')
-
-
-def is_backbone_variable(variable, only_if=lambda x: True):
-  """Returns True if `variable` is a backbone (embedding function) variable.
-
-  Args:
-    variable: A `tf.Variable` whose `name` attribute will be checked to
-      determine whether it belongs to the backbone (embedding function) of a
-      `Learner`.
-    only_if: A callable that returns `True` when a `tf.Variable` satisfies some
-      condition; by default `only_if` returns `True` for any argument.
-
-  Returns:
-    `True` if `variable` belongs to a backbone (embedding function) and
-    `only_if(variable)` is also satisfied.
-  """
-
-  # We restore all embedding variables.
-  is_embedding_var = any(
-      keyword in variable.name for keyword in EMBEDDING_KEYWORDS)
-
-  # We exclude 'relation*' variables as they are not present in a pretrained
-  # checkpoint.
-  is_relationnet_var = variable.name.startswith('relation')
-
-  # We exclude optimizer variables, as the episodic finetuning procedure is a
-  # different optimization problem than the original training objective.
-  is_optimizer_var = any(
-      keyword in variable.name for keyword in OPTIMIZER_KEYWORDS)
-
-  if (only_if(variable) and is_embedding_var and not is_relationnet_var and
-      not is_optimizer_var):
-    if 'adam' in variable.name.lower():
-      logging.error(
-          'Variable name unexpectedly indicates it is both related '
-          'to an embedding, and to the `AdamOptimizer`: %s', variable.name)
-    else:
-      return True
-
-  return False
 
 
 def restore_or_log_informative_error(saver, sess, checkpoint_to_restore):
@@ -819,13 +776,16 @@ class Trainer(object):
         'contains any of the following substrings: %s',
         self.omit_from_saving_and_reloading)
 
-    def is_not_requested_to_omit(var):
+    def is_not_requested_to_omit(variable_name):
       return all([
-          substring not in var.name
+          substring not in variable_name
           for substring in self.omit_from_saving_and_reloading
       ])
 
-    var_list = list(filter(is_not_requested_to_omit, tf.global_variables()))
+    var_list = list([
+        var for var in tf.global_variables()
+        if is_not_requested_to_omit(var.name)
+    ])
     if var_list:
       self.saver = tf.train.Saver(var_list=var_list, max_to_keep=500)
     else:
@@ -862,7 +822,8 @@ class Trainer(object):
         # backbone weights but omit other (e.g., optimizer) parameters.
         backbone_vars_to_reload = [
             var for var in tf.global_variables()
-            if is_backbone_variable(var, only_if=is_not_requested_to_omit)
+            if functional_backbones.is_backbone_variable(
+                var.name, only_if=is_not_requested_to_omit)
         ]
         backbone_saver = tf.train.Saver(
             var_list=backbone_vars_to_reload, max_to_keep=1)
@@ -877,7 +838,7 @@ class Trainer(object):
         logging.info(
             'No checkpoints found; training from random initialization.')
 
-    elif self.checkpoint_to_restore:
+    elif self.checkpoint_to_restore is not None:
       # For evaluation, we restore more than the backbone (embedding function)
       # variables from the provided checkpoint, so we use `self.saver`.
       restore_or_log_informative_error(self.saver, self.sess,
