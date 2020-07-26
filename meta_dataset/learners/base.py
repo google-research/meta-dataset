@@ -66,6 +66,9 @@ class Learner(object):
     self.embedding_fn = embedding_fn
     self.input_shape = input_shape
 
+  def build(self):
+    """Additional build functionality for subclasses of `Learner`."""
+
   def compute_loss(self, onehot_labels, predictions):
     """Computes the CE loss of `predictions` with respect to `onehot_labels`.
 

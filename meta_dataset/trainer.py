@@ -536,23 +536,41 @@ class Trainer(object):
     self.valid_acc = np.nan
     self.valid_ci = np.nan
 
-    # Initialize a Session.
     self.initialize_session()
     self.initialize_saver()
     self.create_summary_writer()
 
   def build_learner(self, split, global_step):
-    """Compute predictions, losses and accuracies of the learner for split."""
+    """Return predictions, losses and accuracies for the learner on split.
+
+    Args:
+      split: A `learning_spec.Split` that identifies the data split for which
+        the learner is to be built.
+      global_step: A `tf.Tensor` representing the iteration index of the learner
+        on `split`.
+
+    Returns:
+      predictions: A `tf.Tensor`; the predictions of the learner on `split`.
+      losses: A `tf.Tensor`; the losses of the learner on `split`.
+      accuracies: A `tf.Tensor`; the accuracies of the learner on `split`.
+
+    """
+    learner = self.learners[split]
+
+    # Build the learner and its variables outside the name scope.
+    learner.build()
+
     with tf.name_scope(split):
       data = self.next_data[split]
-      predictions = self.learners[split].forward_pass(
+      predictions = learner.forward_pass(
           data,
           global_step,
           summaries_collection='{}/learner_summaries'.format(split))
-      loss = self.learners[split].compute_loss(
+      loss = learner.compute_loss(
           predictions=predictions, onehot_labels=data.onehot_labels)
-      accuracy = self.learners[split].compute_accuracy(
+      accuracy = learner.compute_accuracy(
           predictions=predictions, labels=data.labels)
+
     return predictions, loss, accuracy
 
   def set_way_shots_classes_logits_targets(self):
@@ -793,7 +811,6 @@ class Trainer(object):
 
   def initialize_saver(self):
     """Initializes a tf.train.Saver and possibly restores parameters."""
-
     # We omit from saving and restoring any variables that contains as a
     # substring anything in the list `self.omit_from_saving_and_reloading.
     # For example, those that track iterator state.
