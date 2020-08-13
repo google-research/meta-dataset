@@ -526,7 +526,7 @@ class Trainer(object):
       loss = learner.compute_loss(
           predictions=predictions, onehot_labels=data.onehot_labels)
       accuracy = learner.compute_accuracy(
-          predictions=predictions, labels=data.labels)
+          predictions=predictions, onehot_labels=data.onehot_labels)
 
     return predictions, loss, accuracy
 

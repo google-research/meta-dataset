@@ -287,10 +287,10 @@ class BaselineFinetuneLearner(baseline_learners.BaselineLearner):
                 finetune_loss,
                 'accuracy:',
                 self.compute_accuracy(
-                    labels=data.support_labels, predictions=logits),
+                    labels=data.onehot_support_labels, predictions=logits),
                 'query accuracy:',
                 self.compute_accuracy(
-                    labels=data.query_labels, predictions=query_logits),
+                    labels=data.onehot_query_labels, predictions=query_logits),
             ])
 
           with tf.control_dependencies([print_op]):
@@ -336,10 +336,10 @@ class BaselineFinetuneLearner(baseline_learners.BaselineLearner):
         print_op = tf.print([
             'accuracy:',
             self.compute_accuracy(
-                labels=data.support_labels, predictions=logits),
+                labels=data.onehot_support_labels, predictions=logits),
             'query accuracy:',
             self.compute_accuracy(
-                labels=data.query_labels, predictions=query_logits),
+                labels=data.onehot_query_labels, predictions=query_logits),
         ])
       with tf.control_dependencies([print_op]):
         query_logits = self._fc_layer(query_embeddings)[:, 0:data.way]

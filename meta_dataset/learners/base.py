@@ -69,12 +69,19 @@ class Learner(object):
   def build(self):
     """Additional build functionality for subclasses of `Learner`."""
 
+  def compute_regularizer(self, onehot_labels, predictions):
+    """Computes a regularizer, maybe using `predictions` and `onehot_labels`."""
+    del onehot_labels
+    del predictions
+    return tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+
   def compute_loss(self, onehot_labels, predictions):
     """Computes the CE loss of `predictions` with respect to `onehot_labels`.
 
     Args:
       onehot_labels: A `tf.Tensor` containing the the class labels; each vector
-        along the class dimension should hold a valid probability distribution.
+        along the (last) class dimension should represent a valid probability
+        distribution.
       predictions: A `tf.Tensor` containing the the class predictions,
         interpreted as unnormalized log probabilities.
 
@@ -83,24 +90,26 @@ class Learner(object):
     """
     cross_entropy_loss = tf.losses.softmax_cross_entropy(
         onehot_labels=onehot_labels, logits=predictions)
-    regularization = tf.reduce_sum(
-        tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+    regularization = self.compute_regularizer(
+        onehot_labels=onehot_labels, predictions=predictions)
     return cross_entropy_loss + regularization
 
-  def compute_accuracy(self, labels, predictions):
-    """Computes the accuracy of `predictions` with respect to `labels`.
+  def compute_accuracy(self, onehot_labels, predictions):
+    """Computes the accuracy of `predictions` with respect to `onehot_labels`.
 
     Args:
-      labels: A `tf.Tensor` containing the the class labels; each vector along
-        the class dimension should hold a valid probability distribution.
-      predictions: A `tf.Tensor` containing the the class predictions,
-        interpreted as unnormalized log probabilities.
+      onehot_labels: A `tf.Tensor` containing the the class labels; each vector
+        along the (last) class dimension is expected to contain only a single
+        `1`.
+      predictions: A `tf.Tensor` containing the the class predictions
+        represented as unnormalized log probabilities.
 
     Returns:
-       A `tf.Tensor` of ones and zeros representing the individual accuracies.
-         Use tf.reduce_mean(result) to obtain average accuracy.
+       A `tf.Tensor` of ones and zeros representing the correctness of
+       individual predictions; use `tf.reduce_mean(...)` to obtain the average
+       accuracy.
     """
-    correct = tf.equal(labels, tf.to_int32(tf.argmax(predictions, -1)))
+    correct = tf.equal(tf.argmax(onehot_labels, -1), tf.argmax(predictions, -1))
     return tf.cast(correct, tf.float32)
 
   def forward_pass(self, data, global_step, summaries_collection):

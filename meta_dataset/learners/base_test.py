@@ -54,16 +54,6 @@ VALID_LEARNER_INIT_ARGS = {
 # TODO(eringrant): Test feature (embeddding function-less) representations.
 
 
-class MockEmbedding(reparameterizable_backbones.ConvNet):
-
-  def __init__(self):
-    super().__init__(
-        output_dim=None,
-        keep_spatial_dims=False,
-        num_filters_per_layer=(64, 64, 64, 64),
-    )
-
-
 class MockEpisode(
     collections.namedtuple(
         'MockEpisode', 'support_images, query_images, '
@@ -114,10 +104,15 @@ class TestLearner(tf.test.TestCase):
         'The test subclass must provide keyword arguments to initialize a '
         '`Learner`.')
 
+  def set_up_learner(self):
+    learner_kwargs = self.learner_kwargs
+    data = self.random_data()
+    learner = self.learner_cls(**learner_kwargs)
+    return data, learner
+
   def testForwardPass(self):
     """Assert that the learner obeys the API for `forward_pass`."""
-    data = self.random_data()
-    learner = self.learner_cls(**self.learner_kwargs)
+    data, learner = self.set_up_learner()
     outputs = learner.forward_pass(data)
     self.assertEqual(len(outputs.get_shape().as_list()), 2)
     with self.session():
@@ -127,8 +122,7 @@ class TestLearner(tf.test.TestCase):
 
   def testComputeLoss(self):
     """Assert that the learner obeys the API for `compute_loss`."""
-    data = self.random_data()
-    learner = self.learner_cls(**self.learner_kwargs)
+    data, learner = self.set_up_learner()
     loss = learner.compute_loss(
         data.onehot_labels,
         tf.cast(data.onehot_labels, tf.float32),
@@ -140,11 +134,10 @@ class TestLearner(tf.test.TestCase):
 
   def testComputeAccuracy(self):
     """Assert that the learner obeys the API for `compute_accuracy`."""
-    data = self.random_data()
-    learner = self.learner_cls(**self.learner_kwargs)
+    data, learner = self.set_up_learner()
     accuracy = learner.compute_accuracy(
-        data.labels,
-        tf.cast(data.labels, tf.float32),
+        data.onehot_labels,
+        tf.cast(data.onehot_labels, tf.float32),
     )
     with self.session():
       self.evaluate(tf.compat.v1.local_variables_initializer())
@@ -153,10 +146,9 @@ class TestLearner(tf.test.TestCase):
 
   def testLearnerInitRandomAccuracy(self):
     """Assert that the learner's performance wrt accuracy is initially random."""
-    data = self.random_data()
-    learner = self.learner_cls(**self.learner_kwargs)
+    data, learner = self.set_up_learner()
     outputs = learner.forward_pass(data)
-    accuracy = learner.compute_accuracy(data.labels, outputs)
+    accuracy = learner.compute_accuracy(data.onehot_labels, outputs)
     with self.session():
       self.evaluate(tf.compat.v1.local_variables_initializer())
       self.evaluate(tf.compat.v1.global_variables_initializer())
@@ -166,10 +158,9 @@ class TestLearner(tf.test.TestCase):
 
   def testLearnerImprovement(self):
     """Assert that the learner's objective monotonically improves."""
-    data = self.random_data()
+    data, learner = self.set_up_learner()
     # Small learning rate for improvement check.
     optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=0.001)
-    learner = self.learner_cls(**self.learner_kwargs)
     outputs = learner.forward_pass(data)
     loss = learner.compute_loss(data.onehot_labels, outputs)
     train_op = optimizer.minimize(loss)
@@ -184,9 +175,8 @@ class TestLearner(tf.test.TestCase):
 
   def testLearnerConvergence(self):
     """Assert that the unregularized learner overfits a single batch."""
-    data = self.random_data()
+    data, learner = self.set_up_learner()
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.001)
-    learner = self.learner_cls(**self.learner_kwargs)
     outputs = learner.forward_pass(data)
     loss = learner.compute_loss(data.onehot_labels, outputs)
     train_op = optimizer.minimize(loss)
