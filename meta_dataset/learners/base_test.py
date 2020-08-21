@@ -108,6 +108,7 @@ class TestLearner(tf.test.TestCase):
     learner_kwargs = self.learner_kwargs
     data = self.random_data()
     learner = self.learner_cls(**learner_kwargs)
+    learner.build()
     return data, learner
 
   def testForwardPass(self):
