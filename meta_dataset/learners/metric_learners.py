@@ -243,8 +243,7 @@ class RelationNetworkLearner(MetricLearner):
     # relation_pairs.shape.as_list()[-3:] == [-1] + out_shape + [n_feature*2]
     relation_pairs = tf.reshape(relation_pairs,
                                 [-1] + out_shape + [n_feature * 2])
-    relationnet_dict = functional_backbones.relation_module(
-        relation_pairs, 'relationnet')
+    relationnet_dict = functional_backbones.relation_module(relation_pairs)
     way = tf.shape(onehot_support_labels)[-1]
     relations = tf.reshape(relationnet_dict['output'], [-1, way])
     return relations
