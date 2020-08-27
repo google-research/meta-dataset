@@ -460,9 +460,8 @@ class Trainer(object):
       self.learners[split] = learner
 
     # Build the prediction, loss and accuracy graphs for each learner.
-    predictions, losses, accuracies = zip(*[
-        self.build_learner(split, global_step) for split in self.required_splits
-    ])
+    predictions, losses, accuracies = zip(
+        *[self.build_learner(split) for split in self.required_splits])
     self.predictions = dict(zip(self.required_splits, predictions))
     self.losses = dict(zip(self.required_splits, losses))
     self.accuracies = dict(zip(self.required_splits, accuracies))
@@ -497,14 +496,12 @@ class Trainer(object):
     self.initialize_saver()
     self.create_summary_writer()
 
-  def build_learner(self, split, global_step):
+  def build_learner(self, split):
     """Return predictions, losses and accuracies for the learner on split.
 
     Args:
       split: A `learning_spec.Split` that identifies the data split for which
         the learner is to be built.
-      global_step: A `tf.Tensor` representing the iteration index of the learner
-        on `split`.
 
     Returns:
       predictions: A `tf.Tensor`; the predictions of the learner on `split`.
@@ -519,10 +516,7 @@ class Trainer(object):
 
     with tf.name_scope(split):
       data = self.next_data[split]
-      predictions = learner.forward_pass(
-          data,
-          global_step,
-          summaries_collection='{}/learner_summaries'.format(split))
+      predictions = learner.forward_pass(data)
       loss = learner.compute_loss(
           predictions=predictions, onehot_labels=data.onehot_labels)
       accuracy = learner.compute_accuracy(
@@ -568,21 +562,22 @@ class Trainer(object):
 
   def create_summary_writer(self):
     """Create summaries and writer."""
-
-    # Add summaries for the losses / accuracies of the learner.
-    # TODO(eringrant): Rewrite to allow TF2.0 summaries.
-    self.standard_summaries = []
+    # Add summaries for the losses / accuracies of the different learners.
+    standard_summaries = []
     for split in self.required_splits:
-      learner_summaries = tf.get_collection(
-          '{}/learner_summaries'.format(split))
-      if learner_summaries:
-        with tf.name_scope(split):
-          self.standard_summaries.append(tf.summary.merge(learner_summaries))
-    if self.standard_summaries:
-      self.standard_summaries = tf.summary.merge(self.standard_summaries)
+      with tf.name_scope(split):
+        loss_summary = tf.summary.scalar('loss', self.losses[split])
+        acc_summary = tf.summary.scalar('acc',
+                                        tf.reduce_mean(self.accuracies[split]))
+      standard_summaries.append(loss_summary)
+      standard_summaries.append(acc_summary)
 
     # Add summaries for the way / shot / logits / targets of the learner.
-    self.evaluation_summaries = tf.summary.merge(self.add_eval_summaries())
+    evaluation_summaries = self.add_eval_summaries()
+
+    # All summaries.
+    self.standard_summaries = tf.summary.merge(standard_summaries)
+    self.evaluation_summaries = tf.summary.merge(evaluation_summaries)
 
     # Get a writer.
     self.summary_writer = None
@@ -1169,7 +1164,7 @@ class Trainer(object):
         logging.info(message)
 
         # Update summaries.
-        if self.summary_writer and self.standard_summaries:
+        if self.summary_writer:
           summaries = self.sess.run(self.standard_summaries)
           self.summary_writer.add_summary(summaries, global_step)
 

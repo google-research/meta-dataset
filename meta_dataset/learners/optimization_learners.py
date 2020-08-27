@@ -468,22 +468,16 @@ class MAMLLearner(OptimizationLearner):
       fc_bias = tf.pad(fc_bias, paddings, 'CONSTANT', constant_values=0)
     return fc_bias
 
-  def forward_pass(self, data, global_step=None, summaries_collection=None):
+  def forward_pass(self, data):
     """Computes the test logits of MAML.
 
     Args:
       data: A `meta_dataset.providers.Episode` containing the data for the
         episode.
-      global_step: A scalar; the step in training at which this `forward_pass`
-        is executed.
-      summaries_collection: A string; the name of the summaries collections to
-        which to add this `Learner`'s summaries.
 
     Returns:
       The output logits for the query data in this episode.
     """
-    del global_step, summaries_collection  # Unused.
-
     # Have to use one-hot labels since sparse softmax doesn't allow
     # second derivatives.
     support_embeddings_ = self.embedding_fn(

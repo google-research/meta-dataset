@@ -112,7 +112,7 @@ class Learner(object):
     correct = tf.equal(tf.argmax(onehot_labels, -1), tf.argmax(predictions, -1))
     return tf.cast(correct, tf.float32)
 
-  def forward_pass(self, data, global_step, summaries_collection):
+  def forward_pass(self, data):
     """Returns the (query if episodic) logits."""
     raise NotImplementedError('Abstract method.')
 

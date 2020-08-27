@@ -94,22 +94,16 @@ class MetricLearner(learner_base.EpisodicLearner):
     # output dimensionality.
     delattr(self, 'logit_dim')
 
-  def forward_pass(self, data, global_step=None, summaries_collection=None):
+  def forward_pass(self, data):
     """Embeds all (training and testing) images of the episode.
 
     Args:
       data: A `meta_dataset.providers.Episode` containing the data for the
         episode.
-      global_step: A scalar; the step in training at which this `forward_pass`
-        is executed.
-      summaries_collection: A string; the name of the summaries collections to
-        which to add this `Learner`'s summaries.
 
     Returns:
       The predictions for the query set within the episode.
     """
-    del global_step, summaries_collection  # Unused.
-
     # Compute the support set's mean and var and use these as the moments for
     # batch norm on the query set.
     support_embeddings_dict = self.embedding_fn(
