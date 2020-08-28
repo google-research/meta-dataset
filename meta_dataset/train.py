@@ -49,6 +49,8 @@ from meta_dataset import data
 from meta_dataset import learners  # pylint: disable=unused-import
 from meta_dataset import trainer
 from meta_dataset.data import config  # pylint: disable=unused-import
+from meta_dataset.learners import experimental as experimental_learners  # pylint: disable=unused-import
+from meta_dataset.models.experimental import parameter_adapter  # pylint: disable=unused-import
 
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()

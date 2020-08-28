@@ -22,6 +22,8 @@ implicitly (via *args and/or **kwargs) to the overriden method of any ancestor
 classes. These functions are useful for concisely defining tests for classes
 that take potentially-overlapping but non-identical arguments.
 
+For examples, see
+`meta_dataset.models.experimental.reparameterizable_base_test`.
 """
 
 from __future__ import absolute_import

@@ -22,7 +22,9 @@ from __future__ import print_function
 
 import collections
 import functools
+from meta_dataset.learners.experimental import base as experimental_learner_base
 from meta_dataset.models import functional_backbones
+from meta_dataset.models.experimental import reparameterizable_backbones
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -31,6 +33,8 @@ IMAGE_SHAPE = (IMAGE_HEIGHT, IMAGE_WIDTH, 3)
 SUPPORT_SIZE, QUERY_SIZE = 5, 15
 NUM_CLASSES = 5
 
+# Initialization arguments shared between non-experimental and experimental
+# learners.
 VALID_ABSTRACT_LEARNER_INIT_ARGS = {
     'is_training': True,
     'logit_dim': NUM_CLASSES,
@@ -51,6 +55,16 @@ VALID_LEARNER_INIT_ARGS = {
 # behavior.
 
 # TODO(eringrant): Test feature (embeddding function-less) representations.
+
+
+class MockEmbedding(reparameterizable_backbones.ConvNet):
+
+  def __init__(self, keep_spatial_dims=False):
+    super().__init__(
+        output_dim=None,
+        keep_spatial_dims=keep_spatial_dims,
+        num_filters_per_layer=(64, 64, 64, 64),
+    )
 
 
 class MockEpisode(
@@ -105,6 +119,9 @@ class TestLearner(tf.test.TestCase):
 
   def set_up_learner(self):
     learner_kwargs = self.learner_kwargs
+    if issubclass(self.learner_cls,
+                  experimental_learner_base.ExperimentalLearner):
+      learner_kwargs['embedding_fn'] = MockEmbedding()
     data = self.random_data()
     learner = self.learner_cls(**learner_kwargs)
     learner.build()

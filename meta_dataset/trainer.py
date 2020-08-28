@@ -38,6 +38,7 @@ from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
+from meta_dataset.learners import experimental as experimental_learners
 from meta_dataset.models import functional_backbones
 import numpy as np
 import six
@@ -422,6 +423,21 @@ class Trainer(object):
     # Create the global step to pass to the learners.
     global_step = tf.train.get_or_create_global_step()
 
+    if len(self.required_splits) > 1:
+      if issubclass(self.train_learner_class,
+                    experimental_learners.ExperimentalLearner):
+        assert issubclass(
+            self.eval_learner_class, experimental_learners.ExperimentalLearner
+        ), ('If the `Learner` for the train split is an `ExperimentalLearner`,'
+            ' the `Learner` for the evaluation split must be as well, since '
+            'otherwise parameters cannot be shared.')
+      else:
+        assert not issubclass(
+            self.eval_learner_class, experimental_learners.ExperimentalLearner
+        ), ('If the `Learner` for the evaluation split is not an '
+            '`ExperimentalLearner`, the `Learner` for the train split must not'
+            ' be either, since otherwise parameters cannot be shared.')
+
     # Initialize the learners.
     self.learners = {}
     for split in self.required_splits:
@@ -603,11 +619,20 @@ class Trainer(object):
                        '`learners.BatchLearner` or `learners.EpisodicLearner`, '
                        'but received {}.'.format(learner_class))
 
-    return learner_class(
-        is_training=is_training,
-        logit_dim=logit_dim,
-        input_shape=self.image_shape,
-    )
+    if (issubclass(learner_class, experimental_learners.ExperimentalLearner) and
+        tied_learner is not None):
+      return learner_class(
+          is_training=is_training,
+          logit_dim=logit_dim,
+          input_shape=self.image_shape,
+          embedding_fn=tied_learner.embedding_fn,
+      )
+    else:
+      return learner_class(
+          is_training=is_training,
+          logit_dim=logit_dim,
+          input_shape=self.image_shape,
+      )
 
   def get_benchmark_specification(self, records_root_dir=None):
     """Returns a BenchmarkSpecification.
@@ -763,6 +788,9 @@ class Trainer(object):
 
   def initialize_saver(self):
     """Initializes a tf.train.Saver and possibly restores parameters."""
+    # TODO(eringrant): Implement saving and restoring for
+    # `ExperimentalLearner`s.
+
     # We omit from saving and restoring any variables that contains as a
     # substring anything in the list `self.omit_from_saving_and_reloading.
     # For example, those that track iterator state.
