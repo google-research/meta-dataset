@@ -321,10 +321,6 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
         train_episode_config=episode_config,
         eval_episode_config=episode_config,
         data_config=config.DataConfig(),
-        # BEGIN GOOGLE_INTERNAL
-        real_episodes=False,
-        real_episodes_results_dir='',
-        # END GOOGLE_INTERNAL
     )
     # Train 1 update at a time for the last `attempts - 1` steps.
     trainer_instance.num_updates -= (attempts - 1)
