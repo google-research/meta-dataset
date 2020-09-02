@@ -433,6 +433,14 @@ class BatchReaderMixin(object):
       num_examples_per_class = np.array(num_examples_per_class, 'float64')
       class_proportions = num_examples_per_class / num_examples_per_class.sum()
 
+      # Explicitly skip datasets with a weight of 0, as sample_from_datasets
+      # can have some trouble with them.
+      new_datasets_and_weights = [
+          (dataset, weight)
+          for (dataset, weight) in zip(class_datasets, class_proportions)
+          if weight > 0
+      ]
+      class_datasets, class_proportions = zip(*new_datasets_and_weights)
       dataset = tf.data.experimental.sample_from_datasets(
           class_datasets, weights=class_proportions, seed=shuffle_seed)
       if self.shuffle_buffer_size and self.shuffle_buffer_size > 0:
