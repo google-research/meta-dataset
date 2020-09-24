@@ -305,8 +305,14 @@ class EpisodeDescriptionSampler(object):
         raise ValueError('Only applicable to datasets with a bi-level '
                          'dataset specification.')
       # The id's of the superclasses of the split (a contiguous range of ints).
-      self.superclass_set = dataset_spec.get_superclasses(self.split)
-
+      all_superclasses = dataset_spec.get_superclasses(self.split)
+      self.superclass_set = []
+      for i in all_superclasses:
+        if self.dataset_spec.classes_per_superclass[i] < self.min_ways:
+          raise ValueError(
+              'Superclass: %d has num_classes=%d < min_ways=%d.' %
+              (i, self.dataset_spec.classes_per_superclass[i], self.min_ways))
+        self.superclass_set.append(i)
     # For ImageNet.
     elif self.use_dag_hierarchy:
       if self.num_ways is not None:
