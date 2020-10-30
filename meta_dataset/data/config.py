@@ -99,7 +99,8 @@ class EpisodeDescriptionConfig(object):
                max_log_weight,
                ignore_dag_ontology,
                ignore_bilevel_ontology,
-               min_examples_in_class=0):
+               min_examples_in_class=0,
+               num_unique_episodes=0):
     """Initialize a EpisodeDescriptionConfig.
 
     This is used in sampling.py in Trainer and in EpisodeDescriptionSampler to
@@ -140,6 +141,11 @@ class EpisodeDescriptionConfig(object):
         no examples may trigger errors later. For variable shots, a value of 2
         makes it sure that there are at least one support and one query samples.
         For fixed shots, you could set it to `num_support + num_query`.
+      num_unique_episodes: An integer, the number of unique episodes to use.
+        If set to x > 0, x number of episodes are pre-generated, and repeatedly
+        iterated over. This is also helpful when running on TPUs as it avoids
+        the use of tf.data.Dataset.from_generator. If set to x = 0, no such
+        upper bound on number of unique episodes is set.
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
@@ -185,6 +191,7 @@ class EpisodeDescriptionConfig(object):
     self.ignore_dag_ontology = ignore_dag_ontology
     self.ignore_bilevel_ontology = ignore_bilevel_ontology
     self.min_examples_in_class = min_examples_in_class
+    self.num_unique_episodes = num_unique_episodes
 
   @property
   def max_ways(self):

@@ -178,7 +178,8 @@ class Reader(object):
                shuffle_buffer_size,
                read_buffer_size_bytes,
                num_prefetch,
-               num_to_take=-1):
+               num_to_take=-1,
+               num_unique_episodes=0):
     """Initializes a Reader from a source.
 
     The source is identified by dataset_spec and split.
@@ -196,6 +197,11 @@ class Reader(object):
         each tfrecord. If specified, the available images of each class will be
         restricted to that int. By default (-1) no restriction is applied and
         all data is used.
+      num_unique_episodes: Optional, an int specifying the number of unique
+        episodes to use. If set to x > 0, x number of episodes are pre-generated
+        and repeatedly iterated over. This is also helpful when running on
+        TPUs as it avoids the use of tf.data.Dataset.from_generator. If set to
+        x = 0, no such upper bound on number of unique episodes is set.
     """
     self.dataset_spec = dataset_spec
     self.split = split
@@ -203,6 +209,7 @@ class Reader(object):
     self.read_buffer_size_bytes = read_buffer_size_bytes
     self.num_prefetch = num_prefetch
     self.num_to_take = num_to_take
+    self.num_unique_episodes = num_unique_episodes
 
     self.base_path = self.dataset_spec.path
     self.class_set = self.dataset_spec.get_classes(self.split)
@@ -331,9 +338,24 @@ class EpisodeReaderMixin(object):
         pool=pool,
         sampler=sampler)
 
-    choice_dataset = tf.data.Dataset.from_generator(choice_generator,
-                                                    (tf.int64),
-                                                    tf.TensorShape([]))
+    if not self.num_unique_episodes:
+      choice_dataset = tf.data.Dataset.from_generator(choice_generator,
+                                                      (tf.int64),
+                                                      tf.TensorShape([]))
+    else:
+      # If num_unique_episodes is x > 0, then we pre-generate x number of
+      # episodes and repeatedly iterate over them. We generate
+      # (num_unique_episodes * sum(sampler.compute_chunk_sizes()) dataset IDs
+      # using choice_generator.
+      choice_generator_fn = choice_generator()
+      total_num_ids = self.num_unique_episodes * sum(
+          sampler.compute_chunk_sizes())
+      dataset_ids = np.array(
+          list(itertools.islice(choice_generator_fn, total_num_ids)),
+          dtype='int64').reshape([self.num_unique_episodes, -1])
+      choice_dataset = tf.data.Dataset.from_tensor_slices(dataset_ids).shuffle(
+          self.num_unique_episodes).repeat().unbatch()
+
     dataset = tf.data.experimental.choose_from_datasets(class_datasets,
                                                         choice_dataset)
 

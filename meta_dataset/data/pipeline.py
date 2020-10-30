@@ -299,10 +299,12 @@ def make_one_source_episode_pipeline(dataset_spec,
       raise NotImplementedError('Example-level splits or pools not supported.')
   if num_to_take is None:
     num_to_take = -1
+
+  num_unique_episodes = episode_descr_config.num_unique_episodes
   episode_reader = reader.EpisodeReader(dataset_spec, split,
                                         shuffle_buffer_size,
                                         read_buffer_size_bytes, num_prefetch,
-                                        num_to_take)
+                                        num_to_take, num_unique_episodes)
   sampler = sampling.EpisodeDescriptionSampler(
       episode_reader.dataset_spec,
       split,
