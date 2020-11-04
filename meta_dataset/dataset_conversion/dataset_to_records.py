@@ -391,7 +391,8 @@ def write_tfrecord_from_directory(class_directory,
                                   output_path,
                                   invert_img=False,
                                   files_to_skip=None,
-                                  skip_on_error=False):
+                                  skip_on_error=False,
+                                  shuffle_with_seed=None):
   """Create and write a tf.record file for the images corresponding to a class.
 
   Args:
@@ -405,6 +406,8 @@ def write_tfrecord_from_directory(class_directory,
       present in class_directory.
     skip_on_error: whether to skip an image if there is an issue in reading it.
       The default it to crash and report the original exception.
+    shuffle_with_seed: An integer, optional. If provided, the images will be
+      shuffled using that seed.
 
   Returns:
     The number of images written into the records file.
@@ -421,6 +424,10 @@ def write_tfrecord_from_directory(class_directory,
     if tf.io.gfile.isdir(filepath):
       continue
     class_files.append(filepath)
+
+  if shuffle_with_seed is not None:
+    rng = np.random.RandomState(shuffle_with_seed)
+    rng.shuffle(class_files)
 
   written_images_count = write_tfrecord_from_image_files(
       class_files,
@@ -1310,11 +1317,14 @@ class TrafficSignConverter(DatasetConverter):
           self.records_path, self.dataset_spec.file_pattern.format(class_id))
       self.class_names[class_id] = class_label
       # We skip `GT-?????.csv` files, which contain addditional annotations.
+      # Shuffle the images, as they are ordered as sequences of 30 frames from
+      # the same physical sign.
       self.images_per_class[class_id] = write_tfrecord_from_directory(
           class_directory,
           class_id,
           class_records_path,
-          files_to_skip=set(['GT-{:05d}.csv'.format(class_id)]))
+          files_to_skip=set(['GT-{:05d}.csv'.format(class_id)]),
+          shuffle_with_seed=self.seed + 1)
 
 
 class MSCOCOConverter(DatasetConverter):
