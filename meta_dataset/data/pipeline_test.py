@@ -21,7 +21,10 @@ r"""Tests for meta_dataset.data.pipeline.
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
 import os
+
+from absl.testing import parameterized
 import gin
 from meta_dataset.data import config
 from meta_dataset.data import learning_spec
@@ -32,27 +35,37 @@ import numpy as np
 import tensorflow.compat.v1 as tf
 
 
-class PipelineTest(tf.test.TestCase):
+class PipelineTest(tf.test.TestCase, parameterized.TestCase):
 
-  def test_make_multisource_episode_pipeline_feature(self):
+  @parameterized.named_parameters(
+      ('FeatureDecoder', 'feature',
+       'third_party/py/meta_dataset/learn/gin/setups/data_config_feature.gin'),
+      ('NoDecoder', 'none',
+       'third_party/py/meta_dataset/learn/gin/setups/data_config_no_decoder.gin'
+      ),
+  )
+  def test_make_multisource_episode_pipeline_feature(self, decoder_type,
+                                                     config_file_path):
 
     # Create some feature records and write them to a temp directory.
     feat_size = 64
     num_examples = 100
     num_classes = 10
     output_path = self.get_temp_dir()
-    gin.parse_config_file(
-        'third_party/py/meta_dataset/learn/gin/setups/data_config_feature.gin')
+    gin.parse_config_file(config_file_path)
 
     # 1-Write feature records to temp directory.
     self.rng = np.random.RandomState(0)
     class_features = []
+    class_examples = []
     for class_id in range(num_classes):
       features = self.rng.randn(num_examples, feat_size).astype(np.float32)
       label = np.array(class_id).astype(np.int64)
       output_file = os.path.join(output_path, str(class_id) + '.tfrecords')
-      test_utils.write_feature_records(features, label, output_file)
+      examples = test_utils.write_feature_records(features, label, output_file)
+      class_examples.append(examples)
       class_features.append(features)
+    class_examples = np.stack(class_examples)
     class_features = np.stack(class_features)
 
     # 2-Read records back using multi-source pipeline.
@@ -88,24 +101,42 @@ class PipelineTest(tf.test.TestCase):
     episode, _ = self.evaluate(
         dataset_episodic.make_one_shot_iterator().get_next())
 
-    # 3-Check that support and query features are in class_features and have
-    # the correct corresponding label.
-    support_features, support_class_ids = episode[0], episode[2]
-    query_features, query_class_ids = episode[3], episode[5]
+    if decoder_type == 'feature':
+      # 3-Check that support and query features are in class_features and have
+      # the correct corresponding label.
+      support_features, support_class_ids = episode[0], episode[2]
+      query_features, query_class_ids = episode[3], episode[5]
 
-    for feat, class_id in zip(list(support_features), list(support_class_ids)):
-      abs_err = np.abs(np.sum(class_features - feat[None][None], axis=-1))
-      # Make sure the feature is present in the original data.
-      self.assertEqual(abs_err.min(), 0.0)
-      found_class_id = np.where(abs_err == 0.0)[0][0]
-      self.assertEqual(found_class_id, class_id)
+      for feat, class_id in zip(
+          list(support_features), list(support_class_ids)):
+        abs_err = np.abs(np.sum(class_features - feat[None][None], axis=-1))
+        # Make sure the feature is present in the original data.
+        self.assertEqual(abs_err.min(), 0.0)
+        found_class_id = np.where(abs_err == 0.0)[0][0]
+        self.assertEqual(found_class_id, class_id)
 
-    for feat, class_id in zip(list(query_features), list(query_class_ids)):
-      abs_err = np.abs(np.sum(class_features - feat[None][None], axis=-1))
-      # Make sure the feature is present in the original data.
-      self.assertEqual(abs_err.min(), 0.0)
-      found_class_id = np.where(abs_err == 0.0)[0][0]
-      self.assertEqual(found_class_id, class_id)
+      for feat, class_id in zip(list(query_features), list(query_class_ids)):
+        abs_err = np.abs(np.sum(class_features - feat[None][None], axis=-1))
+        # Make sure the feature is present in the original data.
+        self.assertEqual(abs_err.min(), 0.0)
+        found_class_id = np.where(abs_err == 0.0)[0][0]
+        self.assertEqual(found_class_id, class_id)
+
+    elif decoder_type == 'none':
+      # 3-Check that support and query examples are in class_examples and have
+      # the correct corresponding label.
+
+      support_examples, support_class_ids = episode[0], episode[2]
+      query_examples, query_class_ids = episode[3], episode[5]
+
+      for example, class_id in zip(
+          list(support_examples), list(support_class_ids)):
+        found_class_id = np.where(class_examples == example)[0][0]
+        self.assertEqual(found_class_id, class_id)
+
+      for example, class_id in zip(list(query_examples), list(query_class_ids)):
+        found_class_id = np.where(class_examples == example)[0][0]
+        self.assertEqual(found_class_id, class_id)
 
 
 if __name__ == '__main__':

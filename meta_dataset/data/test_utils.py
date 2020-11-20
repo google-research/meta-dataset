@@ -89,8 +89,12 @@ def write_feature_records(features, label, output_path):
     features: An [n, m] numpy array of features.
     label: An integer, the label common to all records.
     output_path: A string specifying the location of the record.
+
+  Returns:
+    serialized_examples: list tf.Example protos written by the writer.
   """
   writer = tf.python_io.TFRecordWriter(output_path)
+  serialized_examples = []
   for feat in list(features):
     # Write the example.
     serialized_example = dataset_to_records.make_example([
@@ -98,4 +102,7 @@ def write_feature_records(features, label, output_path):
         ('image/class/label', 'int64', [label])
     ])
     writer.write(serialized_example)
+    serialized_examples.append(serialized_example)
+
   writer.close()
+  return serialized_examples

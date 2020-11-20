@@ -123,40 +123,47 @@ def process_dumped_episode(support_strings, query_strings, image_size,
     query_strings: 1-D Tensor of dtype str, Example protocol buffers of query
       set.
     image_size: int, desired image size used during decoding.
-    support_decoder: ImageDecoder, used to decode support set images.
-    query_decoder: ImageDecoder, used to decode query set images.
+    support_decoder: If ImageDecoder, used to decode support set images. If
+      None, no decoding of support images is performed.
+    query_decoder: ImageDecoder, used to decode query set images. If
+      None, no decoding of query images is performed.
 
   Returns:
     support_images, support_labels, support_labels, query_images,
       query_labels, query_labels: Tensors, batches of images, labels, and
       labels, for the support and query sets (respectively). We return labels
       twice since dumped datasets doesn't have (absolute) class IDs anymore.
+      Example proto buffers in place of images, and None in place of labels are
+      returned if the corresponding decoder is None.
+
+
   """
   if isinstance(support_decoder, decoder.ImageDecoder):
     log_data_augmentation(support_decoder.data_augmentation, 'support')
     support_decoder.image_size = image_size
-  else:
-    raise TypeError('support_decoder type: %s is not ImageDecoder' %
-                    type(support_decoder))
+
   if isinstance(query_decoder, decoder.ImageDecoder):
     log_data_augmentation(query_decoder.data_augmentation, 'query')
     query_decoder.image_size = image_size
-  else:
-    raise TypeError('query_decoder type: %s is not ImageDecoder' %
-                    type(query_decoder))
 
-  support_decoder.image_size = image_size
-  query_decoder.image_size = image_size
-  support_images, support_labels = tf.map_fn(
-      support_decoder.decode_with_label,
-      support_strings,
-      dtype=(support_decoder.out_type, tf.int32),
-      back_prop=False)
-  query_images, query_labels = tf.map_fn(
-      support_decoder.decode_with_label,
-      query_strings,
-      dtype=(support_decoder.out_type, tf.int32),
-      back_prop=False)
+  support_images = support_strings
+  query_images = query_strings
+  support_labels = None
+  query_labels = None
+
+  if support_decoder:
+    support_images, support_labels = tf.map_fn(
+        support_decoder.decode_with_label,
+        support_strings,
+        dtype=(support_decoder.out_type, tf.int32),
+        back_prop=False)
+
+  if query_decoder:
+    query_images, query_labels = tf.map_fn(
+        query_decoder.decode_with_label,
+        query_strings,
+        dtype=(query_decoder.out_type, tf.int32),
+        back_prop=False)
 
   return (support_images, support_labels, support_labels, query_images,
           query_labels, query_labels)
@@ -183,13 +190,18 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
     chunk_sizes: Tuple of ints representing the sizes the flush and additional
       chunks.
     image_size: int, desired image size used during decoding.
-    support_decoder: Decoder, used to decode support set images.
-    query_decoder: Decoder, used to decode query set images.
+    support_decoder: Decoder, used to decode support set images. If
+      None, no decoding of support images is performed.
+    query_decoder: Decoder, used to decode query set images. If
+      None, no decoding of query images is performed.
 
   Returns:
     support_images, support_labels, support_class_ids, query_images,
       query_labels, query_class_ids: Tensors, batches of images, labels, and
       (absolute) class IDs, for the support and query sets (respectively).
+      Example proto buffers are returned in place of images if the corresponding
+      decoder is None.
+
   """
   # TODO(goroshin): Replace with `support_decoder.log_summary(name='support')`.
   # TODO(goroshin): Eventually remove setting the image size here and pass it
@@ -203,16 +215,22 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
 
   (support_strings, support_class_ids), (query_strings, query_class_ids) = \
       flush_and_chunk_episode(example_strings, class_ids, chunk_sizes)
-  support_images = tf.map_fn(
-      support_decoder,
-      support_strings,
-      dtype=support_decoder.out_type,
-      back_prop=False)
-  query_images = tf.map_fn(
-      query_decoder,
-      query_strings,
-      dtype=query_decoder.out_type,
-      back_prop=False)
+
+  support_images = support_strings
+  query_images = query_strings
+
+  if support_decoder:
+    support_images = tf.map_fn(
+        support_decoder,
+        support_strings,
+        dtype=support_decoder.out_type,
+        back_prop=False)
+  if query_decoder:
+    query_images = tf.map_fn(
+        query_decoder,
+        query_strings,
+        dtype=query_decoder.out_type,
+        back_prop=False)
 
   # Convert class IDs into labels in [0, num_ways).
   _, support_labels = tf.unique(support_class_ids)
@@ -236,20 +254,26 @@ def process_batch(example_strings, class_ids, image_size, batch_decoder):
     class_ids: 1-D Tensor of dtype int, class IDs (absolute wrt the original
       dataset).
     image_size: int, desired image size used during decoding.
-    batch_decoder: Decoder class instance for the batch.
+    batch_decoder: Decoder class instance for the batch. If
+      None, no decoding of the batch is performed.
 
   Returns:
-    images, labels: Tensors, a batch of image and labels.
+    images, labels: Tensors, a batch of image and labels. Example proto buffers
+    are returned in place of images if the batch decoder is None.
   """
   # TODO(goroshin): Replace with `batch_decoder.log_summary(name='support')`.
   if isinstance(batch_decoder, decoder.ImageDecoder):
     log_data_augmentation(batch_decoder.data_augmentation, 'batch')
     batch_decoder.image_size = image_size
-  images = tf.map_fn(
-      batch_decoder,
-      example_strings,
-      dtype=batch_decoder.out_type,
-      back_prop=False)
+
+  images = example_strings
+
+  if batch_decoder:
+    images = tf.map_fn(
+        batch_decoder,
+        example_strings,
+        dtype=batch_decoder.out_type,
+        back_prop=False)
   labels = class_ids
   return (images, labels)
 
