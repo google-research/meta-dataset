@@ -38,8 +38,12 @@ from meta_dataset.data import decoder
 from meta_dataset.data import learning_spec
 from meta_dataset.data import reader
 from meta_dataset.data import sampling
+from simclr import data_util
 from six.moves import zip
 import tensorflow.compat.v1 as tf
+
+tf.flags.DEFINE_float('color_jitter_strength', 1.0,
+                      'The strength of color jittering for SimCLR episodes.')
 
 
 def filter_dummy_examples(example_strings, class_ids):
@@ -169,9 +173,81 @@ def process_dumped_episode(support_strings, query_strings, image_size,
           query_labels, query_labels)
 
 
+def add_simclr_episodes(simclr_episode_fraction, *episode):
+  """Convert simclr_episode_fraction of episodes into SimCLR Episodes."""
+
+  def convert_to_simclr_episode(support_images=None,
+                                support_labels=None,
+                                support_class_ids=None,
+                                query_images=None,
+                                query_labels=None,
+                                query_class_ids=None):
+    """Convert a single episode into a SimCLR Episode."""
+
+    # If there were k query examples of class c, keep the first k support
+    # examples of class c as 'simclr' queries.  We do this by assigning an
+    # id for each image in the query set, implemented as label*1e5+x+1, where
+    # x is the number of images of the same label with a lower index within
+    # the query set.  We do the same for the support set, which gives us a
+    # mapping between query and support images which is injective (as long
+    # as there's enough support-set images of each class).
+    #
+    # note: assumes max support label is 10000 - max_images_per_class
+    query_idx_within_class = tf.cast(
+        tf.equal(query_labels[tf.newaxis, :], query_labels[:, tf.newaxis]),
+        tf.int32)
+    query_idx_within_class = tf.linalg.diag_part(
+        tf.cumsum(query_idx_within_class, axis=1))
+    query_uid = query_labels * 10000 + query_idx_within_class
+    support_idx_within_class = tf.cast(
+        tf.equal(support_labels[tf.newaxis, :], support_labels[:, tf.newaxis]),
+        tf.int32)
+    support_idx_within_class = tf.linalg.diag_part(
+        tf.cumsum(support_idx_within_class, axis=1))
+    support_uid = support_labels * 10000 + support_idx_within_class
+
+    # compute which support-set images have matches in the query set, and
+    # discard the rest to produce the new query set.
+    support_keep = tf.reduce_any(
+        tf.equal(support_uid[:, tf.newaxis], query_uid[tf.newaxis, :]), axis=1)
+    query_images = tf.boolean_mask(support_images, support_keep)
+
+    support_labels = tf.range(
+        tf.shape(support_labels)[0], dtype=support_labels.dtype)
+    query_labels = tf.boolean_mask(support_labels, support_keep)
+    query_class_ids = tf.boolean_mask(support_class_ids, support_keep)
+
+    # Finally, apply SimCLR augmentation to all images.
+    # Note simclr only blurs one image.
+    query_images = simclr_augment(query_images, blur=True)
+    support_images = simclr_augment(support_images)
+
+    return (support_images, support_labels, support_class_ids, query_images,
+            query_labels, query_class_ids)
+
+  return tf.cond(
+      tf.random_uniform([], minval=0, maxval=1,
+                        dtype=tf.float32) > simclr_episode_fraction,
+      lambda: episode, lambda: convert_to_simclr_episode(*episode))
+
+
+def simclr_augment(image_batch, blur=False):
+  """Apply simclr-style augmentations to a single set of images."""
+  (h, w) = image_batch.shape.as_list()[1:3]
+  image_batch = (image_batch + 1.0) / 2.0
+  image_batch = tf.map_fn(
+      lambda x: data_util.preprocess_for_train(x, h, w, impl='simclrv1'),
+      image_batch)
+  if blur:
+    image_batch = tf.map_fn(lambda x: data_util.random_blur(x, h, w),
+                            image_batch)
+  image_batch = image_batch * 2.0 - 1.0
+  return image_batch
+
+
 @gin.configurable(whitelist=['support_decoder', 'query_decoder'])
 def process_episode(example_strings, class_ids, chunk_sizes, image_size,
-                    support_decoder, query_decoder):
+                    support_decoder, query_decoder, simclr_episode_fraction):
   """Processes an episode.
 
   This function:
@@ -194,6 +270,7 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
       None, no decoding of support images is performed.
     query_decoder: Decoder, used to decode query set images. If
       None, no decoding of query images is performed.
+    simclr_episode_fraction: Fraction of episodes to convert to SimCLR episodes.
 
   Returns:
     support_images, support_labels, support_class_ids, query_images,
@@ -236,8 +313,13 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
   _, support_labels = tf.unique(support_class_ids)
   _, query_labels = tf.unique(query_class_ids)
 
-  return (support_images, support_labels, support_class_ids, query_images,
-          query_labels, query_class_ids)
+  episode = (support_images, support_labels, support_class_ids, query_images,
+             query_labels, query_class_ids)
+
+  if simclr_episode_fraction > 0.0:
+    episode = add_simclr_episodes(simclr_episode_fraction, *episode)
+
+  return episode
 
 
 @gin.configurable(whitelist=['batch_decoder'])
@@ -288,7 +370,9 @@ def make_one_source_episode_pipeline(dataset_spec,
                                      read_buffer_size_bytes=None,
                                      num_prefetch=0,
                                      image_size=None,
-                                     num_to_take=None):
+                                     num_to_take=None,
+                                     ignore_hierarchy_probability=0.0,
+                                     simclr_episode_fraction=0.0):
   """Returns a pipeline emitting data from one single source as Episodes.
 
   Args:
@@ -312,6 +396,12 @@ def make_one_source_episode_pipeline(dataset_spec,
       each class' tfrecord. If specified, the available images of each class
       will be restricted to that int. By default no restriction is applied and
       all data is used.
+    ignore_hierarchy_probability: Float, if using a hierarchy, this flag makes
+      the sampler ignore the hierarchy for this proportion of episodes and
+      instead sample categories uniformly.
+    simclr_episode_fraction: Float, fraction of episodes that will be converted
+      to SimCLR Episodes as described in the CrossTransformers paper.
+
 
   Returns:
     A Dataset instance that outputs tuples of fully-assembled and decoded
@@ -336,7 +426,8 @@ def make_one_source_episode_pipeline(dataset_spec,
       pool=pool,
       use_dag_hierarchy=use_dag_ontology,
       use_bilevel_hierarchy=use_bilevel_ontology,
-      use_all_classes=use_all_classes)
+      use_all_classes=use_all_classes,
+      ignore_hierarchy_probability=ignore_hierarchy_probability)
   dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
   # Episodes coming out of `dataset` contain flushed examples and are internally
   # padded with dummy examples. `process_episode` discards flushed examples,
@@ -344,7 +435,10 @@ def make_one_source_episode_pipeline(dataset_spec,
   # and decodes the example strings.
   chunk_sizes = sampler.compute_chunk_sizes()
   map_fn = functools.partial(
-      process_episode, chunk_sizes=chunk_sizes, image_size=image_size)
+      process_episode,
+      chunk_sizes=chunk_sizes,
+      image_size=image_size,
+      simclr_episode_fraction=simclr_episode_fraction)
   dataset = dataset.map(map_fn)
   # There is only one data source, so we know that all episodes belong to it,
   # but for interface consistency, zip with a dataset identifying the source.
@@ -366,7 +460,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                       read_buffer_size_bytes=None,
                                       num_prefetch=0,
                                       image_size=None,
-                                      num_to_take=None):
+                                      num_to_take=None,
+                                      simclr_episode_fraction=0.0):
   """Returns a pipeline emitting data from multiple sources as Episodes.
 
   Each episode only contains data from one single source. For each episode, its
@@ -394,6 +489,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       examples per class to restrict to (for this given split). If provided, its
       length must be the same as len(dataset_spec). If None, no restrictions are
       applied to any dataset and all data per class is used.
+    simclr_episode_fraction: Float, fraction of episodes that will be converted
+      to SimCLR Episodes as described in the CrossTransformers paper.
 
   Returns:
     A Dataset instance that outputs tuples of fully-assembled and decoded
@@ -439,7 +536,10 @@ def make_multisource_episode_pipeline(dataset_spec_list,
 
   def map_fn(episode, source_id):
     return process_episode(
-        *episode, chunk_sizes=chunk_sizes, image_size=image_size), source_id
+        *episode,
+        chunk_sizes=chunk_sizes,
+        image_size=image_size,
+        simclr_episode_fraction=simclr_episode_fraction), source_id
 
   dataset = dataset.map(map_fn)
 

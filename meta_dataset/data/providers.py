@@ -24,6 +24,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+from meta_dataset import distribute_utils
 import tensorflow.compat.v1 as tf
 
 
@@ -89,11 +90,13 @@ class Episode(
   def query_shots(self):
     return compute_shot(self.way, self.query_labels)
 
-  # TODO(evcu) We should probably calculate way from unique labels, not
-  # class_ids.
   @property
   def way(self):
-    return tf.size(self.unique_class_ids)
+    return tf.size(self.unique_labels)
+
+  @property
+  def unique_labels(self):
+    return tf.unique(tf.concat((self.support_labels, self.query_labels), -1))[0]
 
   @property
   def labels(self):
@@ -111,6 +114,74 @@ class Episode(
 
   @property
   def onehot_query_labels(self):
+    return tf.one_hot(self.query_labels, self.way)
+
+
+class EpisodePiece(
+    collections.namedtuple(
+        'Episode', 'support_images, query_images, support_labels, '
+        'query_labels, support_class_ids, query_class_ids, way')):
+  """Wraps an episode's data and facilitates creation of feed dict.
+
+    This class provides the same functionality as an Episode, but it's intended
+    for use in a distributed setting: it contains only a chunk of the support
+    and query images in the episode (and their corresponding labels); basic
+    accessor methods (support/query_images, support/query_labels,
+    one_hot_support/query_labels, support/query_class_ids) will return only
+    the local values.  The remaining properties, however, refer to the global
+    episode stats (way, shots, unique_class_id's) and may be aggregated on
+    demand.
+
+    Args:
+      support_images: A Tensor of images for fitting an episodic model.
+      query_images: A Tensor of images for evaluating an episodic model.
+      support_labels: A 1D Tensor, the matching support labels (numbers between
+        0 and K-1, with K the number of classes involved in the episode).
+      query_labels: A 1D Tensor, the matching query labels (numbers between 0
+        and K-1, with K the number of classes involved in the episode).
+      support_class_ids: A 1D Tensor, the matching support class ids (numbers
+        between 0 and N-1, with N the number of classes in the full dataset).
+      query_class_ids: A 1D Tensor, the matching query class ids (numbers
+        between 0 and N-1, with N the number of classes in the full dataset).
+      way: number of classes in the original episode.
+  """
+
+  @property
+  def unique_class_ids(self):
+    """Return global unique class id's for the episode."""
+    return compute_unique_class_ids(
+        tf.concat((distribute_utils.aggregate(self.support_class_ids),
+                   distribute_utils.aggregate(self.query_class_ids)), -1))
+
+  @property
+  def support_shots(self):
+    """Return global support shots for the episode."""
+    return compute_shot(self.way,
+                        distribute_utils.aggregate(self.support_labels))
+
+  @property
+  def query_shots(self):
+    """Return global query shots for the episode."""
+    return compute_shot(self.way, distribute_utils.aggregate(self.query_labels))
+
+  @property
+  def labels(self):
+    """Return local query labels to provide an episodic/batch-agnostic API."""
+    return self.query_labels
+
+  @property
+  def onehot_labels(self):
+    """Return local one-hot query labels for episodic/batch-agnostic API."""
+    return self.onehot_query_labels
+
+  @property
+  def onehot_support_labels(self):
+    """Return local one-hot support labels."""
+    return tf.one_hot(self.support_labels, self.way)
+
+  @property
+  def onehot_query_labels(self):
+    """Return local one-hot query labels."""
     return tf.one_hot(self.query_labels, self.way)
 
 

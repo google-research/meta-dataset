@@ -118,6 +118,7 @@ tf.flags.DEFINE_integer(
 VALIDATION_ACCURACY_TAGS = (
     'valid_acc/mean',
     'mean valid acc',
+    'mean acc',  # TODO(doersch): rather unclear tag written by trainer.py
 )
 
 

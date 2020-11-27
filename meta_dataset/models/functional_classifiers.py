@@ -85,16 +85,17 @@ def linear_classifier(embeddings, num_classes, cosine_classifier,
     logits: A Tensor of size [batch size, num outputs].
   """
 
-  # A variable to keep track of whether the initialization has already happened.
-  data_dependent_init_done = tf.get_variable(
-      'data_dependent_init_done',
-      initializer=0,
-      dtype=tf.int32,
-      trainable=False)
-
   embedding_dims = embeddings.get_shape().as_list()[-1]
 
   if use_weight_norm:
+    # A variable to keep track of whether the initialization has already
+    # happened.
+    data_dependent_init_done = tf.get_variable(
+        'data_dependent_init_done',
+        initializer=0,
+        dtype=tf.int32,
+        trainable=False)
+
     w_fc = tf.get_variable(
         'w_fc', [embedding_dims, num_classes],
         initializer=tf.random_normal_initializer(0, 0.05),

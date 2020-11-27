@@ -1,0 +1,22 @@
+include 'meta_dataset/learn/gin/setups/imagenet.gin'
+include 'meta_dataset/learn/gin/learners/crosstransformer_config.gin'
+
+# Backbone hypers.
+include 'meta_dataset/learn/gin/default/resnet34_stride16.gin'
+
+# Data hypers.
+DataConfig.image_height = 224
+train/EpisodeDescriptionConfig.ignore_hierarchy_probability = 0.5
+resnet34.deeplab_alignment = False
+
+# Training hypers (not needed for eval).
+Trainer.normalized_gradient_descent = True
+Trainer.decay_learning_rate = True
+Trainer.decay_every = 4000
+Trainer.decay_rate = 0.915193802145601
+Trainer.learning_rate = 0.0006
+Trainer.num_updates = 400000
+Trainer.enable_tf_optimizations = False
+weight_decay = 0.0000885787420909229
+
+train/EpisodeDescriptionConfig.simclr_episode_fraction = 0.5

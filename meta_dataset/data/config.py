@@ -99,6 +99,8 @@ class EpisodeDescriptionConfig(object):
                max_log_weight,
                ignore_dag_ontology,
                ignore_bilevel_ontology,
+               ignore_hierarchy_probability,
+               simclr_episode_fraction,
                min_examples_in_class=0,
                num_unique_episodes=0):
     """Initialize a EpisodeDescriptionConfig.
@@ -135,6 +137,12 @@ class EpisodeDescriptionConfig(object):
       ignore_bilevel_ontology: Whether to ignore Omniglot's DAG ontology when
         sampling classes from it. This has no effect if Omniglot is not part of
         the benchmark.
+      ignore_hierarchy_probability: Float, if using a hierarchy, this flag makes
+        the sampler ignore the hierarchy for this proportion of episodes and
+        instead sample categories uniformly.
+      simclr_episode_fraction: Float, fraction of episodes that will be
+        converted to SimCLR Episodes as described in the CrossTransformers
+        paper.
       min_examples_in_class: An integer, the minimum number of examples that a
         class has to contain to be considered. All classes with fewer examples
         will be ignored. 0 means no classes are ignored, so having classes with
@@ -190,6 +198,8 @@ class EpisodeDescriptionConfig(object):
     self.max_log_weight = max_log_weight
     self.ignore_dag_ontology = ignore_dag_ontology
     self.ignore_bilevel_ontology = ignore_bilevel_ontology
+    self.ignore_hierarchy_probability = ignore_hierarchy_probability
+    self.simclr_episode_fraction = simclr_episode_fraction
     self.min_examples_in_class = min_examples_in_class
     self.num_unique_episodes = num_unique_episodes
 

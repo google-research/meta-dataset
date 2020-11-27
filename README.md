@@ -1,5 +1,8 @@
 This repository contains accompanying code for the article introducing
 Meta-Dataset, [arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
+It also contains accompanying code for CrossTransformers,
+[https://arxiv.org/abs/2007.11498](https://arxiv.org/abs/2007.11498), a
+follow-up work which improves performance.
 
 This code is provided here in order to give more details on the implementation
 of the data-providing pipeline, our back-bones and models, as well as the
@@ -50,6 +53,18 @@ sources for improving their generalization. We also propose a new set of
 baselines for quantifying the benefit of meta-learning in Meta-Dataset. Our
 extensive experimentation has uncovered important research challenges and we
 hope to inspire work in these directions.
+
+## CrossTransformers: spatially-aware few-shot transfer
+
+_Carl Doersch, Ankush Gupta, Andrew Zisserman_
+
+This is a Transformer-based neural network architecture which can find coarse
+spatial correspondence between the query and the support images, and then infer
+class membership by computing distances between spatially-corresponding
+features.  The paper also introduces SimCLR episodes, which are episodes that
+require SimCLR-style instance recognition, and therefore encourage features
+which capture more than just the training-set categories.  This algorithm is
+SOTA on Meta-Dataset (train-on-ILSVRC) as of NeurIPS 2020.
 
 # User instructions
 
@@ -128,7 +143,8 @@ networks"): `four_layer_convnet` (sometimes `convnet` for short), `resnet`, and
 `wide_resnet`. These architectures can be used by all baselines and episodic
 models. Another backbone, `relationnet_convnet` (similar to `four_layer_convnet`
 but without pooling on the last layer), is only used by RelationNet (and
-baseline, for pre-training purposes).
+baseline, for pre-training purposes).  CrossTransformers use a larger backbone
+`resnet34`, which is similar to `resnet` but with more layers.
 
 ### Reproducing results
 

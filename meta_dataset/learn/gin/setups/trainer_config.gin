@@ -4,6 +4,11 @@ Trainer.num_eval_episodes = 600
 Trainer.checkpoint_every = 500
 Trainer.validate_every = 500
 Trainer.log_every = 100
+Trainer.distribute = False
+# Enable TensorFlow optimizations. It can add a few minutes to the first
+# calls to session.run(), but decrease memory usage.
+Trainer.enable_tf_optimizations = True
+
 Learner.transductive_batch_norm = False
 Learner.backprop_through_moments = True
 

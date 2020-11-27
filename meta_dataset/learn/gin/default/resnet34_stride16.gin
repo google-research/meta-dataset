@@ -1,0 +1,3 @@
+Learner.embedding_fn = @resnet34
+Trainer.pretrained_source = 'imagenet'
+resnet34.max_stride = 16

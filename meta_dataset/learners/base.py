@@ -69,10 +69,8 @@ class Learner(object):
   def build(self):
     """Additional build functionality for subclasses of `Learner`."""
 
-  def compute_regularizer(self, onehot_labels, predictions):
-    """Computes a regularizer, maybe using `predictions` and `onehot_labels`."""
-    del onehot_labels
-    del predictions
+  def compute_regularizer(self):
+    """Computes a regularizer, independent of the data."""
     return tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
   def compute_loss(self, onehot_labels, predictions):
@@ -86,13 +84,13 @@ class Learner(object):
         interpreted as unnormalized log probabilities.
 
     Returns:
-       A `tf.Tensor` representing the average loss.
+       A `tf.Tensor` representing the loss per example.
     """
     cross_entropy_loss = tf.losses.softmax_cross_entropy(
-        onehot_labels=onehot_labels, logits=predictions)
-    regularization = self.compute_regularizer(
-        onehot_labels=onehot_labels, predictions=predictions)
-    return cross_entropy_loss + regularization
+        onehot_labels=onehot_labels,
+        logits=predictions,
+        reduction=tf.losses.Reduction.NONE)
+    return cross_entropy_loss
 
   def compute_accuracy(self, onehot_labels, predictions):
     """Computes the accuracy of `predictions` with respect to `onehot_labels`.

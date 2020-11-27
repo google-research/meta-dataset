@@ -15,6 +15,10 @@ EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
 EpisodeDescriptionConfig.max_log_weight = 0.69314718055994529  # np.log(2)
 EpisodeDescriptionConfig.ignore_dag_ontology = False
 EpisodeDescriptionConfig.ignore_bilevel_ontology = False
+EpisodeDescriptionConfig.ignore_hierarchy_probability = 0.0
+
+# By default don't use SimCLR Episodes.
+EpisodeDescriptionConfig.simclr_episode_fraction = 0.0
 # It is possible to override some of the above defaults only for meta-training.
 # An example is shown in the following two commented-out lines.
 # train/EpisodeDescriptionConfig.min_ways = 5

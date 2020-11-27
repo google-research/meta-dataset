@@ -82,26 +82,40 @@ def sample_class_ids_uniformly(num_ways, rel_classes):
   return RNG.choice(rel_classes, num_ways, replace=False)
 
 
-def compute_num_query(images_per_class, max_num_query):
+def compute_num_query(images_per_class, max_num_query, num_support):
   """Computes the number of query examples per class in the episode.
 
   Query sets are balanced, i.e., contain the same number of examples for each
   class in the episode.
 
-  That number is such that the number of query examples corresponds to at most
-  half of the examples for any of the class in the episode, and is no greater
-  than `max_num_query`.
+  The number of query examples satisfies the following conditions:
+  - it is no greater than `max_num_query`
+  - if support size is unspecified, it is at most half the size of the
+    smallest class in the episode
+  - if support size is specified, it is at most the size of the smallest class
+    in the episode minus the max support size.
 
   Args:
     images_per_class: np.array, number of images for each class.
     max_num_query: int, number of images for each class.
+    num_support: int or tuple(int, int), number (or range) of support
+      images per class.
 
   Returns:
     num_query: int, number of query examples per class in the episode.
   """
-  if images_per_class.min() < 2:
-    raise ValueError('Expected at least 2 images per class.')
-  return np.minimum(max_num_query, (images_per_class // 2).min())
+  if num_support is None:
+    if images_per_class.min() < 2:
+      raise ValueError('Expected at least 2 images per class.')
+    return np.minimum(max_num_query, (images_per_class // 2).min())
+  elif isinstance(num_support, int):
+    max_support = num_support
+  else:
+    _, max_support = num_support
+  if (images_per_class - max_support).min() < 1:
+    raise ValueError(
+        'Expected at least {} images per class'.format(max_support + 1))
+  return np.minimum(max_num_query, images_per_class.min() - max_support)
 
 
 def sample_support_set_size(num_remaining_per_class,
@@ -204,7 +218,8 @@ class EpisodeDescriptionSampler(object):
                pool=None,
                use_dag_hierarchy=False,
                use_bilevel_hierarchy=False,
-               use_all_classes=False):
+               use_all_classes=False,
+               ignore_hierarchy_probability=0.0):
     """Initializes an EpisodeDescriptionSampler.episode_config.
 
     Args:
@@ -221,6 +236,9 @@ class EpisodeDescriptionSampler(object):
       use_all_classes: Boolean, defaults to False. Uses all available classes,
         in order, instead of sampling. Overrides `num_ways` to the number of
         classes in `split`.
+      ignore_hierarchy_probability: Float, if using a hierarchy, this flag makes
+        the sampler ignore the hierarchy for this proportion of episodes and
+        instead sample categories uniformly.
 
     Raises:
       RuntimeError: if required parameters are missing.
@@ -231,6 +249,7 @@ class EpisodeDescriptionSampler(object):
     self.pool = pool
     self.use_dag_hierarchy = use_dag_hierarchy
     self.use_bilevel_hierarchy = use_bilevel_hierarchy
+    self.ignore_hierarchy_probability = ignore_hierarchy_probability
     self.use_all_classes = use_all_classes
     self.num_ways = episode_descr_config.num_ways
     self.num_support = episode_descr_config.num_support
@@ -299,6 +318,9 @@ class EpisodeDescriptionSampler(object):
       if self.min_examples_in_class > 0:
         raise ValueError('"use_bilevel_hierarchy" is incompatible with '
                          '"min_examples_in_class".')
+      if self.use_dag_hierarchy:
+        raise ValueError('"use_bilevel_hierarchy" is incompatible with '
+                         '"use_dag_hierarchy".')
 
       if not isinstance(dataset_spec,
                         dataset_spec_lib.BiLevelDatasetSpecification):
@@ -371,7 +393,14 @@ class EpisodeDescriptionSampler(object):
     If self.min_examples_in_class > 0, classes with too few examples will not
     be selected.
     """
-    if self.use_dag_hierarchy:
+    prob = [1.0, 0.0]
+    if self.ignore_hierarchy_probability:
+      prob = [
+          1.0 - self.ignore_hierarchy_probability,
+          self.ignore_hierarchy_probability
+      ]
+
+    if self.use_dag_hierarchy and RNG.choice([True, False], p=prob):
       # Retrieve the list of relative class IDs for an internal node sampled
       # uniformly at random.
       episode_classes_rel = RNG.choice(self.span_leaves_rel)
@@ -386,7 +415,7 @@ class EpisodeDescriptionSampler(object):
       # Light check to make sure the chosen number of classes is valid.
       assert len(episode_classes_rel) >= self.min_ways
       assert len(episode_classes_rel) <= self.max_ways_upper_bound
-    elif self.use_bilevel_hierarchy:
+    elif self.use_bilevel_hierarchy and RNG.choice([True, False], p=prob):
       # First sample a coarse category uniformly. Then randomly sample the way
       # uniformly, but taking care not to sample more than the number of classes
       # of the chosen supercategory.
@@ -444,7 +473,9 @@ class EpisodeDescriptionSampler(object):
       num_query = self.num_query
     else:
       num_query = compute_num_query(
-          images_per_class, max_num_query=self.max_num_query)
+          images_per_class,
+          max_num_query=self.max_num_query,
+          num_support=self.num_support)
 
     if self.num_support is not None:
       if isinstance(self.num_support, int):

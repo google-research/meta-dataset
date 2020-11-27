@@ -1,0 +1,4 @@
+# Best pre-trained resnet. Update the path to the checkpoint.
+Learner.embedding_fn = @resnet34
+Trainer.checkpoint_to_restore = '/path/to/checkpoints/pretrain_imagenet_resnet/model_27500.ckpt'
+Trainer.pretrained_source = 'imagenet'
