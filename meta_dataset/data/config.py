@@ -153,7 +153,9 @@ class EpisodeDescriptionConfig(object):
         If set to x > 0, x number of episodes are pre-generated, and repeatedly
         iterated over. This is also helpful when running on TPUs as it avoids
         the use of tf.data.Dataset.from_generator. If set to x = 0, no such
-        upper bound on number of unique episodes is set.
+        upper bound on number of unique episodes is set. Note that this is the
+        number of unique episodes _for each source dataset_, not total unique
+        episodes.
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
