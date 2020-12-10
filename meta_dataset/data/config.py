@@ -102,7 +102,7 @@ class EpisodeDescriptionConfig(object):
                ignore_hierarchy_probability,
                simclr_episode_fraction,
                min_examples_in_class=0,
-               num_unique_episodes=0):
+               num_unique_descriptions=0):
     """Initialize a EpisodeDescriptionConfig.
 
     This is used in sampling.py in Trainer and in EpisodeDescriptionSampler to
@@ -149,13 +149,14 @@ class EpisodeDescriptionConfig(object):
         no examples may trigger errors later. For variable shots, a value of 2
         makes it sure that there are at least one support and one query samples.
         For fixed shots, you could set it to `num_support + num_query`.
-      num_unique_episodes: An integer, the number of unique episodes to use.
-        If set to x > 0, x number of episodes are pre-generated, and repeatedly
-        iterated over. This is also helpful when running on TPUs as it avoids
-        the use of tf.data.Dataset.from_generator. If set to x = 0, no such
-        upper bound on number of unique episodes is set. Note that this is the
-        number of unique episodes _for each source dataset_, not total unique
-        episodes.
+      num_unique_descriptions: An integer, the number of unique episode
+        descriptions to use. If set to x > 0, x episode descriptions are
+        pre-generated, and repeatedly iterated over. This is especially helpful
+        when running on TPUs as it avoids the use of
+        tf.data.Dataset.from_generator. If set to x = 0, no such upper bound on
+        number of unique episode descriptions is set. Note that this is the
+        number of unique episode descriptions _for each source dataset_,
+        not total unique episode descriptions.
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
@@ -203,7 +204,7 @@ class EpisodeDescriptionConfig(object):
     self.ignore_hierarchy_probability = ignore_hierarchy_probability
     self.simclr_episode_fraction = simclr_episode_fraction
     self.min_examples_in_class = min_examples_in_class
-    self.num_unique_episodes = num_unique_episodes
+    self.num_unique_descriptions = num_unique_descriptions
 
   @property
   def max_ways(self):

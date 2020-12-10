@@ -414,11 +414,11 @@ def make_one_source_episode_pipeline(dataset_spec,
   if num_to_take is None:
     num_to_take = -1
 
-  num_unique_episodes = episode_descr_config.num_unique_episodes
+  num_unique_descriptions = episode_descr_config.num_unique_descriptions
   episode_reader = reader.EpisodeReader(dataset_spec, split,
                                         shuffle_buffer_size,
                                         read_buffer_size_bytes, num_prefetch,
-                                        num_to_take, num_unique_episodes)
+                                        num_to_take, num_unique_descriptions)
   sampler = sampling.EpisodeDescriptionSampler(
       episode_reader.dataset_spec,
       split,
@@ -504,7 +504,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                      'dataset_spec_list.')
   if num_to_take is None:
     num_to_take = [-1] * len(dataset_spec_list)
-  num_unique_episodes = episode_descr_config.num_unique_episodes
+  num_unique_descriptions = episode_descr_config.num_unique_descriptions
   sources = []
   for source_id, (dataset_spec, use_dag_ontology, use_bilevel_ontology,
                   num_to_take_for_dataset) in enumerate(
@@ -514,7 +514,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                           shuffle_buffer_size,
                                           read_buffer_size_bytes, num_prefetch,
                                           num_to_take_for_dataset,
-                                          num_unique_episodes)
+                                          num_unique_descriptions)
     sampler = sampling.EpisodeDescriptionSampler(
         episode_reader.dataset_spec,
         split,
