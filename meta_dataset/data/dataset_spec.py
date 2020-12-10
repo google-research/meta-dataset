@@ -592,6 +592,15 @@ class HierarchicalDatasetSpecification(
     # Maps each Split enum to the number of its classes.
     self.classes_per_split = self.get_classes_per_split()
 
+    # Map each class ID to its corresponding number of examples.
+    examples_per_class = {}
+    for split in learning_spec.Split:
+      leaves = imagenet_specification.get_leaves(self.split_subgraphs[split])
+      for node in leaves:
+        num_examples = self.images_per_class[split][node]
+        examples_per_class[self.class_names_to_ids[node.wn_id]] = num_examples
+    self.examples_per_class = examples_per_class
+
     if restricted_classes_per_split is not None:
       _check_validity_of_restricted_classes_per_split(
           restricted_classes_per_split, self.classes_per_split)
@@ -635,40 +644,8 @@ class HierarchicalDatasetSpecification(
       self.initialize()
     return get_classes(split, self.classes_per_split)
 
-  def get_all_classes_same_example_count(self):
-    """If all classes have the same number of images, return that number.
-
-    Returns:
-      An int, representing the common among all dataset classes number of
-      examples, if the classes are balanced, or -1 to indicate class imbalance.
-    """
-
-    def list_leaf_num_images(split):
-      return [
-          self.images_per_class[split][n] for n in
-          imagenet_specification.get_leaves(self.split_subgraphs[split])
-      ]
-
-    train_example_counts = set(list_leaf_num_images(learning_spec.Split.TRAIN))
-    valid_example_counts = set(list_leaf_num_images(learning_spec.Split.VALID))
-    test_example_counts = set(list_leaf_num_images(learning_spec.Split.TEST))
-
-    is_class_balanced = (
-        len(train_example_counts) == 1 and len(valid_example_counts) == 1 and
-        len(test_example_counts) == 1 and
-        len(train_example_counts | valid_example_counts
-            | test_example_counts) == 1)
-
-    if is_class_balanced:
-      return list(train_example_counts)[0]
-    else:
-      return -1
-
-  def get_total_images_per_class(self, class_id=None, pool=None):
+  def get_total_images_per_class(self, class_id, pool=None):
     """Gets the number of images of class whose id is class_id.
-
-    class_id can only be None in the case where all classes of the dataset have
-    the same number of images.
 
     Args:
       class_id: The integer class id of a class.
@@ -687,22 +664,10 @@ class HierarchicalDatasetSpecification(
       raise ValueError('No dataset with a HierarchicalDataSpecification '
                        'supports example-level splits (pools).')
 
-    common_num_class_images = self.get_all_classes_same_example_count()
-    if class_id is None:
-      if common_num_class_images < 0:
-        raise ValueError('class_id can only be None in the case where all '
-                         'dataset classes have the same number of images.')
-      return common_num_class_images
-
     # Find the class with class_id in one of the split graphs.
-    for s in learning_spec.Split:
-      for n in self.split_subgraphs[s]:
-        # Only consider leaves, as class_names_to_ids only has keys for them.
-        if n.children:
-          continue
-        if self.class_names_to_ids[n.wn_id] == class_id:
-          return self.images_per_class[s][n]
-    raise ValueError('Class id {} not found.'.format(class_id))
+    if class_id not in self.examples_per_class:
+      raise ValueError('Class id {} not found.'.format(class_id))
+    return self.examples_per_class[class_id]
 
   def to_dict(self):
     """Returns a dictionary for serialization to JSON.
@@ -876,4 +841,5 @@ def load_dataset_spec(dataset_records_path, convert_from_pkl=False):
 
   # Replace outdated path of where to find the dataset's records.
   data_spec = data_spec._replace(path=dataset_records_path)
+  data_spec.initialize()
   return data_spec
