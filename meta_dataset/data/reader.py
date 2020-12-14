@@ -46,17 +46,18 @@ def _pad(dataset_indices, chunk_size, dummy_dataset_id):
   """Pads `dataset_indices` with dummy values so it has length `chunk_size`.
 
   Args:
-    dataset_indices: list of int, dataset indices.
+    dataset_indices: list of (dataset_id, num_repeats) tuples representing a
+      sequence of dataset IDs.
     chunk_size: int, size to pad to.
     dummy_dataset_id: int, dummy value to pad with.
   """
-  pad_size = chunk_size - len(dataset_indices)
+  pad_size = chunk_size - sum(n for i, n in dataset_indices)
   assert pad_size >= 0
-  dataset_indices.extend([dummy_dataset_id] * pad_size)
+  dataset_indices.append([dummy_dataset_id, pad_size])
 
 
-def dataset_id_generator(dataset_spec, split, pool, sampler):
-  """Generates a stream of dataset IDs forming a sequence of episodes.
+def episode_representation_generator(dataset_spec, split, pool, sampler):
+  """Generates a stream of compact episode representations.
 
   Each episode is chunked into:
 
@@ -73,6 +74,10 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
   needed). The size of each chunk is prescribed by the `compute_chunk_sizes`
   method of `sampler`, which also implicitly defines the number of additional
   chunks (i.e. `len(chunk_sizes) - 1`).
+
+  Instead of explicitly representing all elements of the dataset ID stream, this
+  generator returns a compact representation where repeated elements are
+  replaced with a `(dataset_id, num_repeats)` tuple.
 
   This generator is meant to be used with
   `tf.data.experimental.choose_from_datasets` and assumes that the list of
@@ -95,7 +100,8 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
     sampler: EpisodeDescriptionSampler instance.
 
   Yields:
-    i: int, dataset ID.
+    episode_representation: tensor of shape [N, 2], where N varies dynamically
+      between episodes.
   """
   chunk_sizes = sampler.compute_chunk_sizes()
   # An episode always starts with a "flush" chunk to allow flushing examples at
@@ -135,7 +141,7 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
       # readability and testability.
       remaining = total_images_per_class[class_idx] - cursors[class_idx]
       if total_requested > remaining:
-        flushed_dataset_indices.extend([class_idx] * remaining)
+        flushed_dataset_indices.append([class_idx, remaining])
         cursors[class_idx] = 0
       # Elements of `distribution` correspond to how many examples of class
       # `class_idx` to allocate for each chunk (e.g. in a few-shot learning
@@ -145,7 +151,7 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
       # that have so far been requested for each chunk.
       for num_to_allocate, dataset_indices in zip(distribution,
                                                   selected_dataset_indices):
-        dataset_indices.extend([class_idx] * num_to_allocate)
+        dataset_indices.append([class_idx, num_to_allocate])
       cursors[class_idx] += total_requested
 
     # An episode sequence is generated in multiple phases, each padded with an
@@ -156,13 +162,28 @@ def dataset_id_generator(dataset_spec, split, pool, sampler):
                                            other_chunk_sizes):
       _pad(dataset_indices, chunk_size, dummy_dataset_id)
 
-    # Yield dataset IDs one by one.
-    # TODO(lamblinp): revisit yielding the whole list at once rather than
-    # element by element for performance reasons.
-    dataset_indices = itertools.chain(flushed_dataset_indices,
-                                      *selected_dataset_indices)
-    for i in dataset_indices:
-      yield i
+    episode_representation = np.array(
+        list(
+            itertools.chain(flushed_dataset_indices,
+                            *selected_dataset_indices)),
+        dtype='int64')
+    yield episode_representation
+
+
+def decompress_episode_representation(episode_representation):
+  """Decompresses an episode representation into a dataset ID stream.
+
+  Args:
+    episode_representation: tensor of shape [None, 2]. Its first column
+      represents dataset IDs and its second column represents the number of
+      times they're repeated in the sequence.
+
+  Returns:
+    1D tensor, decompressed sequence of dataset IDs.
+  """
+  episode_representation.set_shape([None, 2])
+  dataset_ids, repeats = tf.unstack(episode_representation, axis=1)
+  return tf.repeat(dataset_ids, repeats)
 
 
 class Reader(object):
@@ -332,32 +353,33 @@ class EpisodeReaderMixin(object):
     # select which class dataset to sample from. We turn the stream of dataset
     # IDs into a stream of `(example_string, class_id)` tuples using
     # `choose_from_datasets`.
-    choice_generator = functools.partial(
-        dataset_id_generator,
+    representation_generator = functools.partial(
+        episode_representation_generator,
         dataset_spec=self.dataset_spec,
         split=self.split,
         pool=pool,
         sampler=sampler)
 
     if not self.num_unique_descriptions:
-      choice_dataset = tf.data.Dataset.from_generator(choice_generator,
+      choice_dataset = tf.data.Dataset.from_generator(representation_generator,
                                                       (tf.int64),
-                                                      tf.TensorShape([]))
+                                                      tf.TensorShape([None, 2]))
     else:
       # If num_unique_descriptions is x > 0, then we pre-generate x number of
-      # episode descriptions and repeatedly iterate over them. We generate
-      # (x * sum(sampler.compute_chunk_sizes()) dataset IDs using
-      # choice_generator.
-      choice_generator_fn = choice_generator()
-      total_num_ids = self.num_unique_descriptions * sum(
-          sampler.compute_chunk_sizes())
-      episode_desc_ids = np.array(
-          list(itertools.islice(choice_generator_fn, total_num_ids)),
-          dtype='int64').reshape([self.num_unique_descriptions, -1])
-
+      # episodes and repeatedly iterate over them.
+      representations = list(
+          map(
+              # We need to use an intermediate string representation in order to
+              # shuffle ragged arrays with tf.data.Dataset.
+              tf.io.serialize_tensor,
+              itertools.islice(representation_generator(),
+                               self.num_unique_descriptions)))
       choice_dataset = tf.data.Dataset.from_tensor_slices(
-          episode_desc_ids).shuffle(
-              self.num_unique_descriptions).repeat().unbatch()
+          representations).shuffle(self.num_unique_descriptions).map(
+              lambda s: tf.io.parse_tensor(s, tf.int64)).repeat()
+
+    choice_dataset = choice_dataset.map(
+        decompress_episode_representation).unbatch()
 
     dataset = tf.data.experimental.choose_from_datasets(class_datasets,
                                                         choice_dataset)
