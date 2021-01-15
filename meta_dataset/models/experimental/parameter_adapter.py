@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2020 The Meta-Dataset Authors.
+# Copyright 2021 The Meta-Dataset Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ def meta_dataset_functional_variable_generator(reparameterizable_model,
   )
 
 
-@gin.configurable(blacklist=['model'])
+@gin.configurable(denylist=['model'])
 def meta_dataset_functional_parameter_adapter(model, ckpt_path):
   variable_mapping = ckpt_parameter_adapter(
       model=model,
@@ -394,7 +394,7 @@ def bit_variable_generator(model, imported_model):
   return pairs
 
 
-@gin.configurable(blacklist=['model'])
+@gin.configurable(denylist=['model'])
 def bit_parameter_adapter(model, ckpt_path, tags=None):
   """Initialize `model`s parameters from the BiT backbone at `ckpt_path`."""
   imported_model = hub.load(handle=ckpt_path, tags=tags)

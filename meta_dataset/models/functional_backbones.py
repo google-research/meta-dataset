@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2020 The Meta-Dataset Authors.
+# Copyright 2021 The Meta-Dataset Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ def relu(x, use_bounded_activation=False):
 # about leaking information across episodes.
 # Note: we should use ema object to accumulate the statistics for compatibility
 # with TF Eager.
-@gin.configurable('bn', whitelist=['use_ema', 'ema_epsilon'])
+@gin.configurable('bn', allowlist=['use_ema', 'ema_epsilon'])
 def bn(x,
        params=None,
        moments=None,
@@ -837,7 +837,7 @@ def _wide_resnet(x,
     return return_dict
 
 
-@gin.configurable('wide_resnet', whitelist=['weight_decay'])
+@gin.configurable('wide_resnet', allowlist=['weight_decay'])
 def wide_resnet(x,
                 is_training,
                 weight_decay,
@@ -919,7 +919,7 @@ def _four_layer_convnet(inputs,
     return return_dict
 
 
-@gin.configurable('four_layer_convnet', whitelist=['weight_decay'])
+@gin.configurable('four_layer_convnet', allowlist=['weight_decay'])
 def four_layer_convnet(inputs,
                        is_training,
                        weight_decay,
@@ -971,7 +971,7 @@ def four_layer_convnet(inputs,
       keep_spatial_dims=keep_spatial_dims)
 
 
-@gin.configurable('relation_module', whitelist=['weight_decay'])
+@gin.configurable('relation_module', allowlist=['weight_decay'])
 def relation_module(inputs,
                     is_training,
                     weight_decay,
@@ -1036,7 +1036,7 @@ def relation_module(inputs,
     return return_dict
 
 
-@gin.configurable('relationnet_convnet', whitelist=['weight_decay'])
+@gin.configurable('relationnet_convnet', allowlist=['weight_decay'])
 def relationnet_convnet(inputs,
                         is_training,
                         weight_decay,

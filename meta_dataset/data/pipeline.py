@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2020 The Meta-Dataset Authors.
+# Copyright 2021 The Meta-Dataset Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
       for strings, ids in zip(example_strings_chunks, class_ids_chunks))
 
 
-@gin.configurable(whitelist=['support_decoder', 'query_decoder'])
+@gin.configurable(allowlist=['support_decoder', 'query_decoder'])
 def process_dumped_episode(support_strings, query_strings, image_size,
                            support_decoder, query_decoder):
   """Processes a dumped episode.
@@ -245,7 +245,7 @@ def simclr_augment(image_batch, blur=False):
   return image_batch
 
 
-@gin.configurable(whitelist=['support_decoder', 'query_decoder'])
+@gin.configurable(allowlist=['support_decoder', 'query_decoder'])
 def process_episode(example_strings, class_ids, chunk_sizes, image_size,
                     support_decoder, query_decoder, simclr_episode_fraction):
   """Processes an episode.
@@ -322,7 +322,7 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
   return episode
 
 
-@gin.configurable(whitelist=['batch_decoder'])
+@gin.configurable(allowlist=['batch_decoder'])
 def process_batch(example_strings, class_ids, image_size, batch_decoder):
   """Processes a batch.
 
@@ -605,7 +605,7 @@ def make_one_source_batch_pipeline(dataset_spec,
 
 
 # TODO(lamblinp): Update this option's name
-@gin.configurable('BatchSplitReaderGetReader', whitelist=['add_dataset_offset'])
+@gin.configurable('BatchSplitReaderGetReader', allowlist=['add_dataset_offset'])
 def make_multisource_batch_pipeline(dataset_spec_list,
                                     split,
                                     batch_size,

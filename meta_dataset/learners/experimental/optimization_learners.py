@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2020 The Meta-Dataset Authors.
+# Copyright 2021 The Meta-Dataset Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -690,7 +690,7 @@ class HeadAndBackboneLearner(ExperimentalOptimizationLearner):
     return list(self.head_fn.reparameterizables(self.adapt_head_predicate))
 
 
-@gin.configurable(whitelist=['prototype_multiplier'])
+@gin.configurable(allowlist=['prototype_multiplier'])
 def proto_maml_fc_layer_init_fn(labels, embeddings, weights, biases,
                                 prototype_multiplier):
   """Return a list of operations for reparameterized ProtoNet initialization."""
