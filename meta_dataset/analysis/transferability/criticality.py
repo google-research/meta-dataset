@@ -136,7 +136,7 @@ def _interpolate_and_perturb(
 
 
 @gin.configurable(
-    whitelist=(
+    allowlist=(
         'num_samples_per_iteration',
         'alpha_grid_size',
         'sigma_grid_size',

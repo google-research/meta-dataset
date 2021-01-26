@@ -588,7 +588,7 @@ def _resnet(x,
 
 
 @gin.configurable(
-    'resnet', whitelist=['weight_decay', 'max_stride', 'deeplab_alignment'])
+    'resnet', allowlist=['weight_decay', 'max_stride', 'deeplab_alignment'])
 def resnet(x,
            is_training,
            weight_decay,
@@ -619,7 +619,7 @@ def resnet(x,
 
 
 @gin.configurable(
-    'resnet34', whitelist=['weight_decay', 'max_stride', 'deeplab_alignment'])
+    'resnet34', allowlist=['weight_decay', 'max_stride', 'deeplab_alignment'])
 def resnet34(x,
              is_training,
              weight_decay,
@@ -1130,7 +1130,7 @@ def relationnet_convnet(inputs,
 
 @gin.configurable(
     'fully_connected_network',
-    whitelist=[
+    allowlist=[
         'n_hidden_units',
         'use_batchnorm',
         'weight_decay',
