@@ -146,7 +146,7 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
   NUM_EXAMPLES = 5
   FEAT_SIZE = 64
 
-  # Spec for all-way 1-shot dummy dataset. valid classes and examples are the
+  # Spec for all-way 1-shot fake dataset. valid classes and examples are the
   # same as train, to force over-fitting.
   DATASET_SPEC = dataset_spec.DatasetSpecification(
       name=None,
@@ -259,21 +259,21 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
     super(TrainerIntegrationTest, self).setUp()
     self.rng = np.random.RandomState(20200505)
 
-    # Set up tests by creating random dummy examples to train on.
+    # Set up tests by creating random fake examples to train on.
     self.temp_dir = self.get_temp_dir()
-    dataset_dir = os.path.join(self.temp_dir, 'dummy')
+    dataset_dir = os.path.join(self.temp_dir, 'fake')
     tf.io.gfile.mkdir(dataset_dir)
     for example_idx in range(self.NUM_EXAMPLES):
       # Write the same random 2 examples (one support and one query) twice each:
       # - In a meta-train class (example_idx)
       # - In a meta-validation class (example_idx + NUM_EXAMPLES)
-      dummy_features = self.rng.randn(2, self.FEAT_SIZE).astype(np.float32)
+      fake_features = self.rng.randn(2, self.FEAT_SIZE).astype(np.float32)
       for class_offset in (0, self.NUM_EXAMPLES):
         class_idx = example_idx + class_offset
         tfrecord_path = os.path.join(
             dataset_dir, self.DATASET_SPEC.file_pattern.format(class_idx))
         test_utils.write_feature_records(
-            features=dummy_features, label=class_idx, output_path=tfrecord_path)
+            features=fake_features, label=class_idx, output_path=tfrecord_path)
     # Record DATASET_SPEC as well, as it will be loaded by Trainer.
     with tf.io.gfile.GFile(os.path.join(dataset_dir, 'dataset_spec.json'),
                            'w') as f:
@@ -314,8 +314,8 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
         train_learner_class=learner_class,
         eval_learner_class=learner_class,
         is_training=True,
-        train_dataset_list=['dummy'],
-        eval_dataset_list=['dummy'],
+        train_dataset_list=['fake'],
+        eval_dataset_list=['fake'],
         records_root_dir=self.temp_dir,
         checkpoint_dir=os.path.join(self.temp_dir, 'checkpoints'),
         train_episode_config=episode_config,

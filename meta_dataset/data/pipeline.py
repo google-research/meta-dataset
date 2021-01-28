@@ -46,16 +46,16 @@ tf.flags.DEFINE_float('color_jitter_strength', 1.0,
                       'The strength of color jittering for SimCLR episodes.')
 
 
-def filter_dummy_examples(example_strings, class_ids):
-  """Returns tensors with only actual examples, filtering out the dummy ones.
+def filter_placeholders(example_strings, class_ids):
+  """Returns tensors with only actual examples, filtering out the placeholders.
 
-  Actual examples are the first ones in the tensors, and followed by dummy ones,
-  indicated by negative class IDs.
+  Actual examples are the first ones in the tensors, and followed by placeholder
+  ones, indicated by negative class IDs.
 
   Args:
     example_strings: 1-D Tensor of dtype str, Example protocol buffers.
     class_ids: 1-D Tensor of dtype int, class IDs (absolute wrt the original
-      dataset, except for negative ones, that indicate dummy examples).
+      dataset, except for negative ones, that indicate placeholder examples).
   """
   num_actual = tf.reduce_sum(tf.cast(class_ids >= 0, tf.int32))
   actual_example_strings = example_strings[:num_actual]
@@ -84,7 +84,7 @@ def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
   1) splits the batch of examples into a "flush" chunk and some number of
      additional chunks (as determined by `chunk_sizes`),
   2) throws away the "flush" chunk, and
-  3) removes the padded dummy examples from the additional chunks.
+  3) removes the padded placeholder examples from the additional chunks.
 
   For example, in the context of few-shot learning, where episodes are composed
   of a support set and a query set, `chunk_size = (150, 100, 50)` would be
@@ -107,7 +107,7 @@ def flush_and_chunk_episode(example_strings, class_ids, chunk_sizes):
   class_ids_chunks = tf.split(class_ids, num_or_size_splits=chunk_sizes)[1:]
 
   return tuple(
-      filter_dummy_examples(strings, ids)
+      filter_placeholders(strings, ids)
       for strings, ids in zip(example_strings_chunks, class_ids_chunks))
 
 
@@ -254,7 +254,8 @@ def process_episode(example_strings, class_ids, chunk_sizes, image_size,
 
   1) splits the batch of examples into "flush", "support", and "query" chunks,
   2) throws away the "flush" chunk,
-  3) removes the padded dummy examples from the "support" and "query" chunks,
+  3) removes the padded placeholder examples from the "support" and "query"
+     chunks,
   4) extracts and processes images out of the example strings, and
   5) builds support and query targets (numbers from 0 to K-1 where K is the
      number of classes in the episode) from the class IDs.
@@ -430,9 +431,9 @@ def make_one_source_episode_pipeline(dataset_spec,
       ignore_hierarchy_probability=ignore_hierarchy_probability)
   dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
   # Episodes coming out of `dataset` contain flushed examples and are internally
-  # padded with dummy examples. `process_episode` discards flushed examples,
-  # splits the episode into support and query sets, removes the dummy examples
-  # and decodes the example strings.
+  # padded with placeholder examples. `process_episode` discards flushed
+  # examples, splits the episode into support and query sets, removes the
+  # placeholder examples and decodes the example strings.
   chunk_sizes = sampler.compute_chunk_sizes()
   map_fn = functools.partial(
       process_episode,
@@ -531,9 +532,9 @@ def make_multisource_episode_pipeline(dataset_spec_list,
   dataset = tf.data.experimental.sample_from_datasets(sources)
 
   # Episodes coming out of `dataset` contain flushed examples and are internally
-  # padded with dummy examples. `process_episode` discards flushed examples,
-  # splits the episode into support and query sets, removes the dummy examples
-  # and decodes the example strings.
+  # padded with placeholder examples. `process_episode` discards
+  # flushed examples, splits the episode into support and query sets, removes
+  # the placeholder examples and decodes the example strings.
   chunk_sizes = sampler.compute_chunk_sizes()
 
   def map_fn(episode, source_id):

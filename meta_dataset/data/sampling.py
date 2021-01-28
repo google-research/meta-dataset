@@ -510,8 +510,8 @@ class EpisodeDescriptionSampler(object):
   def compute_chunk_sizes(self):
     """Computes the maximal sizes for the flush, support, and query chunks.
 
-    Sequences of dataset IDs are padded with dummy IDs to make sure they can be
-    batched into episodes of equal sizes.
+    Sequences of dataset IDs are padded with placeholder IDs to make sure they
+    can be batched into episodes of equal sizes.
 
     The "flush" part of the sequence has a size that is upper-bounded by the
     size of the "support" and "query" parts.

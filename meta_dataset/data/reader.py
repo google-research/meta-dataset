@@ -19,7 +19,7 @@
 The data output by the Reader consists in episodes or batches (for EpisodeReader
 and BatchReader respectively) from one source (one split of a dataset). They
 contain strings represented images that have not been decoded yet, and can
-contain dummy examples and examples to discard.
+contain placeholder examples and examples to discard.
 See data/pipeline.py for the next stage of the pipeline.
 """
 # TODO(lamblinp): Update variable names to be more consistent
@@ -38,22 +38,23 @@ import numpy as np
 from six.moves import range
 import tensorflow.compat.v1 as tf
 
-# DUMMY_CLASS_ID will be used as the target of examples used for padding only.
-DUMMY_CLASS_ID = -1
+# PLACEHOLDER_CLASS_ID will be used as the target of placeholder examples, that
+# are used for padding only.
+PLACEHOLDER_CLASS_ID = -1
 
 
-def _pad(dataset_indices, chunk_size, dummy_dataset_id):
-  """Pads `dataset_indices` with dummy values so it has length `chunk_size`.
+def _pad(dataset_indices, chunk_size, placeholder_dataset_id):
+  """Pads `dataset_indices` with placeholders so it has length `chunk_size`.
 
   Args:
     dataset_indices: list of (dataset_id, num_repeats) tuples representing a
       sequence of dataset IDs.
     chunk_size: int, size to pad to.
-    dummy_dataset_id: int, dummy value to pad with.
+    placeholder_dataset_id: int, placeholder value to pad with.
   """
   pad_size = chunk_size - sum(n for i, n in dataset_indices)
   assert pad_size >= 0
-  dataset_indices.append([dummy_dataset_id, pad_size])
+  dataset_indices.append([placeholder_dataset_id, pad_size])
 
 
 def episode_representation_generator(dataset_spec, split, pool, sampler):
@@ -69,11 +70,11 @@ def episode_representation_generator(dataset_spec, split, pool, sampler):
 
   To make sure the input pipeline knows where the episode boundary is within the
   stream (and where the boundary is between chunks in an episode), we enforce
-  that each chunk has a fixed size by padding with dummy dataset IDs (of value
-  `num_classes`) as needed (in some cases it's possible that no padding is ever
-  needed). The size of each chunk is prescribed by the `compute_chunk_sizes`
-  method of `sampler`, which also implicitly defines the number of additional
-  chunks (i.e. `len(chunk_sizes) - 1`).
+  that each chunk has a fixed size by padding with placeholder dataset IDs (of
+  value `num_classes`) as needed (in some cases it's possible that no padding is
+  ever needed). The size of each chunk is prescribed by the
+  `compute_chunk_sizes` method of `sampler`, which also implicitly defines the
+  number of additional chunks (i.e. `len(chunk_sizes) - 1`).
 
   Instead of explicitly representing all elements of the dataset ID stream, this
   generator returns a compact representation where repeated elements are
@@ -83,9 +84,9 @@ def episode_representation_generator(dataset_spec, split, pool, sampler):
   `tf.data.experimental.choose_from_datasets` and assumes that the list of
   tf.data.Dataset objects corresponding to each class in the dataset (there are
   `num_classes` of them, which is determined by inspecting the `dataset_spec`
-  argument using the `split` argument) is appended with a "dummy" Dataset (which
-  has index `num_classes` in the list) which outputs a constant `(b'',
-  DUMMY_CLASS_ID)` tuple).
+  argument using the `split` argument) is appended with a placeholder Dataset
+  (which has index `num_classes` in the list) which outputs a constant `(b'',
+  PLACEHOLDER_CLASS_ID)` tuple).
 
   Note that a dataset ID is different from the (absolute) class ID: the dataset
   ID refers to the index of the Dataset in the list of Dataset objects, and the
@@ -111,7 +112,7 @@ def episode_representation_generator(dataset_spec, split, pool, sampler):
 
   class_set = dataset_spec.get_classes(split)
   num_classes = len(class_set)
-  dummy_dataset_id = num_classes
+  placeholder_dataset_id = num_classes
 
   total_images_per_class = dict(
       (class_idx,
@@ -155,12 +156,12 @@ def episode_representation_generator(dataset_spec, split, pool, sampler):
       cursors[class_idx] += total_requested
 
     # An episode sequence is generated in multiple phases, each padded with an
-    # agreed-upon number of dummy dataset IDs.
+    # agreed-upon number of placeholder dataset IDs.
 
-    _pad(flushed_dataset_indices, flush_chunk_size, dummy_dataset_id)
+    _pad(flushed_dataset_indices, flush_chunk_size, placeholder_dataset_id)
     for dataset_indices, chunk_size in zip(selected_dataset_indices,
                                            other_chunk_sizes):
-      _pad(dataset_indices, chunk_size, dummy_dataset_id)
+      _pad(dataset_indices, chunk_size, placeholder_dataset_id)
 
     episode_representation = np.array(
         list(
@@ -333,7 +334,7 @@ class EpisodeReaderMixin(object):
     Returns:
       dataset: a tf.data.Dataset instance which encapsulates episode creation
         for the data identified by `dataset_spec` and `split`. These episodes
-        contain flushed examples and are internally padded with dummy examples.
+        contain flushed examples and are internally padded with placeholders.
         A later part of the pipeline, shared across all sources, will extract
         support and query sets and decode the example strings.
     """
@@ -342,12 +343,12 @@ class EpisodeReaderMixin(object):
     class_datasets = self.construct_class_datasets(
         pool=pool, shuffle=shuffle, shuffle_seed=shuffle_seed)
 
-    # We also construct a dummy dataset which outputs `(b'', DUMMY_CLASS_ID)`
-    # tuples.
-    dummy_dataset = tf.data.Dataset.zip(
+    # We also construct a placeholder dataset which outputs
+    # `(b'', PLACEHOLDER_CLASS_ID)` tuples.
+    placeholder_dataset = tf.data.Dataset.zip(
         (tf.data.Dataset.from_tensors(b'').repeat(),
-         tf.data.Dataset.from_tensors(DUMMY_CLASS_ID).repeat()))
-    class_datasets.append(dummy_dataset)
+         tf.data.Dataset.from_tensors(PLACEHOLDER_CLASS_ID).repeat()))
+    class_datasets.append(placeholder_dataset)
 
     # The "choice" dataset outputs a stream of dataset IDs which are used to
     # select which class dataset to sample from. We turn the stream of dataset

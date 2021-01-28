@@ -100,12 +100,12 @@ class Episode(
 
   @property
   def labels(self):
-    """Return query labels to provide an episodic/batch-agnostic API."""
+    """Return query labels to provide an episode/batch-independent API."""
     return self.query_labels
 
   @property
   def onehot_labels(self):
-    """Return one-hot query labels to provide an episodic/batch-agnostic API."""
+    """Return one-hot query labels to provide an episode/batch-independent API."""
     return self.onehot_query_labels
 
   @property
@@ -166,12 +166,12 @@ class EpisodePiece(
 
   @property
   def labels(self):
-    """Return local query labels to provide an episodic/batch-agnostic API."""
+    """Return local query labels to provide an episode/batch-independent API."""
     return self.query_labels
 
   @property
   def onehot_labels(self):
-    """Return local one-hot query labels for episodic/batch-agnostic API."""
+    """Return local one-hot query labels for episode/batch-independent API."""
     return self.onehot_query_labels
 
   @property

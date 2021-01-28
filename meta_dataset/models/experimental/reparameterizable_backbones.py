@@ -864,7 +864,7 @@ class ResNet(ReparameterizableSpatialBackbone):
         **kwargs)
 
   # TODO(eringrant): Implement DeepLab image alignment.
-  # https://github.com/google-research/meta-dataset/blob/master/meta_dataset/models/functional_backbones.py#L363
+  # https://github.com/google-research/meta-dataset/blob/main/meta_dataset/models/functional_backbones.py#L363
   @property
   def stack(self):
 

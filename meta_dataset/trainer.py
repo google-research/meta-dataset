@@ -577,7 +577,7 @@ class Trainer(object):
       if not tf.io.gfile.exists(self.checkpoint_dir):
         tf.io.gfile.makedirs(self.checkpoint_dir)
 
-    # Dummy variables so that logging works even if called before evaluation.
+    # Meaningless values so that logging works even if called before evaluation.
     self.valid_acc = np.nan
     self.valid_ci = np.nan
 

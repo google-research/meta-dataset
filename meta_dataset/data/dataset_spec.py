@@ -517,7 +517,7 @@ class BiLevelDatasetSpecification(
         id's relative to the dataset (between 0 and the total num classes).
     """
     # The number of classes before the start of superclass_id, i.e. the class id
-    # of the first class of the given superclass.
+    # of the first (sub-)class of the given superclass.
     superclass_offset = self._count_classes_in_superclasses(
         range(superclass_id))
 
