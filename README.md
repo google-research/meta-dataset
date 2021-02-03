@@ -1,6 +1,6 @@
 This repository contains accompanying code for the article introducing
 Meta-Dataset, [arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
-It also contains accompanying code for CrossTransformers,
+It also contains accompanying code and checkpoints for CrossTransformers,
 [https://arxiv.org/abs/2007.11498](https://arxiv.org/abs/2007.11498), a
 follow-up work which improves performance.
 
@@ -65,6 +65,20 @@ features.  The paper also introduces SimCLR episodes, which are episodes that
 require SimCLR-style instance recognition, and therefore encourage features
 which capture more than just the training-set categories.  This algorithm is
 SOTA on Meta-Dataset (train-on-ILSVRC) as of NeurIPS 2020.
+
+Configuration files for CrossTransformers with and without SimCLR episodes (CTX
+and CTX+SimCLR Eps from the paper) can be found in
+`learn/gin/default/crosstransformer*`.  We also have pretrained checkpoints for
+these two configurations:
+[CTX](https://storage.googleapis.com/dm_crosstransformer/ctx.zip),
+and
+[CTX+SimCLR Eps](https://storage.googleapis.com/dm_crosstransformer/ctx_simclreps.zip),
+as well as
+[CTX+SimCLR Eps+BOHB Aug](https://storage.googleapis.com/dm_crosstransformer/ctx_simclreps_bohbaug.zip).
+Note that these were retrained from the versions reported in the paper, but
+their performance should be on-par.  The network structure is the same for all
+three models, and so they can be loaded using either of the CrossTransformer
+config files.
 
 # Leaderboard (in progress)
 
