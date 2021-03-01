@@ -417,7 +417,6 @@ class Trainer(object):
     # TODO(eringrant): Adapt these image-specific expectations to feature
     # inputs.
     self.image_shape = [data_config.image_height] * 2 + [3]
-
     # Create the benchmark specification.
     self.benchmark_spec = self.get_benchmark_specification()
 
