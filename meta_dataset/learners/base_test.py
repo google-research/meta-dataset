@@ -169,7 +169,7 @@ class TestLearner(tf.test.TestCase):
     with self.session():
       self.evaluate(tf.compat.v1.local_variables_initializer())
       self.evaluate(tf.compat.v1.global_variables_initializer())
-      accuracy_value = self.evaluate(accuracy)
+      accuracy_value = self.evaluate(accuracy).mean()
       epsilon = 0.05  # Allow 5% deviation from random.
       self.assertLess(accuracy_value, 1. / data.way + epsilon)
 
@@ -188,7 +188,7 @@ class TestLearner(tf.test.TestCase):
       # Allow three steps for gradient descent to stabilize.
       for _ in range(3):
         _, loss_value = self.evaluate((train_op, loss))
-      self.assertLess(loss_value, loss_value_prev)
+      self.assertLess(loss_value.mean(), loss_value_prev)
 
   def testLearnerConvergence(self):
     """Assert that the unregularized learner overfits a single batch."""
@@ -204,7 +204,7 @@ class TestLearner(tf.test.TestCase):
         _, loss_value = self.evaluate((train_op, loss))
       # TODO(eringrant): Parameterize this convergence check value per
       # `Learner`; 10.0 is too high a loss value for most `Learner`s.
-      self.assertLess(loss_value, 10.0)
+      self.assertLess(loss_value.mean(), 10.0)
 
 
 class TestBatchLearner(TestLearner):

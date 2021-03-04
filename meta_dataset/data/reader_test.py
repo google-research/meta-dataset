@@ -21,7 +21,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import itertools
+import functools
 
 import gin.tf
 from meta_dataset.data import config
@@ -56,22 +56,27 @@ MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS = 100
 MIN_LOG_WEIGHT = np.log(0.5)
 MAX_LOG_WEIGHT = np.log(2)
 
-gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
-gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
-gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)
-gin.bind_parameter('EpisodeDescriptionConfig.min_ways', MIN_WAYS)
-gin.bind_parameter('EpisodeDescriptionConfig.max_ways_upper_bound',
-                   MAX_WAYS_UPPER_BOUND)
-gin.bind_parameter('EpisodeDescriptionConfig.max_num_query', MAX_NUM_QUERY)
-gin.bind_parameter('EpisodeDescriptionConfig.max_support_set_size',
-                   MAX_SUPPORT_SET_SIZE)
-gin.bind_parameter(
-    'EpisodeDescriptionConfig.max_support_size_contrib_per_class',
-    MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
-gin.bind_parameter('EpisodeDescriptionConfig.min_log_weight', MIN_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
-gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
-gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
+
+def bind_gin_parameters():
+  gin.bind_parameter('EpisodeDescriptionConfig.num_ways', None)
+  gin.bind_parameter('EpisodeDescriptionConfig.num_support', None)
+  gin.bind_parameter('EpisodeDescriptionConfig.num_query', None)
+  gin.bind_parameter('EpisodeDescriptionConfig.min_ways', MIN_WAYS)
+  gin.bind_parameter('EpisodeDescriptionConfig.max_ways_upper_bound',
+                     MAX_WAYS_UPPER_BOUND)
+  gin.bind_parameter('EpisodeDescriptionConfig.max_num_query', MAX_NUM_QUERY)
+  gin.bind_parameter('EpisodeDescriptionConfig.max_support_set_size',
+                     MAX_SUPPORT_SET_SIZE)
+  gin.bind_parameter(
+      'EpisodeDescriptionConfig.max_support_size_contrib_per_class',
+      MAX_SUPPORT_SIZE_CONTRIB_PER_CLASS)
+  gin.bind_parameter('EpisodeDescriptionConfig.min_log_weight', MIN_LOG_WEIGHT)
+  gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
+  gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
+  gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
+  gin.bind_parameter('EpisodeDescriptionConfig.ignore_hierarchy_probability',
+                     0.)
+  gin.bind_parameter('EpisodeDescriptionConfig.simclr_episode_fraction', 0.)
 
 
 def split_into_chunks(batch, chunk_sizes):
@@ -102,22 +107,39 @@ class DatasetIDGenTest(tf.test.TestCase):
     super(DatasetIDGenTest, self).setUp()
     self.dataset_spec = DATASET_SPEC
     self.split = Split.TRAIN
+    bind_gin_parameters()
+
+  def tearDown(self):
+    # Gin settings should not persist between tests.
+    gin.clear_config()
+    super().tearDown()
 
   def check_expected_structure(self, sampler):
-    """Checks the stream of dataset indices is as expected."""
+    """Checks the stream of episode descriptions is as expected."""
     chunk_sizes = sampler.compute_chunk_sizes()
     batch_size = sum(chunk_sizes)
     placeholder_id = len(self.dataset_spec.get_classes(self.split))
 
-    generator = reader.dataset_id_generator(self.dataset_spec, self.split, None,
-                                            sampler)
+    # We need to go through TF and back because
+    # `reader.decompress_episode_representation` operates on TF tensors.
+    generator = functools.partial(
+        reader.episode_representation_generator,
+        dataset_spec=self.dataset_spec,
+        split=self.split,
+        pool=None,
+        sampler=sampler)
+    tf_generator = tf.data.Dataset.from_generator(
+        generator, tf.int64,
+        tf.TensorShape([None, 2])).map(reader.decompress_episode_representation)
+    iterator = tf_generator.make_one_shot_iterator()
+    next_item = iterator.get_next()
+
     for _ in range(3):
-      # Re-assemble batch.
-      # TODO(lamblinp): update if we change dataset_id_generator to return
-      # the whole batch at once
-      batch = list(itertools.islice(generator, batch_size))
+      with self.cached_session() as sess:
+        batch = sess.run(next_item)
 
       self.assertEqual(len(batch), batch_size)
+
       flush_chunk, support_chunk, query_chunk = split_into_chunks(
           batch, chunk_sizes)
 
@@ -257,6 +279,12 @@ class EpisodeReaderTest(tf.test.TestCase):
     self.shuffle_buffer_size = 30
     self.read_buffer_size_bytes = None
     self.num_prefetch = 0
+    bind_gin_parameters()
+
+  def tearDown(self):
+    # Gin settings should not persist between tests.
+    gin.clear_config()
+    super().tearDown()
 
   def generate_episodes(self,
                         sampler,

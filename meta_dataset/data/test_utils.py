@@ -70,6 +70,9 @@ def set_episode_descr_config_defaults():
   gin.bind_parameter('EpisodeDescriptionConfig.max_log_weight', MAX_LOG_WEIGHT)
   gin.bind_parameter('EpisodeDescriptionConfig.ignore_dag_ontology', False)
   gin.bind_parameter('EpisodeDescriptionConfig.ignore_bilevel_ontology', False)
+  gin.bind_parameter('EpisodeDescriptionConfig.ignore_hierarchy_probability',
+                     0.)
+  gin.bind_parameter('EpisodeDescriptionConfig.simclr_episode_fraction', 0.)
 
   # Following is set in a different scope.
   gin.bind_parameter('none/EpisodeDescriptionConfig.min_ways', None)

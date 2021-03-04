@@ -16,6 +16,7 @@
 # Lint as: python3
 """Tests for meta_dataset.learners.experimental.metric_learners."""
 
+import gin.tf
 from meta_dataset.learners import base_test
 from meta_dataset.learners.experimental import optimization_learners
 import tensorflow.compat.v1 as tf
@@ -78,6 +79,15 @@ class VanillaMAMLTest(base_test.TestEpisodicLearner):
 
 
 class ProtoMAMLTest(base_test.TestEpisodicLearner):
+
+  def setUp(self):
+    super().setUp()
+    gin.bind_parameter('proto_maml_fc_layer_init_fn.prototype_multiplier', 1.0)
+
+  def tearDown(self):
+    gin.clear_config()
+    super().tearDown()
+
   learner_cls = optimization_learners.MAML
   learner_kwargs = dict(
       **optimization_learner_kwargs, **{
@@ -114,6 +124,15 @@ class VanillaANILTest(base_test.TestEpisodicLearner):
 
 
 class ProtoANILTest(base_test.TestEpisodicLearner):
+
+  def setUp(self):
+    super().setUp()
+    gin.bind_parameter('proto_maml_fc_layer_init_fn.prototype_multiplier', 1.0)
+
+  def tearDown(self):
+    gin.clear_config()
+    super().tearDown()
+
   learner_cls = optimization_learners.ANIL
   learner_kwargs = dict(
       **optimization_learner_kwargs, **{

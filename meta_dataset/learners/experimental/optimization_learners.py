@@ -470,7 +470,7 @@ class ExperimentalOptimizationLearner(learner_base.ExperimentalEpisodicLearner):
     with tf.control_dependencies(episodic_init_ops):
 
       # Inner loop of expectation maximization.
-      num_em_steps = self.getattr('num_em_steps', 0)
+      num_em_steps = getattr(self, 'num_em_steps', 0)
       if num_em_steps > 0:
         loop_variables = em_loop(
             num_updates=self.num_em_steps,

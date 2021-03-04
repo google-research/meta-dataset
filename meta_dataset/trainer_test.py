@@ -81,7 +81,9 @@ class TrainerTest(tf.test.TestCase):
         min_log_weight=np.log(0.5),
         max_log_weight=np.log(2),
         ignore_dag_ontology=False,
-        ignore_bilevel_ontology=False)
+        ignore_bilevel_ontology=False,
+        ignore_hierarchy_probability=0.,
+        simclr_episode_fraction=0.)
 
     # Inspired from `learn/gin/default/debug_proto_mini_imagenet.gin`, but
     # building the objects explicitly.
@@ -124,11 +126,15 @@ class TrainerTest(tf.test.TestCase):
         decay_rate=0.5,
         experiment_name='test',
         pretrained_source='',
+        distribute=False,
+        enable_tf_optimizations=True,
+        normalized_gradient_descent=False,
     )
 
     # Get the next train / valid / test episodes.
     train_episode = trainer_instance.next_data[trainer.TRAIN_SPLIT]
-    self.assertIsInstance(train_episode, providers.Episode)
+    self.assertIsInstance(
+        tf.data.get_output_types(train_episode), providers.Episode)
 
     # This isn't really a test. It just checks that things don't crash...
     print(
@@ -182,6 +188,8 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
       EpisodeDescriptionConfig.max_log_weight = None
       EpisodeDescriptionConfig.ignore_dag_ontology = False
       EpisodeDescriptionConfig.ignore_bilevel_ontology = False
+      EpisodeDescriptionConfig.ignore_hierarchy_probability = 0.
+      EpisodeDescriptionConfig.simclr_episode_fraction = 0.
 
       Trainer.batch_size = 10
       Trainer.checkpoint_every = 1000
@@ -190,10 +198,13 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
       Trainer.num_updates = 20
       Trainer.num_eval_episodes = 1
       Trainer.learning_rate = 1e-3
+      Trainer.normalized_gradient_descent = False
       Trainer.decay_learning_rate = False
       Trainer.decay_every = None
       Trainer.decay_rate = None
       Trainer.checkpoint_to_restore = None
+      Trainer.distribute = False
+      Trainer.enable_tf_optimizations = True
       Trainer.eval_finegrainedness = False
       Trainer.eval_finegrainedness_split = None
       Trainer.eval_imbalance_dataset = False
@@ -278,6 +289,11 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
     with tf.io.gfile.GFile(os.path.join(dataset_dir, 'dataset_spec.json'),
                            'w') as f:
       json.dump(self.DATASET_SPEC.to_dict(), f, indent=2)
+
+  def tearDown(self):
+    # Gin settings should not persist between tests.
+    gin.clear_config()
+    super().tearDown()
 
   @parameterized.named_parameters(
       ('Baseline', learners.BaselineLearner, baseline_config),

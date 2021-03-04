@@ -32,8 +32,6 @@ from six.moves import range
 from six.moves import zip
 import tensorflow.compat.v1 as tf
 
-test_utils.set_episode_descr_config_defaults()
-
 
 class SampleNumWaysUniformlyTest(tf.test.TestCase):
   """Tests for the `sample_num_ways_uniformly` function."""
@@ -97,20 +95,26 @@ class ComputeNumQueryTest(tf.test.TestCase):
   def test_max_num_query_respected(self):
     images_per_class = np.array([30, 45, 35, 50])
     num_query = sampling.compute_num_query(
-        images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
+        images_per_class,
+        max_num_query=test_utils.MAX_NUM_QUERY,
+        num_support=None)
     self.assertEqual(num_query, test_utils.MAX_NUM_QUERY)
 
   def test_at_most_half(self):
     images_per_class = np.array([10, 9, 20, 21])
     num_query = sampling.compute_num_query(
-        images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
+        images_per_class,
+        max_num_query=test_utils.MAX_NUM_QUERY,
+        num_support=None)
     self.assertEqual(num_query, 4)
 
   def test_raises_error_on_one_image_per_class(self):
     images_per_class = np.array([1, 3, 8, 8])
     with self.assertRaises(ValueError):
       sampling.compute_num_query(
-          images_per_class, max_num_query=test_utils.MAX_NUM_QUERY)
+          images_per_class,
+          max_num_query=test_utils.MAX_NUM_QUERY,
+          num_support=None)
 
 
 class SampleSupportSetSizeTest(tf.test.TestCase):
@@ -196,6 +200,15 @@ class EpisodeDescrSamplerErrorTest(parameterized.TestCase, tf.test.TestCase):
   dataset_spec = test_utils.DATASET_SPEC
   split = Split.VALID
 
+  def setUp(self):
+    super().setUp()
+    test_utils.set_episode_descr_config_defaults()
+
+  def tearDown(self):
+    # Gin settings should not persist between tests.
+    gin.clear_config()
+    super().tearDown()
+
   @parameterized.named_parameters(('num_ways_none', None, 5, 10, {}),
                                   ('num_ways_none2', None, 5, 10, {
                                       'min_ways': 3
@@ -254,7 +267,13 @@ class EpisodeDescrSamplerTest(tf.test.TestCase):
 
   def setUp(self):
     super(EpisodeDescrSamplerTest, self).setUp()
+    test_utils.set_episode_descr_config_defaults()
     self.sampler = self.make_sampler()
+
+  def tearDown(self):
+    # Gin settings should not persist between tests.
+    gin.clear_config()
+    super().tearDown()
 
   def make_sampler(self):
     """Helper function to make a new instance of the tested sampler."""
@@ -516,6 +535,7 @@ class ChunkSizesTest(tf.test.TestCase):
 
   def setUp(self):
     super(ChunkSizesTest, self).setUp()
+    test_utils.set_episode_descr_config_defaults()
     # Set up a DatasetSpecification with lots of classes and samples.
     self.dataset_spec = DatasetSpecification(
         name=None,
@@ -524,6 +544,10 @@ class ChunkSizesTest(tf.test.TestCase):
         class_names=None,
         path=None,
         file_pattern='{}.tfrecords')
+
+  def tearDown(self):
+    gin.clear_config()
+    super().tearDown()
 
   def test_large_support(self):
     """Support set larger than MAX_SUPPORT_SET_SIZE with fixed shots."""
