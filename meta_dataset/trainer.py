@@ -501,11 +501,12 @@ class Trainer(object):
     # Build the data-dependent functions (run_fn returns prediction,
     # un-regularized loss,  accuracy, and episode statistics), the iterators
     # producing data (data_fn), and regularizer, for each learner.
-    run_fn, data_fn, regularizer = zip(
+    run_fn, data_fn, regularizer_fn = zip(
         *[self.build_learner(split) for split in self.required_splits])
     self.run_fns = dict(zip(self.required_splits, run_fn))
     self.data_fns = dict(zip(self.required_splits, data_fn))
-    self.regularizers = dict(zip(self.required_splits, regularizer))
+    self.regularizer_fns = dict(zip(self.required_splits, regularizer_fn))
+
     # Get an optimizer and the operation for meta-training.
     self.train_op = None
     if self.is_training:
@@ -524,7 +525,7 @@ class Trainer(object):
         self.optimizer = tf.train.AdamOptimizer(learning_rate)
 
       self.run_fns[TRAIN_SPLIT] = self.get_run_fn_with_train_op(
-          self.run_fns[TRAIN_SPLIT], self.regularizers[TRAIN_SPLIT],
+          self.run_fns[TRAIN_SPLIT], self.regularizer_fns[TRAIN_SPLIT],
           global_step)
     self.predictions = {}
     self.losses = {}
@@ -561,7 +562,7 @@ class Trainer(object):
         output = self.run_fns[split](data_tensors)
 
       loss = tf.reduce_mean(output['loss'])
-      loss += self.regularizers[split]
+      loss += self.regularizer_fns[split]()
 
       self.losses[split] = loss
       self.accuracies[split] = tf.reduce_mean(output['accuracy'])
@@ -680,11 +681,14 @@ class Trainer(object):
                                       input_context.input_pipeline_id)
 
           data = self.strategy.make_input_fn_iterator(input_fn)
-          regularizer = self.learners[split].compute_regularizer()
+          # Return a function that computes the regularizers, to defer their
+          # computation till after the computational graph is instantiated
+          # (otherwise the graph will be empty and no regularizers found).
+          regularizer = self.learners[split].compute_regularizer
           self.data_initializeable_iterators.append(data)
       else:
         data = lambda: data_src
-        regularizer = self.learners[split].compute_regularizer()
+        regularizer = self.learners[split].compute_regularizer
 
       def run(data_local):
         """Run the forward pass of the model."""
@@ -1313,7 +1317,7 @@ class Trainer(object):
 
     return data_pipeline.map(create_batch_structure)
 
-  def get_run_fn_with_train_op(self, run_fn, regularizer, global_step):
+  def get_run_fn_with_train_op(self, run_fn, regularizer_fn, global_step):
     """Returns the operation that performs a training update."""
 
     def run_fn_with_train_op(data):
@@ -1324,7 +1328,7 @@ class Trainer(object):
       # note: every worker computes the same loss.  This is because the
       # reduce_mean needs to be computed globally.
       loss = tf.reduce_mean(loss)
-      loss += regularizer
+      loss += regularizer_fn()
       replica_ctx = tf.distribute.get_replica_context()
       if replica_ctx:
         loss /= replica_ctx.num_replicas_in_sync
