@@ -21,9 +21,11 @@ from __future__ import division
 
 from __future__ import print_function
 
+import functools
 import gin.tf
 from meta_dataset.learners import base as learner_base
 from meta_dataset.models import functional_classifiers
+import numpy as np
 import tensorflow.compat.v1 as tf
 
 
@@ -110,12 +112,8 @@ class BaselineLearner(learner_base.BatchLearner):
       # Always maps to a space whose dimensionality is the number of classes
       # at meta-training time.
       logits = functional_classifiers.linear_classifier(
-          embeddings,
-          self.logit_dim,
-          self.cosine_classifier,
-          self.cosine_logits_multiplier,
-          self.use_weight_norm,
-      )
+          embeddings, self.logit_dim, self.cosine_classifier,
+          self.cosine_logits_multiplier, self.use_weight_norm)
       return logits
 
   def compute_logits(self, support_embeddings, query_embeddings,
@@ -165,3 +163,5 @@ class BaselineLearner(learner_base.BatchLearner):
     #  [num_query, num_classes]
     query_logits = tf.gather(onehot_support_labels, indices)
     return query_logits
+
+

@@ -95,6 +95,7 @@ def relu(x, use_bounded_activation=False):
     return tf.nn.relu(x)
 
 
+# pylint: disable=g-wrong-blank-lines
 # TODO(tylerzhu): Accumulate batch norm statistics (moving {var, mean})
 # during training and use them during testing. However need to be careful
 # about leaking information across episodes.
@@ -130,8 +131,8 @@ def bn(x,
       queries.
     is_training: if use_ema=True, this determines whether to apply the moving
       averages, or update them.
-    ema_epsilon: if updating moving averages, use this value for the
-      exponential moving averages.
+    ema_epsilon: if updating moving averages, use this value for the exponential
+      moving averages.
 
   Returns:
     output: The result of applying batch normalization to the input.
@@ -325,67 +326,46 @@ def conv(x,
   return x, params
 
 
-def conv_bn(x,
-            conv_size,
-            depth,
-            stride,
-            weight_decay,
-            padding='SAME',
-            params=None,
-            moments=None,
-            is_training=True,
-            rate=1,
-            backprop_through_moments=True):
-  """A block that performs convolution, followed by batch-norm."""
-  params_keys, params_vars = [], []
-  moments_keys, moments_vars = [], []
-  x, conv_params = conv(
-      x,
-      conv_size,
-      depth,
-      stride,
-      weight_decay,
-      padding=padding,
-      params=params,
-      rate=rate)
-  params_keys.extend(conv_params.keys())
-  params_vars.extend(conv_params.values())
+ALLOWLIST = ['batch_norm_fn']
 
-  x, bn_params, bn_moments = bn(
+
+@gin.configurable('bn_wrapper', allowlist=ALLOWLIST)
+def _bn_wrapper(
+    x,
+    batch_norm_fn=bn,
+    params=None,
+    moments=None,
+    is_training=True,
+    backprop_through_moments=True):
+  """Returns the result of batch normalization."""
+  return batch_norm_fn(
       x,
       params=params,
       moments=moments,
       is_training=is_training,
       backprop_through_moments=backprop_through_moments)
-  params_keys.extend(bn_params.keys())
-  params_vars.extend(bn_params.values())
-  moments_keys.extend(bn_moments.keys())
-  moments_vars.extend(bn_moments.values())
-
-  params = collections.OrderedDict(zip(params_keys, params_vars))
-  moments = collections.OrderedDict(zip(moments_keys, moments_vars))
-
-  return x, params, moments
 
 
-def bottleneck(x,
-               depth,
-               stride,
-               weight_decay,
-               params=None,
-               moments=None,
-               use_project=False,
-               backprop_through_moments=True,
-               is_training=True,
-               input_rate=1,
-               output_rate=1,
-               use_bounded_activation=False):
+def conv_bn(
+    x,
+    conv_size,
+    depth,
+    stride,
+    weight_decay,
+    padding='SAME',
+    params=None,
+    moments=None,
+    is_training=True,
+    rate=1,
+    backprop_through_moments=True,
+):
   """ResNet18 residual block."""
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []  # means and vars of different layers.
   with tf.variable_scope('conv1'):
     h, conv_bn_params, conv_bn_moments = conv_bn(
-        x, [3, 3],
+        x,
+        [3, 3],
         depth[0],
         stride,
         weight_decay,
@@ -393,7 +373,8 @@ def bottleneck(x,
         moments=moments,
         is_training=is_training,
         rate=input_rate,
-        backprop_through_moments=backprop_through_moments)
+        backprop_through_moments=backprop_through_moments,
+    )
     params_keys.extend(conv_bn_params.keys())
     params_vars.extend(conv_bn_params.values())
     moments_keys.extend(conv_bn_moments.keys())
@@ -403,7 +384,8 @@ def bottleneck(x,
 
   with tf.variable_scope('conv2'):
     h, conv_bn_params, conv_bn_moments = conv_bn(
-        h, [3, 3],
+        h,
+        [3, 3],
         depth[1],
         stride=1,
         weight_decay=weight_decay,
@@ -411,7 +393,8 @@ def bottleneck(x,
         moments=moments,
         is_training=is_training,
         rate=output_rate,
-        backprop_through_moments=backprop_through_moments)
+        backprop_through_moments=backprop_through_moments,
+    )
     if use_bounded_activation:
       h = tf.clip_by_value(h, -6.0, 6.0)
 
@@ -424,7 +407,8 @@ def bottleneck(x,
     if use_project:
       with tf.variable_scope('projection_conv'):
         x, conv_bn_params, conv_bn_moments = conv_bn(
-            x, [1, 1],
+            x,
+            [1, 1],
             depth[1],
             stride,
             weight_decay,
@@ -432,7 +416,8 @@ def bottleneck(x,
             moments=moments,
             is_training=is_training,
             rate=1,
-            backprop_through_moments=backprop_through_moments)
+            backprop_through_moments=backprop_through_moments,
+        )
         params_keys.extend(conv_bn_params.keys())
         params_vars.extend(conv_bn_params.values())
         moments_keys.extend(conv_bn_moments.keys())
@@ -444,19 +429,21 @@ def bottleneck(x,
   return x, params, moments
 
 
-def _resnet(x,
-            is_training,
-            weight_decay,
-            scope,
-            reuse=tf.AUTO_REUSE,
-            params=None,
-            moments=None,
-            backprop_through_moments=True,
-            use_bounded_activation=False,
-            blocks=(2, 2, 2, 2),
-            max_stride=None,
-            deeplab_alignment=True,
-            keep_spatial_dims=False):
+def _resnet(
+    x,
+    is_training,
+    weight_decay,
+    scope,
+    reuse=tf.AUTO_REUSE,
+    params=None,
+    moments=None,
+    backprop_through_moments=True,
+    use_bounded_activation=False,
+    blocks=(2, 2, 2, 2),
+    max_stride=None,
+    deeplab_alignment=True,
+    keep_spatial_dims=False,
+):
   """A ResNet network; ResNet18 by default."""
   x = tf.stop_gradient(x)
   params_keys, params_vars = [], []
@@ -482,14 +469,16 @@ def _resnet(x,
 
     with tf.variable_scope('conv1'):
       x, conv_bn_params, conv_bn_moments = conv_bn(
-          x, [7, 7],
+          x,
+          [7, 7],
           64,
           2,
           weight_decay,
           params=params,
           moments=moments,
           is_training=is_training,
-          backprop_through_moments=backprop_through_moments)
+          backprop_through_moments=backprop_through_moments,
+      )
       params_keys.extend(conv_bn_params.keys())
       params_vars.extend(conv_bn_params.values())
       moments_keys.extend(conv_bn_moments.keys())
@@ -519,7 +508,8 @@ def _resnet(x,
       use_project = True if i == 0 else False
 
       x, bottleneck_params, bottleneck_moments = bottleneck(
-          x, (depth, depth),
+          x,
+          (depth, depth),
           output_stride,
           weight_decay,
           params=params,
@@ -528,7 +518,8 @@ def _resnet(x,
           output_rate=output_rate,
           use_project=use_project,
           is_training=is_training,
-          backprop_through_moments=backprop_through_moments)
+          backprop_through_moments=backprop_through_moments,
+      )
       net_stride *= output_stride
       return x, bottleneck_params, bottleneck_moments, net_stride, output_rate
 
@@ -616,6 +607,8 @@ def resnet(x,
       max_stride=max_stride,
       deeplab_alignment=deeplab_alignment,
       keep_spatial_dims=keep_spatial_dims)
+
+
 
 
 @gin.configurable(

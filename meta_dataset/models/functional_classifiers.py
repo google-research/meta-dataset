@@ -156,3 +156,5 @@ def linear_classifier(embeddings, num_classes, cosine_classifier,
                                             cosine_classifier,
                                             cosine_logits_multiplier, False)
   return logits
+
+

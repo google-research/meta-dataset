@@ -49,7 +49,8 @@ class Learner(object):
     Args:
       is_training: Whether the `Learner` is in training (as opposed to
         evaluation) mode.
-      logit_dim: An integer; the maximum dimensionality of output predictions.
+      logit_dim: An integer; the maximum dimensionality of output predictions or
+        a list of ints, as required for each subclass of Learner.
       transductive_batch_norm: Whether to batch-normalize in the transductive
         setting, where means and variances for normalization are computed from
         each of the support and query sets (rather than using the support set

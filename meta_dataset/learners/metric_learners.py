@@ -21,6 +21,7 @@ from __future__ import division
 
 from __future__ import print_function
 
+import functools
 import gin.tf
 from meta_dataset import distribute_utils
 from meta_dataset.learners import base as learner_base
@@ -154,21 +155,29 @@ class PrototypicalNetworkLearner(MetricLearner):
   """A Prototypical Network."""
   keep_spatial_dims = False
 
-  def compute_logits(self, support_embeddings, query_embeddings,
-                     onehot_support_labels):
+  def compute_logits(self,
+                     support_embeddings,
+                     query_embeddings,
+                     onehot_support_labels,
+                     cosine_distance=False):
     """Computes the negative distances of each query point to each prototype."""
-
-    # [num test images, 1, embedding size].
-    query_embeddings = tf.expand_dims(query_embeddings, 1)
-
     prototypes = compute_prototypes(support_embeddings, onehot_support_labels)
 
-    # [1, num_clases, embedding_size].
-    prototypes = tf.expand_dims(prototypes, 0)
+    if cosine_distance:
+      query_embeddings = tf.nn.l2_normalize(query_embeddings, 1, epsilon=1e-3)
+      prototypes = tf.nn.l2_normalize(prototypes, 1, epsilon=1e-3)
+      logits = tf.matmul(query_embeddings, prototypes, transpose_b=True)
+    else:
+      # [num test images, 1, embedding size].
+      query_embeddings = tf.expand_dims(query_embeddings, 1)
 
-    # Squared euclidean distances between each test embedding / prototype pair.
-    distances = tf.reduce_sum(tf.square(query_embeddings - prototypes), 2)
-    return -distances
+      # [1, num_clases, embedding_size].
+      prototypes = tf.expand_dims(prototypes, 0)
+
+      # Squared euclidean distance between each test embedding / prototype pair.
+      distances = tf.reduce_sum(tf.square(query_embeddings - prototypes), 2)
+      logits = -distances
+    return logits
 
 
 @gin.configurable
@@ -511,3 +520,5 @@ class RelationNetworkLearner(MetricLearner):
         tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
     loss = mse_loss + regularization
     return loss
+
+
