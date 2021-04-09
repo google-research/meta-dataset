@@ -112,9 +112,9 @@ class EpisodeDescriptionConfig(object):
       num_ways: Integer, fixes the number of classes ("ways") to be used in each
         episode. None leads to variable way.
       num_support: An integer, a tuple of two integers, or None. In the first
-        case, the number of examples per class in the support set. In the
-        second case, the range from which to sample the number of examples per
-        class in the support set. Both of these cases would yield class-balanced
+        case, the number of examples per class in the support set. In the second
+        case, the range from which to sample the number of examples per class in
+        the support set. Both of these cases would yield class-balanced
         episodes, i.e. all classes have the same number of support examples.
         Finally, if None, the number of support examples will vary both within
         each episode (introducing class imbalance) and across episodes.
@@ -155,8 +155,8 @@ class EpisodeDescriptionConfig(object):
         when running on TPUs as it avoids the use of
         tf.data.Dataset.from_generator. If set to x = 0, no such upper bound on
         number of unique episode descriptions is set. Note that this is the
-        number of unique episode descriptions _for each source dataset_,
-        not total unique episode descriptions.
+        number of unique episode descriptions _for each source dataset_, not
+        total unique episode descriptions.
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
