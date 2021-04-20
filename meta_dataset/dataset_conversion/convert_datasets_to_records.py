@@ -79,6 +79,10 @@ def _dataset_name_to_converter_and_args(flags=FLAGS):
                       ConverterArgs(
                           data_root=flags.ilsvrc_2012_data_root,
                           long_name='ImageNet ILSVRC-2012')),
+      'ilsvrc_2012_v2': (dataset_to_records.ImageNetConverterV2,
+                         ConverterArgs(
+                             data_root=flags.ilsvrc_2012_data_root,
+                             long_name='ImageNet ILSVRC-2012-V2')),
       'omniglot': (dataset_to_records.OmniglotConverter,
                    ConverterArgs(
                        data_root=flags.omniglot_data_root,

@@ -23,10 +23,14 @@ more context.
       cd ..;
     done
     ```
+
 4.  Download the following two files into `ILSVRC2012_img_train/`:
+
     -   http://www.image-net.org/archive/wordnet.is_a.txt
     -   http://www.image-net.org/archive/words.txt
-5.  Launch the conversion script:
+
+5.  Launch the conversion script (Use `--dataset=ilsvrc_2012_v2` for the
+    training only MetaDataset-v2 version):
 
     ```bash
     python -m meta_dataset.dataset_conversion.convert_datasets_to_records \
@@ -35,9 +39,12 @@ more context.
       --splits_root=$SPLITS \
       --records_root=$RECORDS
     ```
+
 6.  Expect the conversion to take 4 to 12 hours, depending on the filesystem's
     latency and bandwidth.
+
 7.  Find the following outputs in `$RECORDS/ilsvrc_2012/`:
+
     -   1000 tfrecords files named `[0-999].tfrecords`
     -   `dataset_spec.json` (see [note 1](#notes))
     -   `num_leaf_images.json`

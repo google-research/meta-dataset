@@ -1,0 +1,8 @@
+benchmark.train_datasets = 'ilsvrc_2012_v2'
+benchmark.eval_datasets = 'fungi,aircraft,quickdraw,omniglot,mscoco,cu_birds,dtd'
+include 'meta_dataset/learn/gin/setups/data_config.gin'
+include 'meta_dataset/learn/gin/setups/trainer_config.gin'
+include 'meta_dataset/learn/gin/setups/variable_way_and_shot.gin'
+Trainer.data_config = @DataConfig()
+Trainer.train_episode_config = @train/EpisodeDescriptionConfig()
+Trainer.eval_episode_config = @EpisodeDescriptionConfig()

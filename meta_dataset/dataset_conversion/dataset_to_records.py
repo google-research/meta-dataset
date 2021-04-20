@@ -1595,6 +1595,17 @@ class ImageNetConverter(DatasetConverter):
           skip_on_error=True)
 
 
+class ImageNetConverterV2(ImageNetConverter):
+
+  """Prepares ImageNet for integration in the benchmark.
+
+  Different from v1, we assign all dataset as training set.
+  """
+
+  def _create_data_spec(self):
+    super(ImageNetConverterV2, self)._create_data_spec(train_split_only=True)
+
+
 class FungiConverter(DatasetConverter):
   """Prepares Fungi as required to integrate it in the benchmark.
 

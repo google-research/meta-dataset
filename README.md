@@ -1,6 +1,5 @@
 This repository contains accompanying code for the article introducing
-Meta-Dataset, [arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096).
-It also contains accompanying code and checkpoints for CrossTransformers,
+Meta-Dataset, [arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096) and the follow-up paper that proposes the VTAB+MD merged benchmark [arxiv.org/abs/2104.02638](http://arxiv.org/abs/2104.02638). It also contains accompanying code and checkpoints for CrossTransformers,
 [https://arxiv.org/abs/2007.11498](https://arxiv.org/abs/2007.11498), a
 follow-up work which improves performance.
 
@@ -241,6 +240,10 @@ traffic\_sign (Traffic Signs, German Traffic Sign Recognition Benchmark, GTSRB) 
 mscoco (Common Objects in Context, COCO) \[[instructions](doc/dataset_conversion.md#mscoco)\]                                              | 80 (0/40/40, validation and test only)  | \~5.3 GiB (18 GiB download)  | 4 hours
 *Total (All datasets)*                                                                                                                       | *4934 (3144/598/1192)*                  | *\~210 GiB*                  | *12 to 24 hours*
 
+### Meta-Dataset-v2
+In order to make the combined benchmark (VTAB+MD) compatible with each other, Meta-Dataset-v2 makes some changes on the existing pipelines. When converting the ImageNet dataset please use `ilsvrc\_2012\_v2` \([instructions](doc/dataset_conversion.md#ilsvrc_2012)\) in order to make it a training only dataset. Also,`VGG Flowers` is reserved as a VTAB task in VTAB+MD, so there is no need to convert it. For more details check the [paper](http://arxiv.org/abs/2104.02638).
+
+In order to run existing meta-learners with the updated training, validation and test classes you can refer to the `learn/gin/setups/imagenet_v2.gin` `learn/gin/setups/all_v2.gin`. These files are meant to be drop in replacements for `learn/gin/setups/imagenet.gin` and `learn/gin/setups/all.gin` files respectively.
 ## Training
 
 Experiments are defined via [gin](google/gin-config) configuration files, that
