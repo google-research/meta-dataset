@@ -26,8 +26,8 @@ more context.
 
 4.  Download the following two files into `ILSVRC2012_img_train/`:
 
-    -   http://www.image-net.org/archive/wordnet.is_a.txt
-    -   http://www.image-net.org/archive/words.txt
+    -   http://www.image-net.org/data/wordnet.is_a.txt
+    -   http://www.image-net.org/data/words.txt
 
 5.  Launch the conversion script (Use `--dataset=ilsvrc_2012_v2` for the
     training only MetaDataset-v2 version):
