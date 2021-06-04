@@ -1,0 +1,23 @@
+include 'meta_dataset/learn/gin/metadataset_v2/baseline_imagenet.gin'
+include 'meta_dataset/learn/gin/learners/baseline_config.gin'
+
+BatchSplitReaderGetReader.add_dataset_offset = True
+
+# Backbone hypers.
+Learner.embedding_fn = @resnet
+Trainer.checkpoint_to_restore = ''
+Trainer.pretrained_source = ''
+
+# Model hypers.
+BaselineLearner.knn_distance = 'cosine'
+BaselineLearner.cosine_classifier = False
+BaselineLearner.cosine_logits_multiplier = 2
+BaselineLearner.use_weight_norm = False
+
+Trainer.decay_every = 1000
+Trainer.decay_rate = 0.5979159492081371
+Trainer.learning_rate = 0.00047244647904730503
+weight_decay = 0.026388517138594258
+DataConfig.image_height = 126
+DataAugmentation.jitter_amount = 6
+DataAugmentation.gaussian_noise_std = 0.17564536824131866

@@ -1,0 +1,4 @@
+include 'meta_dataset/learn/gin/setups/all_v2.gin'
+include 'meta_dataset/learn/gin/learners/baselinefinetune_config.gin'
+Trainer.learning_rate = 1e-5
+BatchSplitReaderGetReader.add_dataset_offset = True

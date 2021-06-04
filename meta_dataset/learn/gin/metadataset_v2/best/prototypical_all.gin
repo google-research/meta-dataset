@@ -1,0 +1,19 @@
+include 'meta_dataset/learn/gin/setups/all_v2.gin'
+include 'meta_dataset/learn/gin/learners/prototypical_config.gin'
+# Backbone hypers.
+Learner.embedding_fn = @resnet
+Trainer.pretrained_source = 'imagenet'
+Trainer.checkpoint_to_restore = 'path/to/pretrained_checkpoint'
+
+# Training hypers (not needed for eval).
+Trainer.decay_every = 500
+Trainer.decay_learning_rate = True
+Trainer.decay_rate = 0.885662482266546
+Trainer.learning_rate = 0.00025036275525430426
+Learner.backprop_through_moments = True
+Learner.transductive_batch_norm = False
+weight_decay = 0.0001
+
+DataConfig.image_height = 126
+support/DataAugmentation.gaussian_noise_std = 0.15335348868374565
+support/DataAugmentation.jitter_amount = 5
