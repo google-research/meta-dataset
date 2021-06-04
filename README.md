@@ -299,3 +299,11 @@ whether to train from scratch or from pre-trained weights, and the number of
 training updates) were selected using only the validation classes of the ILSVRC
 2012 dataset for all experiments. Even when training on "all" datasets, the
 validation classes of the other datasets were not used.
+
+### Adding `task_adaptation` code to the path
+In order to use `data.read_episodes` module you need to get task_adaptation
+code. You can do that by running following code.
+```bash
+git clone https://github.com/google-research/task_adaptation.git
+export PYTHONPATH=$PYTHONPATH:$PWD
+```

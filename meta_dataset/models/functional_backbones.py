@@ -173,7 +173,7 @@ def bn(x,
 
       replica_ctx = tf.distribute.get_replica_context()
       if replica_ctx:
-        # from third_party/tensorflow/python/keras/layers/normalization/batch_normalization.py  # pylint: disable=line-too-long
+        # from tensorflow/python/keras/layers/normalization/batch_normalization.py  # pylint: disable=line-too-long
         axes = list(range(len(x.shape) - 1))
         local_sum = tf.reduce_sum(x, axis=axes, keepdims=True)
         local_squared_sum = tf.reduce_sum(

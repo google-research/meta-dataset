@@ -39,9 +39,9 @@ class PipelineTest(tf.test.TestCase, parameterized.TestCase):
 
   @parameterized.named_parameters(
       ('FeatureDecoder', 'feature',
-       'third_party/py/meta_dataset/learn/gin/setups/data_config_feature.gin'),
+       'meta_dataset/learn/gin/setups/data_config_feature.gin'),
       ('NoDecoder', 'none',
-       'third_party/py/meta_dataset/learn/gin/setups/data_config_no_decoder.gin'
+       'meta_dataset/learn/gin/setups/data_config_no_decoder.gin'
       ),
   )
   def test_make_multisource_episode_pipeline_feature(self, decoder_type,
