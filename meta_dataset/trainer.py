@@ -40,6 +40,7 @@ from meta_dataset.data import dataset_spec as dataset_spec_lib
 from meta_dataset.data import learning_spec
 from meta_dataset.data import pipeline
 from meta_dataset.data import providers
+from meta_dataset.data import read_episodes
 from meta_dataset.learners import experimental as experimental_learners
 from meta_dataset.models import functional_backbones
 import numpy as np
