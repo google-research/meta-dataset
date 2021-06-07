@@ -367,6 +367,17 @@ class Trainer(object):
     self.eval_dataset_list = eval_dataset_list
     self.normalized_gradient_descent = normalized_gradient_descent
     self.enable_tf_optimizations = enable_tf_optimizations
+    # Currently we are supporting single dataset when we read from fixed
+    # datasets like VTAB or dumped episodes.
+    # Check whether we evaluate on VTAB
+    if (len(self.eval_dataset_list) == 1 and
+        self.eval_dataset_list[0].startswith('vtab')):
+      self._fixed_eval = 'vtab'
+    elif (len(self.eval_dataset_list) == 1 and
+          self.eval_dataset_list[0].startswith('dumped')):
+      self._fixed_eval = 'dumped'
+    else:
+      self._fixed_eval = None
     self.restrict_classes = restrict_classes
     self.restrict_num_per_class = restrict_num_per_class
     self.checkpoint_dir = checkpoint_dir
@@ -812,6 +823,9 @@ class Trainer(object):
     seen_datasets = set()
 
     eval_dataset_list = self.eval_dataset_list
+    # No need to read specs when specs not available and not needed.
+    if self._fixed_eval:
+      eval_dataset_list = []
     if self.is_training:
       benchmark_datasets = self.train_dataset_list + eval_dataset_list
     else:
@@ -1115,11 +1129,80 @@ class Trainer(object):
       return self._build_batch(split)
     elif (issubclass(learner_class, learners.EpisodicLearner) or
           split == self.eval_split):
-      return self._build_episode(split)
+      if self._fixed_eval == 'vtab':
+        return self._build_vtab_episode()
+      elif self._fixed_eval == 'dumped':
+        return self._build_dumped_episode(split)
+      else:
+        return self._build_episode(split)
     else:
       raise ValueError('The `Learner` for `split` should be a subclass of '
                        '`learners.BatchLearner` or `learners.EpisodicLearner`, '
                        'but received {}.'.format(learner_class))
+
+  def _build_vtab_episode(self):
+    """Build a `tf.Dataset` of vtab episodes."""
+    # There is only one dataset.
+    # ['vtab_cifar'] -> 'cifar'
+    dataset_name = re.search('^vtab_(.+)', self.eval_dataset_list[0]).group(1)
+    # Replace back comma.
+    dataset_name = dataset_name.replace(':', ',')
+    return_vals = read_episodes.read_vtab_as_episode(
+        dataset_name,
+        self.data_config.image_height,
+        query_size_limit=self.data_config.vtab_query_size_limit)
+    support_ds, query_ds, n_eval, n_classes = return_vals
+    self.vtab_test_classes = n_classes
+    logging.info('Using VTAB episode for eval. Dataset: %s, n_eval: %d',
+                 dataset_name, n_eval)
+    episodes = tf.data.Dataset.zip((support_ds.repeat(), query_ds.repeat()))
+    self.num_eval_episodes = n_eval
+
+    def create_episode_struct(support_data, query_data):
+      return providers.Episode(
+          support_images=support_data['image'],
+          query_images=query_data['image'],
+          support_labels=support_data['label'],
+          query_labels=query_data['label'],
+          support_class_ids=support_data['label'],
+          query_class_ids=query_data['label'])
+
+    return episodes.map(create_episode_struct)
+
+  def _build_dumped_episode(self, split):
+    """Builds a `tf.Dataset` of episodes through reading dumped episodes."""
+    dataset_name = re.search('^dumped_(.+)', self.eval_dataset_list[0]).group(1)
+    folder_path = os.path.join(self.data_config.eval_dumped_episodes_dir,
+                               'valid' if split == VALID_SPLIT else 'test',
+                               dataset_name)
+    dumped_episode_ds, n_eval = read_episodes.read_episodes_from_records(
+        folder_path)
+    # If we request less than the available number of episodes, we use that
+    # number instead.
+    n_eval = min(self.num_eval_episodes, n_eval)
+    logging.info('Using dumped episode for eval. Dataset: %s, n_eval: %d',
+                 dataset_name, n_eval)
+    self.num_eval_episodes = n_eval
+    map_fn = functools.partial(
+        pipeline.process_dumped_episode,
+        image_size=self.data_config.image_height)
+    dataset = dumped_episode_ds.map(map_fn)
+
+    # Overlap episode processing and training.
+    data_pipeline = dataset.prefetch(1)
+    data_pipeline = apply_dataset_options(data_pipeline)
+
+    def create_episode_struct(support_images, support_labels, support_class_ids,
+                              query_images, query_labels, query_class_ids):
+      return providers.Episode(
+          support_images=support_images,
+          query_images=query_images,
+          support_labels=support_labels,
+          query_labels=query_labels,
+          support_class_ids=support_class_ids,
+          query_class_ids=query_class_ids)
+
+    return data_pipeline.map(create_episode_struct)
 
 
   def _build_episode(self, split):
@@ -1460,6 +1543,10 @@ class Trainer(object):
       # Otherwise, validation summaries become too big.
       if not self.is_training and self.summary_writer:
         self.summary_writer.add_summary(summaries, eval_trial_num)
+      if self._fixed_eval == 'vtab':
+        accuracies.append(np.sum(acc))
+        total_samples += np.size(acc)
+        continue
       accuracies.append(np.mean(acc))
       total_samples += 1
 
@@ -1467,6 +1554,10 @@ class Trainer(object):
 
     mean_acc = np.sum(accuracies) / total_samples
     ci_acc = np.std(accuracies) * 1.96 / np.sqrt(len(accuracies))  # confidence
+
+    # VTAB evaluation has 1 episode.
+    if self._fixed_eval == 'vtab':
+      ci_acc = 0
 
     if not self.is_training:
       # Logging during training is handled by self.train() instead.
@@ -1523,6 +1614,8 @@ class Trainer(object):
     Returns:
       int, total number of logits needed.
     """
+    if self._fixed_eval == 'vtab':
+      return self.vtab_test_classes
     if is_batch_learner:
       # Get the total number of classes in this split, across all datasets
       # contributing to this split.

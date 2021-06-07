@@ -37,6 +37,9 @@ class DataConfig(object):
       shuffle_buffer_size,
       read_buffer_size_bytes,
       num_prefetch,
+      eval_dumped_episodes_dir=None,
+      eval_extra_dumped_episodes_dir=None,
+      vtab_query_size_limit=500,
   ):
     """Initialize a DataConfig.
 
@@ -54,11 +57,21 @@ class DataConfig(object):
       num_prefetch: int, the number of examples to prefetch for each class of
         each dataset. Prefetching occurs just after the class-specific Dataset
         object is constructed. If < 1, no prefetching occurs.
+      eval_dumped_episodes_dir: str or None, if given reads the the evaluation
+        episodes from given folder in episodic mode.
+      eval_extra_dumped_episodes_dir: str or None, if given reads the the
+        evaluation episodes for the "extra datasets" (mnist, cifar10, cifar100
+        and unshuffled_traffic_sign) from this folder.
+      vtab_query_size_limit: int, limits the size of the query sets for VTAB
+        episodes.
     """
     self.image_height = image_height
     self.shuffle_buffer_size = shuffle_buffer_size
     self.read_buffer_size_bytes = read_buffer_size_bytes
     self.num_prefetch = num_prefetch
+    self.eval_dumped_episodes_dir = eval_dumped_episodes_dir
+    self.eval_extra_dumped_episodes_dir = eval_extra_dumped_episodes_dir
+    self.vtab_query_size_limit = vtab_query_size_limit
 
 
 @gin.configurable
