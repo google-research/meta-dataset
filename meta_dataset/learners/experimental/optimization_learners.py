@@ -38,7 +38,7 @@ def sgd(learning_rate):
   """Construct optimizer triple for stochastic gradient descent (SGD).
 
   Inspired by the optimizer definitions in JAX
-  (https://github.com/google/jax/blob/master/jax/experimental/optimizers.py),
+  (https://github.com/google/jax/blob/main/jax/experimental/optimizers.py),
   this implementation of SGD is fully functional (i.e., it maintains no hidden
   state) and so is compatible for use with an optimization-based meta-learner.
 
@@ -69,7 +69,7 @@ def adam(learning_rate, b1=0.9, b2=0.999, eps=1e-8):
   """Construct optimizer triple for Adam.
 
   Inspired by the optimizer definitions in JAX
-  (https://github.com/google/jax/blob/master/jax/experimental/optimizers.py),
+  (https://github.com/google/jax/blob/main/jax/experimental/optimizers.py),
   this implementation of Adam is fully functional (i.e., it maintains no hidden
   state) and so is compatible for use with an optimization-based meta-learner.
 
