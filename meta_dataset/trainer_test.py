@@ -38,6 +38,7 @@ from meta_dataset.data import test_utils
 from meta_dataset.models import functional_backbones
 import numpy as np
 import tensorflow.compat.v1 as tf
+
 tf.disable_eager_execution()
 
 tf.flags.DEFINE_string('records_root_dir', '',
@@ -296,7 +297,7 @@ class TrainerIntegrationTest(parameterized.TestCase, tf.test.TestCase):
     super().tearDown()
 
   @parameterized.named_parameters(
-      ('Baseline', learners.BaselineLearner, baseline_config),
+      ('Baseline', learners.BaselineLearner, baseline_config, 0.8, 20),
       ('BaselineFinetune', learners.BaselineFinetuneLearner,
        baselinefinetune_config, 0.8, 20),
       ('ProtoNets', learners.PrototypicalNetworkLearner, proto_config),

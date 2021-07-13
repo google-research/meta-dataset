@@ -170,7 +170,7 @@ class TestLearner(tf.test.TestCase):
       self.evaluate(tf.compat.v1.local_variables_initializer())
       self.evaluate(tf.compat.v1.global_variables_initializer())
       accuracy_value = self.evaluate(accuracy).mean()
-      epsilon = 0.05  # Allow 5% deviation from random.
+      epsilon = 0.08  # Allow 8% deviation from random.
       self.assertLess(accuracy_value, 1. / data.way + epsilon)
 
   def testLearnerImprovement(self):
