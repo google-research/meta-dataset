@@ -206,7 +206,7 @@ Eleni Triantafillou, Hugo Larochelle, Richard Zemel, Vincent Dumoulin; [_Learnin
 
 ###### \[11\] Li et al. (2021a)
 
-Wei-Hong Li, Xialei Liu, Hakan Bilen; [_Universal Representation Learning from Multiple Domains for Few-shot Classification_](https://arxiv.org/pdf/2103.13841.pdf); arXiv 2021.
+Wei-Hong Li, Xialei Liu, Hakan Bilen; [_Universal Representation Learning from Multiple Domains for Few-shot Classification_](https://arxiv.org/pdf/2103.13841.pdf); To appear in ICCV 2021.
 
 
 ###### \[12\] Li et al. (2021b)
