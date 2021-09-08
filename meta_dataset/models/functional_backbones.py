@@ -359,6 +359,53 @@ def conv_bn(
     rate=1,
     backprop_through_moments=True,
 ):
+  """A block that performs convolution, followed by batch-norm."""
+  params_keys, params_vars = [], []
+  moments_keys, moments_vars = [], []
+  x, conv_params = conv(
+      x,
+      conv_size,
+      depth,
+      stride,
+      weight_decay,
+      padding=padding,
+      params=params,
+      rate=rate)
+  params_keys.extend(conv_params.keys())
+  params_vars.extend(conv_params.values())
+
+  x, bn_params, bn_moments = _bn_wrapper(
+      x,
+      params=params,
+      moments=moments,
+      is_training=is_training,
+      backprop_through_moments=backprop_through_moments,
+  )
+  params_keys.extend(bn_params.keys())
+  params_vars.extend(bn_params.values())
+  moments_keys.extend(bn_moments.keys())
+  moments_vars.extend(bn_moments.values())
+
+  params = collections.OrderedDict(zip(params_keys, params_vars))
+  moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+
+  return x, params, moments
+
+
+def bottleneck(
+    x,
+    depth,
+    stride,
+    weight_decay,
+    params=None,
+    moments=None,
+    use_project=False,
+    backprop_through_moments=True,
+    is_training=True,
+    input_rate=1,
+    output_rate=1,
+    use_bounded_activation=False,
+):
   """ResNet18 residual block."""
   params_keys, params_vars = [], []
   moments_keys, moments_vars = [], []  # means and vars of different layers.
