@@ -120,15 +120,23 @@ def episode_representation_generator(dataset_spec, split, pool, sampler):
       for class_idx in range(num_classes))
   cursors = [0] * num_classes
 
+  run_counter = 0
   # Infinite loop over episodes.
   while True:
     flushed_dataset_indices = []
     selected_dataset_indices = [[] for _ in other_chunk_sizes]
-    # Sample an episode description. A description is a tuple of
-    # `(class_idx, ...)` tuples, where `class_idx` indicates the class to sample
-    # from and the remaining `len(chunk_sizes) - 1` elements indicate how many
-    # examples to allocate to each chunk.
-    episode_description = sampler.sample_episode_description()
+    if run_counter == 0:
+      # Sample an episode description. A description is a tuple of
+      # `(class_idx, ...)` tuples, where `class_idx` indicates the class to
+      # sample from and the remaining `len(chunk_sizes) - 1` elements indicate
+      # how many examples to allocate to each chunk.
+      episode_description = sampler.sample_episode_description()
+
+    if run_counter < sampler.episode_description_switch_frequency - 1:
+      run_counter += 1
+    else:
+      run_counter = 0
+
     for element in episode_description:
       class_idx, distribution = element[0], element[1:]
       total_requested = sum(distribution)

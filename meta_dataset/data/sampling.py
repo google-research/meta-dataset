@@ -262,6 +262,7 @@ class EpisodeDescriptionSampler(object):
     self.min_log_weight = episode_descr_config.min_log_weight
     self.max_log_weight = episode_descr_config.max_log_weight
     self.min_examples_in_class = episode_descr_config.min_examples_in_class
+    self.episode_description_switch_frequency = episode_descr_config.episode_description_switch_frequency
 
     self.class_set = dataset_spec.get_classes(self.split)
     self.num_classes = len(self.class_set)

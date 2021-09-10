@@ -115,7 +115,8 @@ class EpisodeDescriptionConfig(object):
                ignore_hierarchy_probability,
                simclr_episode_fraction,
                min_examples_in_class=0,
-               num_unique_descriptions=0):
+               num_unique_descriptions=0,
+               episode_description_switch_frequency=1):
     """Initialize a EpisodeDescriptionConfig.
 
     This is used in sampling.py in Trainer and in EpisodeDescriptionSampler to
@@ -170,6 +171,10 @@ class EpisodeDescriptionConfig(object):
         number of unique episode descriptions is set. Note that this is the
         number of unique episode descriptions _for each source dataset_, not
         total unique episode descriptions.
+      episode_description_switch_frequency: An integer, the number of calls to
+        Dataset before the class IDs are switched. This is useful in case of
+        finite number of unrolls that are trained on the same class IDs, but
+        using different samples. Default: 1 (i.e. episode switches every call).
 
     Raises:
       RuntimeError: if incompatible arguments are passed.
@@ -218,6 +223,7 @@ class EpisodeDescriptionConfig(object):
     self.simclr_episode_fraction = simclr_episode_fraction
     self.min_examples_in_class = min_examples_in_class
     self.num_unique_descriptions = num_unique_descriptions
+    self.episode_description_switch_frequency = episode_description_switch_frequency
 
   @property
   def max_ways(self):

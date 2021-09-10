@@ -436,6 +436,42 @@ class EpisodeReaderTest(tf.test.TestCase):
             num_ways=12, num_support=3, num_query=7))
     self.generate_and_check(sampler, 10)
 
+  def test_episode_switch_frequency(self):
+    """Tests episode switch frequency."""
+    num_episodes = 9
+    switch_freq = 3
+    num_ways = 5
+    episode_descr_config = config.EpisodeDescriptionConfig()
+    episode_descr_config.episode_description_switch_frequency = switch_freq
+    episode_descr_config.num_ways = num_ways
+    sampler = sampling.EpisodeDescriptionSampler(
+        self.dataset_spec,
+        self.split,
+        episode_descr_config=episode_descr_config)
+    episodes = self.generate_episodes(sampler, num_episodes)
+    flush_size, _, _ = sampler.compute_chunk_sizes()
+    # Group episodes every `switch_freq`.
+    episode_group = [
+        [episodes[0][0], episodes[1][0], episodes[2][0]],
+        [episodes[3][0], episodes[4][0], episodes[5][0]],
+        [episodes[6][0], episodes[7][0], episodes[8][0]],
+    ]  # each episode is (input_string, class_id). We need only input_string.
+
+    flush_size, _, _ = sampler.compute_chunk_sizes()
+
+    def get_episode_classes(episode):
+      return [e.split(b'.')[0] for e in episode[flush_size:]]
+
+    for episodes in episode_group:
+      ref_classes = get_episode_classes(episodes[0])
+      for episode in episodes[1:]:
+        self.assertAllEqual(ref_classes, get_episode_classes(episode))
+
+    # The classes in different examples_group's should be different.
+    ref_classes = get_episode_classes(episode_group[0][0])
+    for episodes in episode_group[1:]:
+      self.assertNotEqual(ref_classes, get_episode_classes(episodes[0]))
+
   def test_non_deterministic_shuffle(self):
     """Different Readers generate different episode compositions.
 
