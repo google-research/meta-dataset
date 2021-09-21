@@ -379,6 +379,10 @@ class EpisodeDescriptionSampler(object):
         if self.min_ways <= len(ids_rel) <= MAX_SPANNING_LEAVES_ELIGIBLE:
           self.span_leaves_rel.append(ids_rel)
 
+      # Ensure a deterministic order by sorting the elements in
+      # `self.span_leaves_rel` and then sorting `self.span_leaves_rel` itself.
+      self.span_leaves_rel = sorted(map(sorted, self.span_leaves_rel))
+
       num_eligible_nodes = len(self.span_leaves_rel)
       if num_eligible_nodes < 1:
         raise ValueError('There are no classes eligible for participating in '
