@@ -362,10 +362,11 @@ class EpisodeDescriptionSampler(object):
       spanning_leaves_dict = imagenet_specification.get_spanning_leaves(graph)
 
       # Build a list of lists storing the relative class IDs of the spanning
-      # leaves for each eligible internal node.
+      # leaves for each eligible internal node. We ensure a deterministic order
+      # by sorting the inner-nodes and their corresponding leaves by wn_id.
       self.span_leaves_rel = []
-      for node in internal_nodes:
-        node_leaves = spanning_leaves_dict[node]
+      for node in sorted(internal_nodes, key=lambda n: n.wn_id):
+        node_leaves = sorted(spanning_leaves_dict[node], key=lambda n: n.wn_id)
         # Build a list of relative class IDs of leaves that have at least
         # min_examples_in_class examples.
         ids_rel = []
@@ -378,10 +379,6 @@ class EpisodeDescriptionSampler(object):
         # `min_allowed_classes` and at most `max_eligible` leaves.
         if self.min_ways <= len(ids_rel) <= MAX_SPANNING_LEAVES_ELIGIBLE:
           self.span_leaves_rel.append(ids_rel)
-
-      # Ensure a deterministic order by sorting the elements in
-      # `self.span_leaves_rel` and then sorting `self.span_leaves_rel` itself.
-      self.span_leaves_rel = sorted(map(sorted, self.span_leaves_rel))
 
       num_eligible_nodes = len(self.span_leaves_rel)
       if num_eligible_nodes < 1:
