@@ -462,6 +462,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                       num_prefetch=0,
                                       image_size=None,
                                       num_to_take=None,
+                                      source_sampling_seed=None,
                                       simclr_episode_fraction=0.0):
   """Returns a pipeline emitting data from multiple sources as Episodes.
 
@@ -490,6 +491,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       examples per class to restrict to (for this given split). If provided, its
       length must be the same as len(dataset_spec). If None, no restrictions are
       applied to any dataset and all data per class is used.
+    source_sampling_seed: random seed for source sampling.
     simclr_episode_fraction: Float, fraction of episodes that will be converted
       to SimCLR Episodes as described in the CrossTransformers paper.
 
@@ -529,7 +531,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
     sources.append(tf.data.Dataset.zip((dataset, source_id_dataset)))
 
   # Sample uniformly among sources.
-  dataset = tf.data.experimental.sample_from_datasets(sources)
+  dataset = tf.data.experimental.sample_from_datasets(
+      sources, seed=source_sampling_seed)
 
   # Episodes coming out of `dataset` contain flushed examples and are internally
   # padded with placeholder examples. `process_episode` discards
