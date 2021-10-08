@@ -51,7 +51,7 @@ RNG = np.random.RandomState(seed=None)
 MAX_SPANNING_LEAVES_ELIGIBLE = 392
 
 
-def sample_num_ways_uniformly(num_classes, min_ways, max_ways):
+def sample_num_ways_uniformly(num_classes, min_ways, max_ways, rng=None):
   """Samples a number of ways for an episode uniformly and at random.
 
   The support of the distribution is [min_ways, num_classes], or
@@ -61,25 +61,29 @@ def sample_num_ways_uniformly(num_classes, min_ways, max_ways):
     num_classes: int, number of classes.
     min_ways: int, minimum number of ways.
     max_ways: int, maximum number of ways. Only used if num_classes > max_ways.
+    rng: np.random.RandomState used for sampling.
 
   Returns:
     num_ways: int, number of ways for the episode.
   """
+  rng = rng or RNG
   max_ways = min(max_ways, num_classes)
-  return RNG.randint(low=min_ways, high=max_ways + 1)
+  return rng.randint(low=min_ways, high=max_ways + 1)
 
 
-def sample_class_ids_uniformly(num_ways, rel_classes):
+def sample_class_ids_uniformly(num_ways, rel_classes, rng=None):
   """Samples the (relative) class IDs for the episode.
 
   Args:
     num_ways: int, number of ways for the episode.
     rel_classes: list of int, available class IDs to sample from.
+    rng: np.random.RandomState used for sampling.
 
   Returns:
     class_ids: np.array, class IDs for the episode, with values in rel_classes.
   """
-  return RNG.choice(rel_classes, num_ways, replace=False)
+  rng = rng or RNG
+  return rng.choice(rel_classes, num_ways, replace=False)
 
 
 def compute_num_query(images_per_class, max_num_query, num_support):
@@ -120,7 +124,8 @@ def compute_num_query(images_per_class, max_num_query, num_support):
 
 def sample_support_set_size(num_remaining_per_class,
                             max_support_size_contrib_per_class,
-                            max_support_set_size):
+                            max_support_set_size,
+                            rng=None):
   """Samples the size of the support set in the episode.
 
   That number is such that:
@@ -138,14 +143,16 @@ def sample_support_set_size(num_remaining_per_class,
       of examples of that class in the support set; this is a limit on its
       contribution to computing the support set _size_.
     max_support_set_size: int, maximum size of the support set.
+    rng: np.random.RandomState used for sampling.
 
   Returns:
     support_set_size: int, size of the support set in the episode.
   """
+  rng = rng or RNG
   if max_support_set_size < len(num_remaining_per_class):
     raise ValueError('max_support_set_size is too small to have at least one '
                      'support example per class.')
-  beta = RNG.uniform()
+  beta = rng.uniform()
   support_size_contributions = np.minimum(max_support_size_contrib_per_class,
                                           num_remaining_per_class)
   return np.minimum(
@@ -157,9 +164,12 @@ def sample_support_set_size(num_remaining_per_class,
       max_support_set_size)
 
 
-def sample_num_support_per_class(images_per_class, num_remaining_per_class,
-                                 support_set_size, min_log_weight,
-                                 max_log_weight):
+def sample_num_support_per_class(images_per_class,
+                                 num_remaining_per_class,
+                                 support_set_size,
+                                 min_log_weight,
+                                 max_log_weight,
+                                 rng=None):
   """Samples the number of support examples per class.
 
   At a high level, we wish the composition to loosely match class frequencies.
@@ -178,10 +188,12 @@ def sample_num_support_per_class(images_per_class, num_remaining_per_class,
     support_set_size: int, size of the support set in the episode.
     min_log_weight: float, minimum log-weight to give to any particular class.
     max_log_weight: float, maximum log-weight to give to any particular class.
+    rng: np.random.RandomState used for sampling.
 
   Returns:
     num_support_per_class: np.array, number of support examples for each class.
   """
+  rng = rng or RNG
   if support_set_size < len(num_remaining_per_class):
     raise ValueError('Requesting smaller support set than the number of ways.')
   if np.min(num_remaining_per_class) < 1:
@@ -192,7 +204,7 @@ def sample_num_support_per_class(images_per_class, num_remaining_per_class,
   remaining_support_set_size = support_set_size - len(num_remaining_per_class)
 
   unnormalized_proportions = images_per_class * np.exp(
-      RNG.uniform(min_log_weight, max_log_weight, size=images_per_class.shape))
+      rng.uniform(min_log_weight, max_log_weight, size=images_per_class.shape))
   support_set_proportions = (
       unnormalized_proportions / unnormalized_proportions.sum())
 
@@ -244,6 +256,11 @@ class EpisodeDescriptionSampler(object):
       RuntimeError: if required parameters are missing.
       ValueError: Inconsistent parameters.
     """
+    # Each instance has its own RNG which is seeded from the module-level RNG,
+    # which makes episode description sampling deterministic within individual
+    # data sources.
+    self._rng = np.random.RandomState(
+        seed=RNG.randint(0, 2**32, size=None, dtype='uint32'))
     self.dataset_spec = dataset_spec
     self.split = split
     self.pool = pool
@@ -402,14 +419,14 @@ class EpisodeDescriptionSampler(object):
           self.ignore_hierarchy_probability
       ]
 
-    if self.use_dag_hierarchy and RNG.choice([True, False], p=prob):
+    if self.use_dag_hierarchy and self._rng.choice([True, False], p=prob):
       # Retrieve the list of relative class IDs for an internal node sampled
       # uniformly at random.
-      episode_classes_rel = RNG.choice(self.span_leaves_rel)
+      episode_classes_rel = self._rng.choice(self.span_leaves_rel)
 
       # If the number of chosen classes is larger than desired, sub-sample them.
       if len(episode_classes_rel) > self.max_ways_upper_bound:
-        episode_classes_rel = RNG.choice(
+        episode_classes_rel = self._rng.choice(
             episode_classes_rel,
             size=[self.max_ways_upper_bound],
             replace=False)
@@ -417,26 +434,27 @@ class EpisodeDescriptionSampler(object):
       # Light check to make sure the chosen number of classes is valid.
       assert len(episode_classes_rel) >= self.min_ways
       assert len(episode_classes_rel) <= self.max_ways_upper_bound
-    elif self.use_bilevel_hierarchy and RNG.choice([True, False], p=prob):
+    elif self.use_bilevel_hierarchy and self._rng.choice([True, False], p=prob):
       # First sample a coarse category uniformly. Then randomly sample the way
       # uniformly, but taking care not to sample more than the number of classes
       # of the chosen supercategory.
-      episode_superclass = RNG.choice(self.superclass_set, 1)[0]
+      episode_superclass = self._rng.choice(self.superclass_set, 1)[0]
       num_superclass_classes = self.dataset_spec.classes_per_superclass[
           episode_superclass]
 
       num_ways = sample_num_ways_uniformly(
           num_superclass_classes,
           min_ways=self.min_ways,
-          max_ways=self.max_ways_upper_bound)
+          max_ways=self.max_ways_upper_bound,
+          rng=self._rng)
 
       # e.g. if these are [3, 1] then the 4'th and the 2'nd of the subclasses
       # that belong to the chosen superclass will be used. If the class id's
       # that belong to this superclass are [23, 24, 25, 26] then the returned
       # episode_classes_rel will be [26, 24] which as usual are number relative
       # to the split.
-      episode_subclass_ids = sample_class_ids_uniformly(num_ways,
-                                                        num_superclass_classes)
+      episode_subclass_ids = sample_class_ids_uniformly(
+          num_ways, num_superclass_classes, rng=self._rng)
       (episode_classes_rel,
        _) = self.dataset_spec.get_class_ids_from_superclass_subclass_inds(
            self.split, episode_superclass, episode_subclass_ids)
@@ -449,12 +467,14 @@ class EpisodeDescriptionSampler(object):
         num_ways = sample_num_ways_uniformly(
             self.num_filtered_classes,
             min_ways=self.min_ways,
-            max_ways=self.max_ways_upper_bound)
+            max_ways=self.max_ways_upper_bound,
+            rng=self._rng)
       # Filtered class IDs relative to the selected split
       ids_rel = [
           class_id - self.class_set[0] for class_id in self._filtered_class_set
       ]
-      episode_classes_rel = sample_class_ids_uniformly(num_ways, ids_rel)
+      episode_classes_rel = sample_class_ids_uniformly(
+          num_ways, ids_rel, rng=self._rng)
 
     return episode_classes_rel
 
@@ -490,20 +510,22 @@ class EpisodeDescriptionSampler(object):
           raise ValueError('The range provided for uniform sampling of the '
                            'number of support examples per class is not valid: '
                            'some classes do not have enough examples.')
-        num_support = RNG.randint(low=start, high=end + 1)
+        num_support = self._rng.randint(low=start, high=end + 1)
       num_support_per_class = [num_support for _ in class_ids]
     else:
       num_remaining_per_class = images_per_class - num_query
       support_set_size = sample_support_set_size(
           num_remaining_per_class,
           self.max_support_size_contrib_per_class,
-          max_support_set_size=self.max_support_set_size)
+          max_support_set_size=self.max_support_set_size,
+          rng=self._rng)
       num_support_per_class = sample_num_support_per_class(
           images_per_class,
           num_remaining_per_class,
           support_set_size,
           min_log_weight=self.min_log_weight,
-          max_log_weight=self.max_log_weight)
+          max_log_weight=self.max_log_weight,
+          rng=self._rng)
 
     return tuple(
         (class_id, num_support, num_query)
