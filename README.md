@@ -1,3 +1,14 @@
+# NEW! TFDS API for Meta-Dataset
+
+To accompany the presentation of the [VTAB+MD paper](https://openreview.net/pdf?id=Q0hm0_G1mpH)
+at NeurIPS 2021's Datasets and Benchmarks track, we are releasing a TensorFlow
+Datasets-based implementation of Meta-Dataset's input pipeline which is
+compatible with both the original Meta-Dataset protocol (MD-v1) and the updated
+protocol designed for VTAB+MD (MD-v2). See [the documentation page](data/tfds/README.md)
+for more information and example code snippets.
+
+# Meta-Dataset
+
 This repository contains accompanying code for the article introducing
 Meta-Dataset, [arxiv.org/abs/1903.03096](https://arxiv.org/abs/1903.03096) and the follow-up paper that proposes the VTAB+MD merged benchmark [arxiv.org/abs/2104.02638](http://arxiv.org/abs/2104.02638). It also contains accompanying code and checkpoints for CrossTransformers,
 [https://arxiv.org/abs/2007.11498](https://arxiv.org/abs/2007.11498), a

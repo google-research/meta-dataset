@@ -1,0 +1,2 @@
+recursive-include meta_dataset/learn *.gin
+recursive-include meta_dataset/dataset_conversion *.json

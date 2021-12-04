@@ -1,0 +1,50 @@
+import meta_dataset.data.config
+import meta_dataset.data.decoder
+import meta_dataset.data.pipeline
+
+# Variable shots / ways.
+EpisodeDescriptionConfig.num_ways = None
+EpisodeDescriptionConfig.num_support = None
+EpisodeDescriptionConfig.num_query = None
+
+# Default values for sampling variable shots / ways.
+EpisodeDescriptionConfig.min_ways = 5
+EpisodeDescriptionConfig.max_ways_upper_bound = 50
+EpisodeDescriptionConfig.max_num_query = 10
+
+EpisodeDescriptionConfig.min_examples_in_class = 0
+EpisodeDescriptionConfig.max_support_set_size = 500
+EpisodeDescriptionConfig.max_support_size_contrib_per_class = 100
+EpisodeDescriptionConfig.min_log_weight = -0.69314718055994529  # np.log(0.5)
+EpisodeDescriptionConfig.max_log_weight = 0.69314718055994529  # np.log(2)
+EpisodeDescriptionConfig.ignore_dag_ontology = False
+EpisodeDescriptionConfig.ignore_bilevel_ontology = False
+EpisodeDescriptionConfig.ignore_hierarchy_probability = 0.0
+
+# By default don't use SimCLR Episodes.
+EpisodeDescriptionConfig.simclr_episode_fraction = 0.0
+
+# Other default values for the data pipeline.
+DataConfig.image_height = 84
+DataConfig.shuffle_buffer_size = 1000
+DataConfig.read_buffer_size_bytes = 1048576  # 1 MB (1024**2)
+DataConfig.num_prefetch = 64
+
+process_dumped_episode.support_decoder = @support/ImageDecoder()
+process_episode.support_decoder = @support/ImageDecoder()
+support/ImageDecoder.data_augmentation = @support/DataAugmentation()
+support/DataAugmentation.enable_jitter = True
+support/DataAugmentation.jitter_amount = 0
+support/DataAugmentation.enable_gaussian_noise = True
+support/DataAugmentation.gaussian_noise_std = 0.0
+
+process_dumped_episode.query_decoder = @query/ImageDecoder()
+process_episode.query_decoder = @query/ImageDecoder()
+query/ImageDecoder.data_augmentation = @query/DataAugmentation()
+query/DataAugmentation.enable_jitter = False
+query/DataAugmentation.jitter_amount = 0
+query/DataAugmentation.enable_gaussian_noise = False
+query/DataAugmentation.gaussian_noise_std = 0.0
+
+
+ImageDecoder.skip_tfexample_decoding = True

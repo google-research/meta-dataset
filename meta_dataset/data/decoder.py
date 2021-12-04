@@ -43,7 +43,10 @@ class ImageDecoder(object):
   """Image decoder."""
   out_type = tf.float32
 
-  def __init__(self, image_size=None, data_augmentation=None):
+  def __init__(self,
+               image_size=None,
+               data_augmentation=None,
+               skip_tfexample_decoding=False):
     """Class constructor.
 
     Args:
@@ -51,9 +54,14 @@ class ImageDecoder(object):
         to `[image_size, image_size]`.
       data_augmentation: A DataAugmentation object with parameters for
         perturbing the images.
+      skip_tfexample_decoding: bool, if True the example string is treated as
+        an image string and TFExample decoding is skipped. In that case,
+        `decode_with_label` returns a constant placeholder label along with the
+        image.
     """
     self.image_size = image_size
     self.data_augmentation = data_augmentation
+    self.skip_tfexample_decoding = skip_tfexample_decoding
 
   def __call__(self, example_string):
     """Processes a single example string.
@@ -86,8 +94,15 @@ class ImageDecoder(object):
         values to go beyond this range.
       label: tf.int
     """
-    ex_decoded = read_example_and_parse_image(example_string)
-    image_decoded = ex_decoded['image']
+    if self.skip_tfexample_decoding:
+      image_decoded = tf.image.decode_image(example_string, channels=3)
+      image_decoded.set_shape([None, None, 3])
+      label = tf.constant(-1, dtype=tf.int32)
+    else:
+      ex_decoded = read_example_and_parse_image(example_string)
+      image_decoded = ex_decoded['image']
+      label = tf.cast(ex_decoded['label'], dtype=tf.int32)
+
     image_resized = tf.image.resize_images(
         image_decoded, [self.image_size, self.image_size],
         method=tf.image.ResizeMethod.BILINEAR,
@@ -106,7 +121,7 @@ class ImageDecoder(object):
         image = tf.pad(image, paddings, 'REFLECT')
         image = tf.image.random_crop(image,
                                      [self.image_size, self.image_size, 3])
-    return image, tf.cast(ex_decoded['label'], dtype=tf.int32)
+    return image, label
 
 
 @gin.configurable

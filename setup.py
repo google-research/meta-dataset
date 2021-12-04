@@ -40,7 +40,6 @@ class InstallCommand(install.install):
     self.run_command('simclr_download')
     install.install.run(self)
 
-
 setup(
     name='meta_dataset',
     version='0.2.0',
@@ -49,6 +48,7 @@ setup(
     license='Apache License, Version 2.0',
     python_requires='>=2.7, <3.10',
     packages=find_packages(),
+    include_package_data=True,
     install_requires=[
         'absl-py>=0.7.0',
         'gin-config>=0.1.2',
@@ -63,6 +63,7 @@ setup(
         'sklearn',
         'tensorflow_probability<=0.7',
         'tf-models-official',
+        'tensorflow-datasets',
     ],
     cmdclass={
         'simclr_download': DownloadSimCLRAugmentationCommand,
