@@ -4,7 +4,7 @@ To accompany the presentation of the [VTAB+MD paper](https://openreview.net/pdf?
 at NeurIPS 2021's Datasets and Benchmarks track, we are releasing a TensorFlow
 Datasets-based implementation of Meta-Dataset's input pipeline which is
 compatible with both the original Meta-Dataset protocol (MD-v1) and the updated
-protocol designed for VTAB+MD (MD-v2). See [the documentation page](data/tfds/README.md)
+protocol designed for VTAB+MD (MD-v2). See [the documentation page](meta_dataset/data/tfds/README.md)
 for more information and example code snippets.
 
 # Meta-Dataset
