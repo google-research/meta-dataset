@@ -164,3 +164,88 @@ class BaselineLearner(learner_base.BatchLearner):
     return query_logits
 
 
+@gin.configurable
+class DatasetConditionalBaselineLearner(BaselineLearner):
+  """A dataset-conditional Baseline Learner with separate readout heads."""
+
+  def __init__(self, num_sets, *args, **kwargs):
+    super(DatasetConditionalBaselineLearner, self).__init__(*args, **kwargs)
+    self.num_sets = num_sets
+    self._set_start_indices_for_sources()
+
+  def forward_pass(self, data, source, *args, **kwargs):
+    self.embedding_fn = functools.partial(
+        self.embedding_fn, film_selector=source)
+    self.forward_pass_fc = functools.partial(
+        self.forward_pass_fc, source=source)
+
+    return super(DatasetConditionalBaselineLearner,
+                 self).forward_pass(data, *args, **kwargs)
+
+  def forward_pass_fc(self, embeddings, source):
+    start_idx = tf.gather(self._start_inds_for_sources, source)
+    num_classes = self.logit_dim  # a list of the datasets' numbers of classes.
+    with tf.variable_scope('fc', reuse=tf.AUTO_REUSE):
+      logits = functional_classifiers.separate_head_linear_classifier(
+          embeddings, num_classes, source, start_idx, self.cosine_classifier,
+          self.cosine_logits_multiplier)
+      return logits
+
+  def _set_start_indices_for_sources(self):
+    self._start_inds_for_sources = [0] + list(np.cumsum(self.logit_dim))[:-1]
+
+  def _restrict_to_source(self, one_hot_labels, source):
+    """Returns the slice of one_hot_labels corresponding to source."""
+    return tf.slice(
+        one_hot_labels,
+        begin=[0, tf.gather(self._start_inds_for_sources, source)],
+        size=[tf.shape(one_hot_labels)[0],
+              tf.gather(self.logit_dim, source)])
+
+  def compute_loss(self, onehot_labels, predictions, source):
+    """Computes the CE loss of `predictions` with respect to `onehot_labels`.
+
+    Args:
+      onehot_labels: A `tf.Tensor` containing the the class labels; each vector
+        along the class dimension should hold a valid probability distribution
+        over the entire set of training classes (of all datasets).
+      predictions: A `tf.Tensor` containing the the class predictions,
+        interpreted as unnormalized log probabilities, for the classes of the
+        relevant head.
+      source: An int Tensor. The dataset source for this forward pass.
+
+    Returns:
+       A `tf.Tensor` representing the average loss.
+    """
+    # Restrict the one-hot labels to the range relevant for the given source.
+    onehot_labels = self._restrict_to_source(onehot_labels, source)
+    return super(DatasetConditionalBaselineLearner,
+                 self).compute_loss(onehot_labels, predictions)
+
+  def compute_accuracy(self, onehot_labels, predictions, source):
+    """Computes the accuracy."""
+    # Restrict the one-hot labels to the range relevant for the given source.
+    onehot_labels = self._restrict_to_source(onehot_labels, source)
+    return super(DatasetConditionalBaselineLearner,
+                 self).compute_accuracy(onehot_labels, predictions)
+
+
+@gin.configurable
+class DatasetLearner(learner_base.BatchLearner):
+  """A Learner for the dataset prediction task."""
+
+  def forward_pass(self, data, source=None):
+    del source  # Not required for forward pass.
+    images = data.images
+    logits = self.embedding_fn(images)
+    return logits
+
+  def compute_loss(self, onehot_labels, predictions, source=None):
+    del source
+    return super(DatasetLearner, self).compute_loss(onehot_labels, predictions)
+
+  def compute_accuracy(self, onehot_labels, predictions, source=None):
+    del source
+    return super(DatasetLearner, self).compute_accuracy(onehot_labels,
+                                                        predictions)
+

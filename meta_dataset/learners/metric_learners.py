@@ -521,3 +521,45 @@ class RelationNetworkLearner(MetricLearner):
     return loss
 
 
+@gin.configurable
+class DatasetConditionalPrototypicalNetworkLearner(PrototypicalNetworkLearner):
+  """A Prototypical Network with Dataset Conditioning."""
+
+  def __init__(self, num_sets, *args, **kwargs):
+    del num_sets
+    super(DatasetConditionalPrototypicalNetworkLearner,
+          self).__init__(*args, **kwargs)
+
+  def forward_pass(self, data, source, *args, **kwargs):
+    if 'source_for_classifier' in kwargs:
+      del kwargs['source_for_classifier']
+
+    self.embedding_fn = functools.partial(
+        self.embedding_fn, film_selector=source)
+
+    # Compute the support set's mean and var and use these as the moments for
+    # batch norm on the query set.
+    support_embeddings_dict = self.embedding_fn(
+        data.support_images,
+        self.is_training,
+        keep_spatial_dims=self.keep_spatial_dims)
+    support_embeddings = support_embeddings_dict['embeddings']
+    support_set_moments = None
+    if not self.transductive_batch_norm:
+      support_set_moments = support_embeddings_dict['moments']
+    query_embeddings_dict = self.embedding_fn(
+        data.query_images,
+        self.is_training,
+        params=support_embeddings_dict['params'],
+        moments=support_set_moments,
+        keep_spatial_dims=self.keep_spatial_dims)
+    query_embeddings = query_embeddings_dict['embeddings']
+
+    query_logits = self.compute_logits(
+        support_embeddings,
+        query_embeddings,
+        data.onehot_support_labels,
+        cosine_distance=True)
+
+    return query_logits
+

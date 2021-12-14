@@ -1,0 +1,5 @@
+include 'meta_dataset/learn/gin/setups/data_config_common.gin'
+# Do SUR-like image processing and data augmentation. This differs from the
+# default Meta-Dataset image processing in that more augmentations are added
+# (e.g. random flips, random brightness, contrast, saturation etc)
+include 'meta_dataset/learn/gin/setups/sur_data_config.gin'

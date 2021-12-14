@@ -157,3 +157,52 @@ def linear_classifier(embeddings, num_classes, cosine_classifier,
   return logits
 
 
+@gin.configurable
+def separate_head_linear_classifier(embeddings, num_classes, dataset_idx,
+                                    start_idx, cosine_classifier,
+                                    cosine_logits_multiplier, learnable_scale,
+                                    weight_decay):
+  """A linear classifier with num_sets heads, for different datasets.
+
+  Args:
+    embeddings: A Tensor of size [batch size, embedding dim].
+    num_classes: A list of integers; the dimension of the classifier layers of
+      the different heads.
+    dataset_idx: An int Tensor. The index of the dataset head to use.
+    start_idx: An int Tensor. The index of the first class of the given dataset.
+    cosine_classifier: A bool. If true, a cosine classifier is used, which does
+      not require a bias.
+    cosine_logits_multiplier: A float. Only used if cosine_classifier is True,
+      and multiplies the resulting logits.
+    learnable_scale: A bool. Whether to make the cosine_logits_multiplier a
+      learnable parameter. Only applies if cosine_classifier is True.
+    weight_decay: A float; the scalar multiple on the L2 regularization of the
+      weight matrix.
+
+  Returns:
+    logits: A Tensor of size [batch size, num outputs].
+  """
+  if not cosine_classifier:
+    raise NotImplementedError('`separate_head_linear_classifier` currently '
+                              'only supports `cosine_classifier` True.')
+
+  if learnable_scale:
+    cosine_logits_multiplier = tf.get_variable(
+        'cosine_scale',
+        initializer=cosine_logits_multiplier,
+        dtype=tf.float32,
+        trainable=True)
+
+  embedding_dims = embeddings.get_shape().as_list()[-1]
+  w_fc = functional_backbones.weight_variable(
+      [embedding_dims, sum(num_classes)], weight_decay=weight_decay)
+
+  # Select the output "head" to use in the forward pass.
+  dataset_num_classes = tf.gather(num_classes, dataset_idx)
+  w_fc = w_fc[:, start_idx:start_idx + dataset_num_classes]
+
+  logits = linear_classifier_forward_pass(embeddings, w_fc, None,
+                                          cosine_classifier,
+                                          cosine_logits_multiplier, False)
+  return logits
+

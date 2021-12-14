@@ -1,0 +1,27 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
+include 'meta_dataset/learn/gin/setups/trainer_config_flute.gin'
+include 'meta_dataset/learn/gin/setups/data_config_flute.gin'
+
+# Learner to use for evaluation (the `train_learner_class` isn't used now).
+Trainer_flute.train_learner_class = @DatasetConditionalBaselineLearner
+Trainer_flute.eval_learner_class = @FLUTEFiLMLearner
+
+# The path to the dataset classifier checkpoint to restore (this is required if
+# using the `blender` or `hard blender` as the `film_init` heuristic).
+Trainer_flute.dataset_classifier_to_restore = "path/to/trained/dataset/classifier"
+
+# FLUTE FiLM Learner settings.
+FLUTEFiLMLearner.film_init = 'blender'
+FLUTEFiLMLearner.num_steps = 6
+FLUTEFiLMLearner.lr = 0.005
+
+# Backbone settings.
+FLUTEFiLMLearner.embedding_fn = @flute_resnet
+bn_wrapper.batch_norm_fn = @bn_flute_eval
+bn_wrapper.num_film_sets = %num_film_sets
+dataset_classifier.weight_decay = %weight_decay
+dataset_classifier.num_datasets = %num_film_sets
+flute_resnet.weight_decay = %weight_decay
+weight_decay = 0.
+num_film_sets = 8

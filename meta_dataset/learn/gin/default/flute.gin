@@ -1,0 +1,51 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
+include 'meta_dataset/learn/gin/setups/trainer_config_flute.gin'
+include 'meta_dataset/learn/gin/setups/data_config_flute.gin'
+
+# Learners to use at train and validation.
+Trainer_flute.train_learner_class = @DatasetConditionalBaselineLearner
+Trainer_flute.eval_learner_class = @DatasetConditionalPrototypicalNetworkLearner
+BaselineLearner.cosine_classifier = True
+BaselineLearner.cosine_logits_multiplier = 10.
+BaselineLearner.use_weight_norm = False
+BatchSplitReaderGetReader.add_dataset_offset = True
+BaselineLearner.knn_in_fc = False
+BaselineLearner.knn_distance = 'l2'  # Does not matter.
+
+# Optimization.
+Trainer_flute.optimizer_type = 'momentum'
+Trainer_flute.learn_rate_scheduler = 'cosine_decay_restarts'
+Trainer_flute.decay_learning_rate = True
+Trainer_flute.sample_half_from_imagenet = True
+Trainer_flute.meta_batch_size = 8
+Trainer_flute.batch_size = 16
+Trainer_flute.learning_rate = 0.01
+Trainer_flute.decay_every = 5000
+Trainer_flute.num_updates = 640000
+Trainer_flute.validate_every = 1000
+Trainer_flute.checkpoint_every = 2000
+
+# Weight decay and learner settings.
+separate_head_linear_classifier.learnable_scale = True
+separate_head_linear_classifier.weight_decay = %weight_decay
+flute_resnet.weight_decay = %weight_decay
+weight_decay = 7e-4
+Learner.transductive_batch_norm = False
+Learner.backprop_through_moments = True
+
+# Backbone settings.
+Learner.embedding_fn = @flute_resnet
+bn_wrapper.batch_norm_fn = @bn_flute_train
+bn_flute_train.film_weight_decay = 0.0001
+DatasetConditionalBaselineLearner.num_sets = %num_film_sets
+DatasetConditionalPrototypicalNetworkLearner.num_sets = %num_film_sets
+bn_wrapper.num_film_sets = %num_film_sets
+num_film_sets = 8
+
+# Data settings.
+# Validate on the same datasets as training happens, and in the same order, so
+# that the ground truth source ID can be used for validation-time forward passes
+# without remapping.
+benchmark.train_datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'
+benchmark.eval_datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'

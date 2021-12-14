@@ -1,0 +1,73 @@
+import meta_dataset.data.sur_decoder
+import meta_dataset.data.config
+import meta_dataset.data.decoder
+
+# Other default values for the data pipeline.
+DataConfig.image_height = 84
+DataConfig.shuffle_buffer_size = 1000
+DataConfig.read_buffer_size_bytes = 1048576  # 1 MB (1024**2)
+DataConfig.num_prefetch = 400
+SURImageDecoder.image_size = 84
+
+# If we decode features then change the lines below to use FeatureDecoder.
+process_episode.support_decoder = @support/SURImageDecoder()
+support/SURImageDecoder.data_augmentation = @support/SURDataAugmentation()
+support/SURDataAugmentation.enable_jitter = True
+support/SURDataAugmentation.jitter_amount = 0
+support/SURDataAugmentation.enable_gaussian_noise = True
+support/SURDataAugmentation.gaussian_noise_std = 0.0
+support/SURDataAugmentation.enable_random_flip = False
+support/SURDataAugmentation.enable_random_brightness = False
+support/SURDataAugmentation.random_brightness_delta = 0
+support/SURDataAugmentation.enable_random_contrast = False
+support/SURDataAugmentation.random_contrast_delta = 0
+support/SURDataAugmentation.enable_random_hue = False
+support/SURDataAugmentation.random_hue_delta = 0
+support/SURDataAugmentation.enable_random_saturation = False
+support/SURDataAugmentation.random_saturation_delta = 0
+
+process_episode.query_decoder = @query/SURImageDecoder()
+query/SURImageDecoder.data_augmentation = @query/SURDataAugmentation()
+query/SURDataAugmentation.enable_jitter = False
+query/SURDataAugmentation.jitter_amount = 0
+query/SURDataAugmentation.enable_gaussian_noise = False
+query/SURDataAugmentation.gaussian_noise_std = 0.0
+query/SURDataAugmentation.enable_random_flip = False
+query/SURDataAugmentation.enable_random_brightness = False
+query/SURDataAugmentation.random_brightness_delta = 0
+query/SURDataAugmentation.enable_random_contrast = False
+query/SURDataAugmentation.random_contrast_delta = 0
+query/SURDataAugmentation.enable_random_hue = False
+query/SURDataAugmentation.random_hue_delta = 0
+query/SURDataAugmentation.enable_random_saturation = False
+query/SURDataAugmentation.random_saturation_delta = 0
+
+process_batch.batch_decoder = @batch/SURImageDecoder()
+batch/SURImageDecoder.data_augmentation = @batch/SURDataAugmentation()
+batch/SURDataAugmentation.enable_jitter = True
+batch/SURDataAugmentation.jitter_amount = 8
+batch/SURDataAugmentation.enable_gaussian_noise = True
+batch/SURDataAugmentation.gaussian_noise_std = 0.0
+batch/SURDataAugmentation.enable_random_flip = False
+batch/SURDataAugmentation.enable_random_brightness = True
+batch/SURDataAugmentation.random_brightness_delta = 0.125
+batch/SURDataAugmentation.enable_random_contrast = True
+batch/SURDataAugmentation.random_contrast_delta = 0.2
+batch/SURDataAugmentation.enable_random_hue = True
+batch/SURDataAugmentation.random_hue_delta = 0.03
+batch/SURDataAugmentation.enable_random_saturation = True
+batch/SURDataAugmentation.random_saturation_delta = 0.2
+
+# For dumped episodes:
+process_dumped_episode.support_decoder = @support/ImageDecoder()
+support/ImageDecoder.data_augmentation = @support/DataAugmentation()
+support/DataAugmentation.enable_jitter = True
+support/DataAugmentation.jitter_amount = 0
+support/DataAugmentation.enable_gaussian_noise = True
+support/DataAugmentation.gaussian_noise_std = 0.0
+process_dumped_episode.query_decoder = @query/ImageDecoder()
+query/ImageDecoder.data_augmentation = @query/DataAugmentation()
+query/DataAugmentation.enable_jitter = False
+query/DataAugmentation.jitter_amount = 0
+query/DataAugmentation.enable_gaussian_noise = False
+query/DataAugmentation.gaussian_noise_std = 0.0

@@ -94,7 +94,183 @@ def relu(x, use_bounded_activation=False):
     return tf.nn.relu(x)
 
 
-# pylint: disable=g-wrong-blank-lines
+@gin.configurable('bn_flute_train', allowlist=['film_weight_decay'])
+def bn_flute_train(x,
+                   film_selector,
+                   num_sets,
+                   film_weight_decay,
+                   params=None,
+                   moments=None,
+                   is_training=True,
+                   backprop_through_moments=True):
+  """Batch normalization used during training FLUTE's template."""
+  del is_training, backprop_through_moments  # Not needed.
+  params_keys, params_vars, moments_keys, moments_vars = [], [], [], []
+  with tf.variable_scope('batch_norm'):
+    scope_name = tf.get_variable_scope().name
+
+    # Part 1: Get the statistics (mean and var) to use during normalization.
+    # Compute the mean and var of the current batch. [1, 1, 1, num channels].
+    mean, var = tf.nn.moments(
+        x, axes=list(range(len(x.shape) - 1)), keep_dims=True)
+    num_channels = mean.shape[-1]
+
+    if moments is not None:
+      # A common use case for this: passing in the moments computed from the
+      # support set during the query set forward pass.
+      mean = moments[scope_name + '/mean']
+      var = moments[scope_name + '/var']
+
+    moments_keys += [scope_name + '/mean']
+    moments_vars += [mean]
+    moments_keys += [scope_name + '/var']
+    moments_vars += [var]
+
+    # Part 2: Select the scale and offset params to use during normalization.
+    if params is None:
+      offset = tf.get_variable(
+          'offset',
+          shape=[num_sets, num_channels],
+          initializer=tf.initializers.zeros(),
+          regularizer=tf.keras.regularizers.L2(film_weight_decay))
+      # We init the scale to zeros and then add 1 (instead of init at 1) so that
+      # the weight decay regularizes the scale parameters towards unity.
+      scale = tf.get_variable(
+          'scale',
+          shape=[num_sets, num_channels],
+          initializer=tf.initializers.zeros(),
+          regularizer=tf.keras.regularizers.L2(film_weight_decay))
+      scale = scale + 1
+
+      # Combine the parameters according to the given selector.
+      # pylint: disable=g-explicit-length-test
+      if isinstance(film_selector, int) or not len(film_selector.shape):
+        # pylint: enable=g-explicit-length-test
+        # If sel is an int or []-shaped int Tensor, expand it to [1, num_sets].
+        film_selector = tf.one_hot(tf.cast(film_selector, tf.int64), num_sets)
+        film_selector = tf.expand_dims(film_selector, 0)
+        film_selector = tf.cast(film_selector, tf.float32)
+      # [1, num_sets] x [num_sets, num channels] -> [1, num channels].
+      scale = tf.matmul(film_selector, scale)
+      offset = tf.matmul(film_selector, offset)
+      # Reshape to [1, 1, 1, num_channels].
+      scale = tf.reshape(scale, [1, 1, 1, -1])
+      offset = tf.reshape(offset, [1, 1, 1, -1])
+
+    else:
+      offset = tf.squeeze(params[scope_name + '/offset'])
+      scale = tf.squeeze(params[scope_name + '/scale'])
+
+    params_keys += [scope_name + '/offset']
+    params_vars += [offset]
+    params_keys += [scope_name + '/scale']
+    params_vars += [scale]
+
+    # Part 3: Perform batch normalization with the selected stats and params.
+    output = tf.nn.batch_normalization(x, mean, var, offset, scale, 0.00001)
+
+    params = collections.OrderedDict(zip(params_keys, params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+    return output, params, moments
+
+
+@gin.configurable
+def bn_flute_eval(x,
+                  film_selector,
+                  num_sets,
+                  film_weight_decay=None,
+                  params=None,
+                  moments=None,
+                  is_training=True,
+                  backprop_through_moments=True):
+  """Batch normalization used for FLUTE evaluation."""
+  del is_training, backprop_through_moments, film_weight_decay  # Not needed.
+  params_keys, params_vars, moments_keys, moments_vars = [], [], [], []
+
+  with tf.variable_scope('batch_norm'):
+    scope_name = tf.get_variable_scope().name
+
+    if moments is None:
+      # Compute the mean and var of the current batch. [1, 1, 1, num channels].
+      mean, var = tf.nn.moments(
+          x, axes=list(range(len(x.shape) - 1)), keep_dims=True)
+    else:
+      mean = moments[scope_name + '/mean']
+      var = moments[scope_name + '/var']
+
+    num_channels = mean.shape[-1]
+    moments_keys += [scope_name + '/mean']
+    moments_vars += [mean]
+    moments_keys += [scope_name + '/var']
+    moments_vars += [var]
+
+    if params is None:
+      # These variables will be restored from the pre-trained checkpoint.
+      offset = tf.get_variable(
+          'offset',
+          shape=[num_sets, num_channels],
+          initializer=tf.initializers.zeros())
+      scale = tf.get_variable(
+          'scale',
+          shape=[num_sets, num_channels],
+          initializer=tf.initializers.zeros())
+      scale = scale + 1
+
+      if film_selector is not None:
+        # Combine the parameters according to the given selector.
+        # pylint: disable=g-explicit-length-test
+        if isinstance(film_selector, int) or not len(film_selector.shape):
+          # pylint: enable=g-explicit-length-test
+          # If sel is an int or []-shaped int Tensor, expand to [1, num_sets].
+          film_selector = tf.one_hot(tf.cast(film_selector, tf.int64), num_sets)
+          film_selector = tf.expand_dims(film_selector, 0)
+          film_selector = tf.cast(film_selector, tf.float32)
+        # [1, num_sets] x [num_sets, num channels] -> [1, num channels].
+        scale = tf.matmul(film_selector, scale)
+        offset = tf.matmul(film_selector, offset)
+        # Reshape to [1, 1, 1, num_channels].
+        scale = tf.reshape(scale, [1, 1, 1, -1])
+        offset = tf.reshape(offset, [1, 1, 1, -1])
+
+      # The following two variables are the ones that FiLMLearner will optimize
+      # for each task using the support set. These are additive offsets to the
+      # selected initialization (e.g. the proposed blending of the per-dataset
+      # sets of FiLM parameters).
+      # [1, 1, 1, num_channels].
+      offset_for_film_learner = tf.get_variable(
+          'offset_for_film_learner',
+          shape=mean.get_shape().as_list(),
+          initializer=tf.initializers.zeros())
+      scale_for_film_learner = tf.get_variable(
+          'scale_for_film_learner',
+          shape=var.get_shape().as_list(),
+          initializer=tf.initializers.zeros())
+
+      if film_selector is None:
+        # Learn a set of FiLM parameters from scratch, ignoring reloaded ones.
+        offset = offset_for_film_learner
+        scale = scale_for_film_learner + 1
+      else:
+        # The new offset/scale are additive offsets to the reloaded ones.
+        offset = offset_for_film_learner + offset
+        scale = scale_for_film_learner + scale
+
+    else:
+      offset = params[scope_name + '/offset']
+      scale = params[scope_name + '/scale']
+
+    params_keys += [scope_name + '/offset']
+    params_vars += [offset]
+    params_keys += [scope_name + '/scale']
+    params_vars += [scale]
+
+    output = tf.nn.batch_normalization(x, mean, var, offset, scale, 0.00001)
+    params = collections.OrderedDict(zip(params_keys, params_vars))
+    moments = collections.OrderedDict(zip(moments_keys, moments_vars))
+
+    return output, params, moments
+
+
 # TODO(tylerzhu): Accumulate batch norm statistics (moving {var, mean})
 # during training and use them during testing. However need to be careful
 # about leaking information across episodes.
@@ -325,24 +501,42 @@ def conv(x,
   return x, params
 
 
-ALLOWLIST = ['batch_norm_fn']
+ALLOWLIST = ['batch_norm_fn', 'num_film_sets']
 
 
 @gin.configurable('bn_wrapper', allowlist=ALLOWLIST)
 def _bn_wrapper(
     x,
+    film_selector=None,
+    num_film_sets=0,
     batch_norm_fn=bn,
     params=None,
     moments=None,
     is_training=True,
     backprop_through_moments=True):
   """Returns the result of batch normalization."""
-  return batch_norm_fn(
-      x,
-      params=params,
-      moments=moments,
-      is_training=is_training,
-      backprop_through_moments=backprop_through_moments)
+  if batch_norm_fn not in [bn, bn_flute_train, bn_flute_eval]:
+    raise ValueError(
+        'Unexpected `batch_norm_fn` {}. Expected one of bn, bn_flute_train'
+        'or bn_flute_eval.'.format(batch_norm_fn))
+  if batch_norm_fn in [bn_flute_train, bn_flute_eval]:
+    if not num_film_sets:
+      raise ValueError('Expected num_film_sets > 0.')
+    return batch_norm_fn(
+        x,
+        film_selector=film_selector,
+        num_sets=num_film_sets,
+        params=params,
+        moments=moments,
+        is_training=is_training,
+        backprop_through_moments=backprop_through_moments)
+  else:
+    return batch_norm_fn(
+        x,
+        params=params,
+        moments=moments,
+        is_training=is_training,
+        backprop_through_moments=backprop_through_moments)
 
 
 def conv_bn(
@@ -357,6 +551,7 @@ def conv_bn(
     is_training=True,
     rate=1,
     backprop_through_moments=True,
+    film_selector=None
 ):
   """A block that performs convolution, followed by batch-norm."""
   params_keys, params_vars = [], []
@@ -379,6 +574,7 @@ def conv_bn(
       moments=moments,
       is_training=is_training,
       backprop_through_moments=backprop_through_moments,
+      film_selector=film_selector
   )
   params_keys.extend(bn_params.keys())
   params_vars.extend(bn_params.values())
@@ -404,6 +600,7 @@ def bottleneck(
     input_rate=1,
     output_rate=1,
     use_bounded_activation=False,
+    film_selector=None
 ):
   """ResNet18 residual block."""
   params_keys, params_vars = [], []
@@ -420,6 +617,7 @@ def bottleneck(
         is_training=is_training,
         rate=input_rate,
         backprop_through_moments=backprop_through_moments,
+        film_selector=film_selector
     )
     params_keys.extend(conv_bn_params.keys())
     params_vars.extend(conv_bn_params.values())
@@ -440,6 +638,7 @@ def bottleneck(
         is_training=is_training,
         rate=output_rate,
         backprop_through_moments=backprop_through_moments,
+        film_selector=film_selector
     )
     if use_bounded_activation:
       h = tf.clip_by_value(h, -6.0, 6.0)
@@ -463,6 +662,7 @@ def bottleneck(
             is_training=is_training,
             rate=1,
             backprop_through_moments=backprop_through_moments,
+            film_selector=film_selector
         )
         params_keys.extend(conv_bn_params.keys())
         params_vars.extend(conv_bn_params.values())
@@ -489,6 +689,7 @@ def _resnet(
     max_stride=None,
     deeplab_alignment=True,
     keep_spatial_dims=False,
+    film_selector=None
 ):
   """A ResNet network; ResNet18 by default."""
   x = tf.stop_gradient(x)
@@ -524,6 +725,7 @@ def _resnet(
           moments=moments,
           is_training=is_training,
           backprop_through_moments=backprop_through_moments,
+          film_selector=film_selector
       )
       params_keys.extend(conv_bn_params.keys())
       params_vars.extend(conv_bn_params.values())
@@ -565,6 +767,7 @@ def _resnet(
           use_project=use_project,
           is_training=is_training,
           backprop_through_moments=backprop_through_moments,
+          film_selector=film_selector
       )
       net_stride *= output_stride
       return x, bottleneck_params, bottleneck_moments, net_stride, output_rate
@@ -655,6 +858,110 @@ def resnet(x,
       keep_spatial_dims=keep_spatial_dims)
 
 
+def bn_for_deep_set_encoder(x,
+                            bn_weight_decay,
+                            scope_name='batch_norm_for_set_encoder'):
+  """Batch normalization for use in the DeepSet encoder.
+
+  Args:
+    x: inputs.
+    bn_weight_decay: Weight decay for scale and offset parameters.
+    scope_name: A string. The scope name.
+
+  Returns:
+    output: The result of applying batch normalization to the input.
+  """
+  with tf.variable_scope(scope_name):
+    # Compute the mean and var of the current batch. [1, 1, 1, num channels].
+    mean, var = tf.nn.moments(
+        x, axes=list(range(len(x.shape) - 1)), keep_dims=True)
+    num_channels = mean.shape[-1]
+
+    # [num channels].
+    offset = tf.get_variable(
+        'offset',
+        shape=[num_channels],
+        initializer=tf.initializers.zeros(),
+        regularizer=tf.keras.regularizers.L2(bn_weight_decay))
+    # We init the scale to zeros and then add 1 (instead of init at 1) so that
+    # the weight decay regularizes the scale parameters towards unity.
+    scale = tf.get_variable(
+        'scale',
+        shape=[num_channels],
+        initializer=tf.initializers.zeros(),
+        regularizer=tf.keras.regularizers.L2(bn_weight_decay))
+    scale = scale + 1
+
+    output = tf.nn.batch_normalization(x, mean, var, offset, scale, 0.00001)
+    return output
+
+
+def deep_set_encoder(x, weight_decay):
+  """Returns a deep set encoding of x."""
+  h = x
+  for i in range(5):
+    with tf.variable_scope('set_encoder_{}'.format(i + 1), reuse=tf.AUTO_REUSE):
+      h, _ = conv(h, [3, 3], 64, 1, weight_decay)
+      h = bn_for_deep_set_encoder(h, weight_decay)
+      h = relu(h)
+      h = tf.nn.max_pool(
+          h, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+  # Create the set representation of x.
+  # Average pool to reduce [batch_size, X, X, 64] to [batch_size, 1, 1, 64].
+  out = tf.nn.avg_pool2d(h, h.shape[1], h.shape[1], 'SAME')
+  # Average over the batch size: [1, 1, 64].
+  out = tf.reduce_mean(out, axis=0)
+  out = tf.reshape(out, [1, 64])  # to make the shape known.
+  return out
+
+
+@gin.configurable(
+    'dataset_classifier', allowlist=[
+        'weight_decay',
+        'num_datasets',
+    ])
+def dataset_classifier(x, weight_decay, num_datasets):
+  """Classifies the batch x into one of the training datasets."""
+  deep_set_embeddings = deep_set_encoder(x, weight_decay)  # [1, 64].
+
+  with tf.variable_scope('dataset_fc', reuse=tf.AUTO_REUSE):
+    w_fc = weight_variable([64, num_datasets], weight_decay=weight_decay)
+    b_fc = bias_variable([num_datasets])
+  dataset_logits = tf.matmul(deep_set_embeddings, w_fc) + b_fc
+  return dataset_logits
+
+
+@gin.configurable('flute_resnet', allowlist=['weight_decay'])
+def flute_resnet(x,
+                 is_training,
+                 weight_decay,
+                 params=None,
+                 moments=None,
+                 reuse=tf.AUTO_REUSE,
+                 scope='resnet18',
+                 backprop_through_moments=True,
+                 use_bounded_activation=False,
+                 max_stride=None,
+                 deeplab_alignment=True,
+                 keep_spatial_dims=False,
+                 film_selector=None):
+  """ResNet18 embedding function for FLUTE."""
+  return _resnet(
+      x,
+      is_training,
+      weight_decay,
+      scope,
+      reuse=reuse,
+      params=params,
+      moments=moments,
+      backprop_through_moments=backprop_through_moments,
+      use_bounded_activation=use_bounded_activation,
+      blocks=(2, 2, 2, 2),
+      max_stride=max_stride,
+      deeplab_alignment=deeplab_alignment,
+      keep_spatial_dims=keep_spatial_dims,
+      film_selector=film_selector)
 
 
 @gin.configurable(

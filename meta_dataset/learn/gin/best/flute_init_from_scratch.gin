@@ -1,0 +1,6 @@
+include 'meta_dataset/learn/gin/best_v2/flute.gin'
+
+Trainer_flute.dataset_classifier_to_restore = ""
+FLUTEFiLMLearner.film_init = 'scratch'
+FLUTEFiLMLearner.num_steps = 4
+FLUTEFiLMLearner.lr = 0.005

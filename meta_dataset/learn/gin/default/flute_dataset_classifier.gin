@@ -1,0 +1,36 @@
+include 'meta_dataset/learn/gin/setups/all.gin'
+include 'meta_dataset/learn/gin/learners/learner_config.gin'
+include 'meta_dataset/learn/gin/setups/trainer_config_flute.gin'
+include 'meta_dataset/learn/gin/setups/data_config_flute.gin'
+
+# Learners to use at train and validation.
+Trainer_flute.train_learner_class = @DatasetLearner
+Trainer_flute.eval_learner_class = @DatasetLearner
+BatchSplitReaderGetReader.add_dataset_offset = True
+Learner.transductive_batch_norm = False
+Learner.backprop_through_moments = True
+
+# Optimization.
+Trainer_flute.optimizer_type = 'adam'
+Trainer_flute.learn_rate_scheduler = 'cosine_decay'
+Trainer_flute.decay_learning_rate = True
+Trainer_flute.sample_half_from_imagenet = False
+Trainer_flute.meta_batch_size = 8
+Trainer_flute.batch_size = 16
+Trainer_flute.learning_rate = 0.001
+Trainer_flute.decay_every = 3000
+Trainer_flute.num_updates = 14000
+
+# Backbone settings.
+Learner.embedding_fn = @dataset_classifier
+dataset_classifier.weight_decay = %weight_decay
+dataset_classifier.num_datasets = %num_film_sets
+num_film_sets = 8
+weight_decay = 7e-4
+
+# Data settings.
+# Validate on the same datasets as training happens, and in the same order, so
+# that the ground truth source ID can be used for validation-time forward passes
+# without remapping.
+benchmark.train_datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'
+benchmark.eval_datasets = 'ilsvrc_2012,aircraft,cu_birds,omniglot,quickdraw,vgg_flower,dtd,fungi'

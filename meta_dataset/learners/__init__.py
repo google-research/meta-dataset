@@ -29,6 +29,7 @@ from meta_dataset.learners.metric_learners import MetricLearner
 from meta_dataset.learners.metric_learners import PrototypicalNetworkLearner
 from meta_dataset.learners.metric_learners import RelationNetworkLearner
 from meta_dataset.learners.optimization_learners import BaselineFinetuneLearner
+from meta_dataset.learners.optimization_learners import FLUTEFiLMLearner
 from meta_dataset.learners.optimization_learners import MAMLLearner
 from meta_dataset.learners.optimization_learners import OptimizationLearner
 
@@ -44,4 +45,5 @@ __all__ = [
     'OptimizationLearner',
     'PrototypicalNetworkLearner',
     'RelationNetworkLearner',
+    'FLUTEFiLMLearner',
 ]
