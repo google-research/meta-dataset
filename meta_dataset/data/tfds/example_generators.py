@@ -29,6 +29,7 @@ import re
 from typing import Optional
 
 from absl import logging
+from etils import epath
 import numpy as np
 from PIL import ImageOps
 import tensorflow_datasets as tfds
@@ -52,11 +53,10 @@ def _image_key(image_id, total_num_examples):
   return image_id * gap
 
 
-def _load_and_process_image(
-    image_path = None,
-    image_bytes = None,
-    invert_img = False,
-    bbox=None):
+def _load_and_process_image(image_path = None,
+                            image_bytes = None,
+                            invert_img = False,
+                            bbox=None):
   """Loads and processes an image.
 
   Args:
