@@ -207,8 +207,8 @@ gin.parse_config_file(tfds.core.as_path(meta_dataset.__file__).parent /
 # VTAB+MD paper for a detailed explanation). This is not to be confused
 # with the (unrelated) arXiv version of the Meta-Dataset paper.
 md_version = 'v1'
-md_sources = ('aircraft', 'cu_birds', 'dtd', 'fungi', 'ilsvrc_2012', 'mscoco',
-              'omniglot', 'quickdraw', 'traffic_sign'):
+md_sources = ('aircraft', 'cu_birds', 'dtd', 'fungi', 'ilsvrc_2012', 'omniglot',
+              'quickdraw'):
 if md_version == 'v1':
   md_sources += ('vgg_flower',)
 
