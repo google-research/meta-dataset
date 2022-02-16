@@ -200,7 +200,10 @@ def read_episodes_from_records_multiple_sources(episodes_dir_list,
       dataset_per_dir), num_files_per_dir
 
 
-def read_vtab_as_episode(vtab_key, image_size=224, query_size_limit=500):
+def read_vtab_as_episode(vtab_key,
+                         image_size=224,
+                         query_size_limit=500,
+                         data_dir=None):
   """This function reads VTAB-1k datasets as episodes.
 
   The training set becomes support set and the test is the query set.
@@ -214,6 +217,7 @@ def read_vtab_as_episode(vtab_key, image_size=224, query_size_limit=500):
     vtab_key: str, one of constants.VTAB_DATASETS.
     image_size: int, used to resize the images read.
     query_size_limit: int, used to batch the query set.
+    data_dir: str, optional data directory path for tf-datasets.
 
   Returns:
     tf.data.Dataset, of support set in one batch.
@@ -222,7 +226,7 @@ def read_vtab_as_episode(vtab_key, image_size=224, query_size_limit=500):
   """
   dataset_instance = data_loader.get_dataset_instance({
       "dataset": "data.%s" % vtab_key,
-      "data_dir": None
+      "data_dir": data_dir
   })
   query_ds = dataset_instance.get_tf_data(
       split_name="test",
