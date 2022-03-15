@@ -51,7 +51,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'absl-py>=0.7.0',
-        'etils>=0.7.0',
+        'etils>=0.4.0',
         'gin-config>=0.1.2',
         'numpy>=1.13.3',
         'scipy>=1.0.0',

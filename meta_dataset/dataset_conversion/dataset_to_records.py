@@ -166,7 +166,7 @@ def make_example(features):
       'bytes': _bytes_feature
   }
 
-  feature_dict = dict((key, feature_fns[feature_type](value))
+  feature_dict = dict((key, feature_fns[feature_type](np.ravel(value)))
                       for key, feature_type, value in features)
 
   # Create an example protocol buffer.

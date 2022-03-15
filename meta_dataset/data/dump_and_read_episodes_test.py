@@ -76,7 +76,7 @@ class DumpAndReadEpisodesTest(tf.test.TestCase, parameterized.TestCase):
       f.write(json.dumps(images_per_class_dict, indent=2))
     return record_dir, episodes
 
-  def test_single_dataset(self, n_image=10):
+  def test_single_dataset(self):
     record_dir, episodes = self.dump_episodes(2)
     for i, (train_ds, test_ds) in enumerate(episodes):
       train_loader = read_episodes.read_episode_as_dataset(
@@ -91,7 +91,7 @@ class DumpAndReadEpisodesTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(img1, img2)
         self.assertAllEqual(label1, label2)
 
-  def test_single_dataset_with_info(self, n_image=10):
+  def test_single_dataset_with_info(self):
     record_dir, episodes = self.dump_episodes(2)
     for i, (train_ds, test_ds) in enumerate(episodes):
       _, num_imgs_per_class = read_episodes.read_episode_as_dataset(
@@ -105,7 +105,7 @@ class DumpAndReadEpisodesTest(tf.test.TestCase, parameterized.TestCase):
       expected_counts_test = dict(collections.Counter(all_test_labels))
       self.assertDictEqual(expected_counts_test, num_imgs_per_class)
 
-  def test_read_as_meta_dataset(self, n_image=10):
+  def test_read_as_meta_dataset(self):
     record_dir, episodes = self.dump_episodes(2)
     episode_ds, n_episodes = read_episodes.read_episodes_from_records(
         record_dir)
