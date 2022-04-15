@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Utilities for adapting checkpoints for use with `ReparameterizableModule`s.
 
 Parameter adapters are functions that take a single non-configurable `tf.Module`

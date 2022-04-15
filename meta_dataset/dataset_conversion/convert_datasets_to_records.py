@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 # pyformat: disable
 r"""Main file for converting the datasets used in the benchmark into records.
 

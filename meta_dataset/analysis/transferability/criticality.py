@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 # pyformat: disable
 """Implementation of the criticality measures from [Chatterji et al. (2020)][1].
 

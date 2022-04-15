@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Mappings from images to embeddings or embeddings to predictions."""
 
 from __future__ import absolute_import

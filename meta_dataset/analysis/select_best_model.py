@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 r"""A script for choosing the best variant of a model automatically.
 
 It takes as input the root directory of all experiments, and a list of names of
