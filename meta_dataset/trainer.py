@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Interface for a learner that uses BenchmarkReaderDataSource to get data."""
 # TODO(lamblinp): Update variable names to be more consistent
 # - target, class_idx, label
