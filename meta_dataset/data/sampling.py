@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Sampling the composition of episodes.
 
 The composition of episodes consists in the number of classes (num_ways), which

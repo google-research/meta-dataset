@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Demonstrates how to read dumped episodes from disk.
 
 Dumped episodes are assumed to be stored as `{episode_number}-train.tfrecords`

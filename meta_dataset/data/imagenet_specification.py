@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Prepares the ILSVRC2012 subset of ImageNet for integration in the benchmark.
 
 This requires creating a data structure to navigate the subset of the ontology

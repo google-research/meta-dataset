@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Interfaces for data returned by the pipelines.
 
 TODO(lamblinp): Integrate better with pipeline.py.

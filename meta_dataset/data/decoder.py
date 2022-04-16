@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Module responsible for decoding image/feature examples."""
 import gin.tf
 import tensorflow.compat.v1 as tf

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Sub-module for reading data and assembling episodes."""
 # Whether datasets with example-level splits, or pools, are supported.
 # Currently, this is not implemented.

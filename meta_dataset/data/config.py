@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Configuration classes for data processing.
 
 Config classes that parametrize the behaviour of different stages of the data

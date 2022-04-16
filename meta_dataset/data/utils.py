@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 r"""Utils for dumping Meta-Dataset episodes to disk as tfrecords files."""
 import collections
 import os

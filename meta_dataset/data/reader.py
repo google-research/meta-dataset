@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python2, python3
 """Forming the first part of a tf.data pipeline, reading from a source on disk.
 
 The data output by the Reader consists in episodes or batches (for EpisodeReader
