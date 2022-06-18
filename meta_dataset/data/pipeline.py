@@ -463,6 +463,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
                                       image_size=None,
                                       num_to_take=None,
                                       source_sampling_seed=None,
+                                      episode_sampling_seed=None,
                                       simclr_episode_fraction=0.0):
   """Returns a pipeline emitting data from multiple sources as Episodes.
 
@@ -492,6 +493,7 @@ def make_multisource_episode_pipeline(dataset_spec_list,
       length must be the same as len(dataset_spec). If None, no restrictions are
       applied to any dataset and all data per class is used.
     source_sampling_seed: random seed for source sampling.
+    episode_sampling_seed: random seed for episode sampling.
     simclr_episode_fraction: Float, fraction of episodes that will be converted
       to SimCLR Episodes as described in the CrossTransformers paper.
 
@@ -524,7 +526,8 @@ def make_multisource_episode_pipeline(dataset_spec_list,
         episode_descr_config,
         pool=pool,
         use_dag_hierarchy=use_dag_ontology,
-        use_bilevel_hierarchy=use_bilevel_ontology)
+        use_bilevel_hierarchy=use_bilevel_ontology,
+        episode_sampling_seed=episode_sampling_seed)
     dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
     # Create a dataset to zip with the above for identifying the source.
     source_id_dataset = tf.data.Dataset.from_tensors(source_id).repeat()
