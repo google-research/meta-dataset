@@ -373,7 +373,8 @@ def make_one_source_episode_pipeline(dataset_spec,
                                      image_size=None,
                                      num_to_take=None,
                                      ignore_hierarchy_probability=0.0,
-                                     simclr_episode_fraction=0.0):
+                                     simclr_episode_fraction=0.0,
+                                     episode_sampling_seed=None):
   """Returns a pipeline emitting data from one single source as Episodes.
 
   Args:
@@ -428,7 +429,8 @@ def make_one_source_episode_pipeline(dataset_spec,
       use_dag_hierarchy=use_dag_ontology,
       use_bilevel_hierarchy=use_bilevel_ontology,
       use_all_classes=use_all_classes,
-      ignore_hierarchy_probability=ignore_hierarchy_probability)
+      ignore_hierarchy_probability=ignore_hierarchy_probability,
+      episode_sampling_seed=episode_sampling_seed)
   dataset = episode_reader.create_dataset_input_pipeline(sampler, pool=pool)
   # Episodes coming out of `dataset` contain flushed examples and are internally
   # padded with placeholder examples. `process_episode` discards flushed
