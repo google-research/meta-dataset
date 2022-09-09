@@ -20,6 +20,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+from collections import abc
 import json
 import os
 
@@ -131,7 +132,7 @@ def get_total_images_per_class(data_spec, class_id=None, pool=None):
   num_images = data_spec.images_per_class[class_id]
 
   if pool is None:
-    if isinstance(num_images, collections.Mapping):
+    if isinstance(num_images, abc.Mapping):
       raise ValueError('DatasetSpecification {} has example-level splits, so '
                        'the "pool" argument has to be set (to "train" or '
                        '"test".'.format(data_spec.name))
