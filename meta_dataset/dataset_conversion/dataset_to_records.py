@@ -273,7 +273,7 @@ def write_tfrecord_from_npy_single_channel(class_npy_file, class_label,
     imgs = np.load(f)
 
   # If the values are in the range 0-1, bring them to the range 0-255.
-  if imgs.dtype == np.bool:
+  if imgs.dtype == bool:
     imgs = imgs.astype(np.uint8)
     imgs *= 255
 
