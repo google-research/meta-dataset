@@ -230,7 +230,8 @@ class EpisodeDescriptionSampler(object):
                use_dag_hierarchy=False,
                use_bilevel_hierarchy=False,
                use_all_classes=False,
-               ignore_hierarchy_probability=0.0):
+               ignore_hierarchy_probability=0.0, 
+               episode_sampling_seed=None):
     """Initializes an EpisodeDescriptionSampler.episode_config.
 
     Args:
@@ -250,6 +251,8 @@ class EpisodeDescriptionSampler(object):
       ignore_hierarchy_probability: Float, if using a hierarchy, this flag makes
         the sampler ignore the hierarchy for this proportion of episodes and
         instead sample categories uniformly.
+      episode_sampling_seed: random seed for making episode description sampling 
+        deterministic within individual data sources
 
     Raises:
       RuntimeError: if required parameters are missing.
@@ -258,8 +261,13 @@ class EpisodeDescriptionSampler(object):
     # Each instance has its own RNG which is seeded from the module-level RNG,
     # which makes episode description sampling deterministic within individual
     # data sources.
-    self._rng = np.random.RandomState(
-        seed=RNG.randint(0, 2**32, size=None, dtype='uint32'))
+    if episode_sampling_seed == None:
+      self._rng = np.random.RandomState(
+          seed=RNG.randint(0, 2**32, size=None, dtype='uint32'))
+    else:
+      self._rng = np.random.RandomState(
+          seed=episode_sampling_seed)
+
     self.dataset_spec = dataset_spec
     self.split = split
     self.pool = pool

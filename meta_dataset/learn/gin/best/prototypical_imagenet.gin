@@ -2,7 +2,7 @@ include 'meta_dataset/learn/gin/setups/imagenet.gin'
 include 'meta_dataset/learn/gin/learners/prototypical_config.gin'
 
 # Backbone hypers.
-include 'meta_dataset/learn/gin/best_v2/pretrained_resnet.gin'
+include 'meta_dataset/learn/gin/best/pretrained_resnet.gin'
 
 # Data hypers.
 DataConfig.image_height = 126
